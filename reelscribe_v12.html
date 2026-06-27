@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ReelScribe — прототип v4</title>
+<style>
+:root{
+  --bg:#15171e;--panel:#1b1e27;--panel2:#21242f;--line:#2b2f3c;
+  --tx:#e9ebf2;--mut:#8b91a3;--faint:#5b6073;
+  --iris:#7c83ff;--teal:#3ec9b0;--amber:#f5a623;--green:#2fbf71;--rose:#f0556f;--sky:#49b8ef;--fire:#ff7849;
+  --paper:#f6f3ea;--ink:#23262e;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;--sans:-apple-system,"Segoe UI",Roboto,system-ui,sans-serif;--serif:Georgia,"Times New Roman",serif;
+}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--tx);font-family:var(--sans);font-size:13.5px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font-family:inherit;cursor:pointer}a{color:inherit}
+.app{display:flex;flex-direction:column;height:100vh;max-width:1280px;margin:0 auto}
+header{padding:13px 18px;border-bottom:1px solid var(--line);flex:0 0 auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.logo{display:flex;align-items:flex-end;gap:2px;height:20px}
+.logo i{display:block;width:3px;border-radius:2px;background:var(--iris);animation:bar 1.1s ease-in-out infinite}
+.logo i:nth-child(1){height:7px}.logo i:nth-child(2){height:16px;background:var(--teal);animation-delay:.15s}
+.logo i:nth-child(3){height:11px;animation-delay:.3s}.logo i:nth-child(4){height:19px;background:var(--amber);animation-delay:.45s}
+.logo i:nth-child(5){height:8px;animation-delay:.6s}
+@keyframes bar{0%,100%{transform:scaleY(.55)}50%{transform:scaleY(1)}}
+h1{font-size:16px;font-weight:680;margin:0}.spacer{flex:1}
+.stepper{display:flex;gap:6px;font-size:12px}
+.step{display:flex;align-items:center;gap:7px;color:var(--faint);padding:5px 11px;border-radius:20px;border:1px solid transparent}
+.step b{font-family:var(--mono);width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:10px;border:1px solid var(--line);font-weight:600}
+.step.on{color:var(--tx);background:var(--panel);border-color:var(--line)}.step.on b{background:var(--iris);border-color:var(--iris);color:#fff}
+.step.done b{background:var(--green);border-color:var(--green);color:#0c1411}
+.btn{background:var(--iris);color:#fff;border:0;padding:9px 16px;border-radius:9px;font-weight:600;font-size:12.5px}
+.btn:hover{filter:brightness(1.08)}.btn:disabled{opacity:.45;cursor:default;filter:none}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--tx)}
+.btn.sm{padding:7px 12px;font-size:12px}
+.view{flex:1;min-height:0;display:none}.view.on{display:flex}
+
+/* IMPORT */
+#vImport{overflow:auto}
+.imp{max-width:960px;margin:0 auto;padding:28px 22px 60px;width:100%}
+.kicker{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--iris)}
+.hero{font-size:27px;font-weight:720;letter-spacing:-.02em;margin:8px 0 6px;line-height:1.1}
+.lead{color:var(--mut);font-size:14px;max-width:560px}
+.grid{display:grid;grid-template-columns:1.25fr .9fr;gap:16px;margin-top:22px}
+.drop{border:1.5px dashed var(--line);border-radius:14px;background:var(--panel);padding:18px;transition:.15s}
+.drop.hot{border-color:var(--iris);background:color-mix(in srgb,var(--iris) 8%,var(--panel))}
+.up{display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 0 14px;text-align:center;cursor:pointer}
+.up svg{width:30px;height:30px;stroke:var(--iris);fill:none;stroke-width:1.6}.up .t{font-weight:600}.up .s{font-size:12px;color:var(--mut)}
+.or{display:flex;align-items:center;gap:10px;color:var(--faint);font-size:11px;font-family:var(--mono);margin:5px 0}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+textarea{width:100%;height:104px;resize:vertical;background:var(--panel2);border:1px solid var(--line);color:var(--tx);border-radius:10px;padding:11px;font-family:var(--mono);font-size:12.5px;outline:none}
+textarea:focus{border-color:var(--iris)}
+.detected{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column}
+.det-num{font-family:var(--mono);font-size:28px;font-weight:600;line-height:1}.det-sub{font-size:12px;color:var(--mut);margin-top:4px}
+.det-break{display:flex;gap:8px;margin:12px 0}
+.minib{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:7px;text-align:center}
+.minib .v{font-family:var(--mono);font-weight:600}.minib .l{font-size:10px;color:var(--mut)}
+.prev{flex:1;overflow:auto;margin-top:4px;border-top:1px solid var(--line);padding-top:9px;max-height:150px}
+.prev div{font-family:var(--mono);font-size:11px;color:var(--faint);padding:3px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* settings block */
+.block{margin-top:18px;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:16px 18px}
+.block .bt{font-size:12px;color:var(--mut);margin-bottom:11px;display:flex;align-items:center;gap:8px}
+.cards2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mcard{border:1.5px solid var(--line);background:var(--panel2);border-radius:12px;padding:13px 15px;text-align:left;position:relative}
+.mcard.on{border-color:var(--iris);background:color-mix(in srgb,var(--iris) 10%,var(--panel2))}
+.mcard .mh{font-weight:700;font-family:var(--mono);font-size:14px;display:flex;align-items:center;gap:8px}
+.mcard .mb{font-size:12px;color:var(--mut);margin-top:6px;line-height:1.45}
+.mcard .mt{display:inline-block;margin-top:9px;font-family:var(--mono);font-size:10px;color:var(--teal);border:1px solid color-mix(in srgb,var(--teal) 40%,transparent);padding:2px 7px;border-radius:6px}
+.mcard.on .check{position:absolute;top:11px;right:12px;color:var(--iris);font-weight:700}
+.opts{display:flex;gap:18px;flex-wrap:wrap;margin-top:14px;align-items:flex-end}
+.setting{display:flex;flex-direction:column;gap:5px}.setting label{font-size:11px;color:var(--mut)}
+select{background:var(--panel2);border:1px solid var(--line);color:var(--tx);border-radius:8px;padding:8px 11px;font-size:12.5px;outline:none}
+.chkline{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--tx)}
+.cta{display:flex;gap:12px;margin-top:20px;flex-wrap:wrap;align-items:center}
+.hint{font-size:11px;color:var(--faint)}
+input[type=checkbox]{accent-color:var(--iris);width:15px;height:15px}
+
+/* PROCESSING */
+#vProc{align-items:center;justify-content:center}
+.proc{width:100%;max-width:620px;padding:24px;text-align:center}
+.bigeq{display:inline-flex;align-items:flex-end;gap:3px;height:26px;color:var(--amber);margin-bottom:16px}
+.bigeq i{width:3px;background:currentColor;border-radius:2px;animation:eq .8s ease-in-out infinite}
+.bigeq i:nth-child(2){animation-delay:.12s}.bigeq i:nth-child(3){animation-delay:.24s}.bigeq i:nth-child(4){animation-delay:.36s}.bigeq i:nth-child(5){animation-delay:.48s}.bigeq i:nth-child(6){animation-delay:.6s}
+@keyframes eq{0%,100%{height:5px}50%{height:26px}}
+.proc h2{font-size:20px;margin:0 0 4px;font-weight:680}.proc .psub{color:var(--mut);font-size:13px}
+.pbar{height:8px;background:var(--panel2);border:1px solid var(--line);border-radius:20px;overflow:hidden;margin:22px 0 8px}
+.pbar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--iris),var(--teal));border-radius:20px;transition:width .25s}
+.pcount{font-family:var(--mono);font-size:12px;color:var(--mut)}
+.pstats{display:flex;gap:8px;margin:20px 0}
+.pstat{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px}
+.pstat .v{font-family:var(--mono);font-size:16px;font-weight:600}.pstat .l{font-size:10px;color:var(--mut);margin-top:3px}
+.feed{text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px;margin-top:6px}
+.feed .f{display:flex;align-items:center;gap:10px;padding:8px 10px;font-size:12px}
+.feed .f .sc{font-family:var(--mono);color:var(--faint);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.throttle{font-size:11px;color:var(--faint);margin-top:14px}
+.tag{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:2px 6px;border-radius:5px;border:1px solid;white-space:nowrap}
+.t-reel{color:var(--iris);border-color:color-mix(in srgb,var(--iris) 55%,transparent)}
+.t-post{color:var(--teal);border-color:color-mix(in srgb,var(--teal) 55%,transparent)}
+
+/* RESULTS */
+#vResults{flex-direction:column}
+.rtop{display:flex;align-items:center;gap:12px;padding:11px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.rtop .ti{font-weight:680}.rtop .ti span{color:var(--mut);font-weight:400;font-family:var(--mono);font-size:12px}
+.toggle{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.toggle button{background:none;border:0;color:var(--mut);padding:8px 13px;font-size:12.5px;font-weight:500}.toggle button.on{background:var(--iris);color:#fff}
+.subbar{display:flex;align-items:center;gap:8px;padding:10px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.search{flex:1;min-width:180px;background:var(--panel);border:1px solid var(--line);color:var(--tx);padding:8px 12px;border-radius:8px;outline:none;font-size:13px}
+.search:focus{border-color:var(--iris)}.search::placeholder{color:var(--faint)}
+.chip{background:var(--panel);border:1px solid var(--line);color:var(--mut);padding:6px 11px;border-radius:20px;font-size:12px}
+.chip.on{background:var(--panel2);border-color:var(--iris);color:var(--tx)}
+.chip.fire.on{border-color:var(--fire);color:var(--fire)}
+.chip.tr.on{border-color:var(--teal);color:var(--teal)}
+.rwrap{flex:1;overflow:auto;min-height:0}
+#tableWrap.analytics table{min-width:1180px}
+.c-num{width:58px;text-align:right;white-space:nowrap}
+th.c-num{text-align:right;font-size:14px}
+.grp-ratio{background:color-mix(in srgb,var(--iris) 7%,transparent)}
+th.grp-ratio{color:var(--iris)}
+th.grp-raw{color:var(--teal)}
+.grp-reach{background:color-mix(in srgb,var(--amber) 6%,transparent)}
+th.grp-reach{color:var(--amber)}
+th.grp-auth{color:var(--mut)}
+.col-grpstart{border-left:2px solid var(--line)}
+.colh{cursor:grab;user-select:none}
+.colh.dragging{opacity:.4}
+.colh.dragover{box-shadow:inset 2px 0 0 var(--iris)}
+.authlink{color:var(--iris);text-decoration:none;font-family:var(--mono);font-size:12px}
+.authlink:hover{text-decoration:underline}
+.noteic{margin-right:5px;cursor:help}
+.drawer-back{position:fixed;inset:0;background:rgba(8,9,12,.5);opacity:0;pointer-events:none;transition:.2s;z-index:30}
+.drawer-back.on{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;height:100vh;width:430px;max-width:92vw;background:var(--panel);border-left:1px solid var(--line);
+  transform:translateX(100%);transition:transform .24s ease;z-index:31;overflow:auto;padding:0}
+.drawer.on{transform:none}
+.dclose{position:absolute;top:12px;right:14px;background:rgba(0,0,0,.4);border:0;color:#fff;width:30px;height:30px;border-radius:50%;font-size:17px;z-index:2}
+.vprev{position:relative;width:100%;aspect-ratio:9/16;max-height:44vh;background:
+  radial-gradient(120% 80% at 50% 0%, #232838 0%, #181b24 60%, #14161d 100%);
+  display:flex;align-items:center;justify-content:center;overflow:hidden;border-bottom:1px solid var(--line)}
+.vprev::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(255,255,255,.015) 0 2px,transparent 2px 9px)}
+.vprev .play{width:58px;height:58px;border-radius:50%;background:rgba(255,255,255,.95);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 24px rgba(0,0,0,.45);z-index:1}
+.vprev .play::after{content:"";border-left:17px solid var(--ink);border-top:10px solid transparent;border-bottom:10px solid transparent;margin-left:4px}
+.vprev .vlabel{position:absolute;bottom:0;left:0;right:0;padding:26px 16px 12px;color:#fff;font-size:12px;
+  background:linear-gradient(transparent,rgba(0,0,0,.75));display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;z-index:1}
+.vprev .vtag{position:absolute;top:12px;left:14px;z-index:1}
+.vprev .vopen{position:absolute;top:12px;right:50px;z-index:1;font-size:11px;color:#fff;background:rgba(0,0,0,.45);padding:5px 10px;border-radius:20px;text-decoration:none}
+.dbody{padding:16px 18px 30px}
+.dmetrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:4px 0 16px}
+.dm{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:11px 8px;text-align:center}
+.dm .dm-ic{font-size:19px;line-height:1;margin-bottom:6px}
+.dm .v{font-family:var(--mono);font-weight:600;font-size:15px}.dm .l{font-size:9.5px;color:var(--mut);margin-top:3px}
+.seclabel{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:18px 0 9px;display:flex;align-items:center;gap:8px}
+.seclabel.posthead{cursor:pointer;user-select:none}
+.seclabel .chev{margin-left:auto;color:var(--faint)}
+.postcard{background:var(--bg);border:1px solid var(--line);border-left:3px solid var(--teal);border-radius:10px;padding:12px 14px;color:var(--tx);font-size:13.5px;line-height:1.55;white-space:pre-wrap}
+.sessnote{display:flex;align-items:center;gap:8px;padding:8px 18px;background:color-mix(in srgb,var(--teal) 8%,var(--bg));border-bottom:1px solid var(--line);font-size:12.5px;color:var(--teal)}
+.sessnote span{color:var(--tx)}
+.author-row{display:flex;align-items:center;gap:9px;margin-bottom:12px}
+.av{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--iris),var(--teal));display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:13px}
+.author-row .an{font-weight:600}.author-row .af{font-size:11px;color:var(--mut)}
+.dnote{width:100%;height:70px;resize:vertical;background:var(--bg);border:1px solid var(--line);color:var(--tx);border-radius:9px;padding:9px 11px;font-family:var(--sans);font-size:13px;outline:none}
+.dnote:focus{border-color:var(--iris)}
+.histlist{display:flex;flex-direction:column;gap:8px}
+.hist{display:flex;align-items:center;gap:12px;background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:11px 14px}
+.hist .hi-main{flex:1}.hist .hi-sub{font-size:11.5px;color:var(--mut);margin-top:3px}
+.hist .hi-note{font-size:12px;color:var(--iris);margin-top:5px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{position:sticky;top:0;background:var(--bg);text-align:left;color:var(--mut);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:10px 10px;border-bottom:1px solid var(--line);white-space:nowrap;cursor:pointer;z-index:2}
+thead th.nos{cursor:default}.ar{opacity:.4;font-size:9px}
+tbody tr{border-bottom:1px solid var(--line)}tbody tr.main:hover{background:var(--panel)}tbody tr.main{cursor:pointer}
+td{padding:10px 10px;vertical-align:top}
+td.c-type{width:50px}td.c-date{width:90px}td.c-views{width:80px}td.c-er{width:78px}td.c-st{width:78px}td.c-chk{width:32px}
+.mono{font-family:var(--mono);font-size:11.5px;color:var(--faint)}
+.txcell{max-width:380px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.txcell .trbadge{font-family:var(--mono);font-size:9px;color:var(--teal);border:1px solid color-mix(in srgb,var(--teal) 45%,transparent);padding:1px 5px;border-radius:5px;margin-right:6px;text-transform:uppercase}
+.views{font-family:var(--mono);font-weight:600;color:var(--tx)}
+.er{font-family:var(--mono);font-weight:700;font-size:12px;padding:3px 8px;border-radius:7px;display:inline-block}
+.er.x3{color:var(--mut);background:color-mix(in srgb,var(--mut) 14%,transparent)}
+.er.x5{color:var(--green);background:color-mix(in srgb,var(--green) 15%,transparent)}
+.er.x10{color:var(--fire);background:color-mix(in srgb,var(--fire) 16%,transparent)}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;white-space:nowrap}
+.p-done{color:var(--green);background:color-mix(in srgb,var(--green) 16%,transparent)}
+.p-fail{color:var(--rose);background:color-mix(in srgb,var(--rose) 16%,transparent)}
+tr.exp td{background:var(--panel2);padding:0}.expbox{padding:16px 18px 20px}
+.engrow{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:13px}
+.stat2{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:8px 12px;min-width:96px}
+.stat2 .v{font-family:var(--mono);font-weight:600;font-size:14px}.stat2 .l{font-size:10px;color:var(--mut)}
+.paper{background:var(--paper);color:var(--ink);border-radius:10px;padding:15px 17px;font-family:var(--serif);font-size:15px;line-height:1.6;white-space:pre-wrap;max-width:760px}
+.paper.ru{background:#eef4f0}
+.plabel{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);margin:14px 0 7px}
+.expact{display:flex;gap:9px;margin-top:14px;flex-wrap:wrap}
+.summary{margin-top:14px;max-width:760px;background:color-mix(in srgb,var(--iris) 9%,var(--panel));border:1px solid color-mix(in srgb,var(--iris) 30%,transparent);border-radius:10px;padding:13px 15px}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.tagx{font-size:11px;font-weight:600;color:var(--iris);background:color-mix(in srgb,var(--iris) 14%,transparent);padding:3px 9px;border-radius:20px}
+.failtx{color:var(--rose);font-family:var(--mono);font-size:12px}
+.btn{} .selbar{display:none;align-items:center;gap:10px;padding:8px 18px;background:color-mix(in srgb,var(--iris) 10%,var(--bg));border-bottom:1px solid var(--line);font-size:12.5px}
+.selbar.on{display:flex}
+.filtpanel{display:none;gap:14px;flex-wrap:wrap;align-items:flex-end;padding:12px 18px;border-bottom:1px solid var(--line);background:var(--panel)}
+.filtpanel.on{display:flex}
+.fgroup{display:flex;flex-direction:column;gap:5px}
+.fgroup label{font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+.fgroup input,.fgroup select{background:var(--panel2);border:1px solid var(--line);color:var(--tx);border-radius:8px;padding:7px 10px;font-size:12.5px;outline:none;width:130px}
+.fgroup input:focus,.fgroup select:focus{border-color:var(--iris)}
+.capcol{color:var(--mut);max-width:220px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;font-size:12.5px}
+.label{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin:0 0 8px}
+#reader{display:none;height:100%}#reader.on{display:flex}
+.rlist{width:38%;max-width:420px;border-right:1px solid var(--line);overflow:auto;padding:6px}
+.row{display:block;width:100%;text-align:left;background:transparent;border:1px solid transparent;border-radius:10px;padding:11px 12px;margin:2px 0;color:inherit}
+.row:hover{background:var(--panel)}.row.sel{background:var(--panel2);border-color:var(--line)}
+.row .top{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.capcell{color:var(--mut);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.rdetail{flex:1;overflow:auto;padding:22px 26px}
+.rd-wrap{max-width:680px;margin:0 auto}
+.rd-head{display:flex;gap:16px;margin-bottom:18px;align-items:flex-start}
+.rd-thumb{flex:0 0 90px;width:90px;aspect-ratio:9/16;border-radius:12px;background:radial-gradient(120% 80% at 50% 0%,#232838,#181b24 70%);display:flex;align-items:center;justify-content:center;border:1px solid var(--line)}
+.rd-thumb .play{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.92);display:flex;align-items:center;justify-content:center}
+.rd-thumb .play::after{content:"";border-left:11px solid var(--ink);border-top:7px solid transparent;border-bottom:7px solid transparent;margin-left:3px}
+.rd-stats{display:flex;gap:14px;flex-wrap:wrap;font-family:var(--mono);font-size:12px;color:var(--mut)}
+.rd-paper{font-size:16.5px;line-height:1.7;padding:22px 24px}
+.rd-nav{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:24px;padding-top:16px;border-top:1px solid var(--line)}
+.modal{position:fixed;inset:0;background:rgba(8,9,12,.66);display:none;align-items:center;justify-content:center;z-index:40;padding:20px}
+.modal.on{display:flex}
+.sheet{background:var(--panel);border:1px solid var(--line);border-radius:16px;max-width:700px;width:100%;max-height:88vh;overflow:auto;padding:22px 24px}
+.sheet h3{margin:0 0 4px;font-size:18px}.sheet .x{float:right;background:none;border:0;color:var(--mut);font-size:20px}
+.fmts{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:16px 0}
+.fmt{border:1px solid var(--line);background:var(--panel2);border-radius:11px;padding:12px 14px;text-align:left}
+.fmt.on{border-color:var(--iris);background:color-mix(in srgb,var(--iris) 10%,var(--panel2))}
+.fmt .h{font-weight:600;display:flex;align-items:center;gap:8px}.fmt .d{font-size:11.5px;color:var(--mut);margin-top:4px}.fmt .ext{font-family:var(--mono);font-size:10px;color:var(--iris)}
+.prevwrap{overflow:auto;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.prevwrap table{font-family:var(--mono);font-size:11px;min-width:900px}
+.prevwrap th{font-size:10px;text-transform:none;letter-spacing:0;cursor:default}
+.prevwrap td{white-space:nowrap;max-width:170px;overflow:hidden;text-overflow:ellipsis;color:var(--mut)}
+.scope{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--mut);margin-top:14px;flex-wrap:wrap}
+.dlrow{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap;align-items:center}
+@media(max-width:860px){.grid{grid-template-columns:1fr}.cards2{grid-template-columns:1fr}.fmts{grid-template-columns:1fr}.hero{font-size:23px}}
+@media(max-width:760px){.stepper{order:3;width:100%}td.c-date,.h-date,td.c-views,.h-views,td.c-cap,.h-cap{display:none}.rlist{width:100%;max-width:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <span class="logo"><i></i><i></i><i></i><i></i><i></i></span><h1>ReelScribe</h1><span class="spacer"></span>
+    <div class="stepper" id="stepper"><div class="step on" id="st1"><b>1</b>Импорт</div><div class="step" id="st2"><b>2</b>Обработка</div><div class="step" id="st3"><b>3</b>Результаты</div></div>
+  </header>
+
+  <!-- IMPORT -->
+  <div class="view on" id="vImport">
+    <div class="imp">
+      <div class="kicker">Шаг 1 · источник и настройки</div>
+      <div class="hero">Из ссылок — в расшифровки.</div>
+      <div class="lead">Вставь ссылки, загрузи <b>.txt</b>/<b>.csv</b> или перетащи сам экспорт <b>message_1.json</b>.</div>
+      <div class="grid">
+        <div>
+          <div class="drop" id="drop">
+            <div class="up" id="pick">
+              <svg viewBox="0 0 24 24"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M5 16v3a1 1 0 001 1h12a1 1 0 001-1v-3"/></svg>
+              <div class="t">Перетащи файл или нажми, чтобы выбрать</div>
+              <div class="s">.txt · .csv · message_1.json</div>
+            </div>
+            <input type="file" id="file" accept=".txt,.csv,.json" hidden>
+            <div class="or">или вставь вручную</div>
+            <textarea id="paste" placeholder="https://www.instagram.com/reel/DaDhJiqtQRQ/&#10;…"></textarea>
+          </div>
+
+          <!-- MODEL CHOICE (prominent) -->
+          <div class="block">
+            <div class="bt">🎙 Чем распознавать речь</div>
+            <div class="setting" style="margin-bottom:12px"><label>Движок</label>
+              <select id="engine" style="max-width:320px"><option value="fw">faster-whisper — локально, бесплатно</option><option value="yandex">Yandex SpeechKit — облако, из РФ</option><option value="deepgram">Deepgram — облако</option><option value="openai">OpenAI Whisper — облако</option></select></div>
+            <div id="modelArea">
+              <div class="bt" style="margin-bottom:8px">Модель faster-whisper</div>
+              <div class="cards2" id="modelCards">
+                <button class="mcard on" data-m="medium"><span class="check">✓</span><div class="mh">medium</div><div class="mb">Быстро, спокойно идёт на твоём MacBook M1. Качество хорошее для большинства рилсов.</div><span class="mt">быстро · ~0 ₽</span></button>
+                <button class="mcard" data-m="large-v3"><span class="check">✓</span><div class="mh">large-v3</div><div class="mb">Максимальная точность на русском и сложном звуке. Медленнее — разовый прогон на бесплатном GPU (Kaggle, ~30 ч/нед).</div><span class="mt">точнее · ~0 ₽ на Kaggle GPU</span></button>
+              </div>
+            </div>
+            <div id="cloudNote" style="display:none;font-size:12px;color:var(--mut)">Размер модели у облачного движка задаёт провайдер — выбор medium/large тут не нужен.</div>
+            <div class="opts">
+              <div class="setting"><label>Язык</label><select><option>авто-определение</option><option>русский</option><option>английский</option></select></div>
+              <label class="chkline"><input type="checkbox" id="optTr" checked> Переводить иностранные на русский</label>
+              <label class="chkline"><input type="checkbox" id="optStats" checked> Подтягивать просмотры / автора</label>
+            </div>
+            <div class="setting" style="margin-top:14px"><label>🗒 Комментарий к этой загрузке <span style="color:var(--faint)">— зачем гружу, чтобы потом найти</span></label>
+              <textarea id="importNote" class="dnote" style="height:54px" placeholder="например: рилсы по Claude Code за июнь — отобрать залётные на переснять"></textarea></div>
+          </div>
+
+          <div class="cta">
+            <button class="btn" id="startBtn" disabled>Начать транскрибацию</button>
+            <button class="btn ghost sm" id="demoBtn">Загрузить мой список (демо · 873)</button>
+          </div>
+          <div class="hint" style="margin-top:9px">Видео не хранится — берём аудио и удаляем после распознавания.</div>
+        </div>
+
+        <div class="detected">
+          <div class="det-num" id="detNum">0</div><div class="det-sub">ссылок найдено</div>
+          <div class="det-break">
+            <div class="minib"><div class="v" id="detReel">0</div><div class="l">рилсы</div></div>
+            <div class="minib"><div class="v" id="detPost">0</div><div class="l">посты</div></div>
+            <div class="minib"><div class="v" id="detDup">0</div><div class="l">дублей</div></div>
+          </div>
+          <div class="label">Предпросмотр</div>
+          <div class="prev" id="prev"><div style="color:var(--faint)">пусто</div></div>
+        </div>
+      </div>
+
+      <div class="block" style="margin-top:18px">
+        <div class="bt">🕓 История загрузок <span style="color:var(--faint);font-weight:400">— результаты кэшируются, повторно не обрабатываются</span></div>
+        <div class="histlist">
+          <div class="hist"><div class="hi-main"><b>873 рилса</b> · faster-whisper · medium<div class="hi-sub">27 июн 2026 · экспорт из Instagram · 11 готово, 1 ошибка</div><div class="hi-note">📝 основной архив, разобрать залётные за Q2</div></div><button class="btn ghost sm">Открыть</button></div>
+          <div class="hist"><div class="hi-main"><b>40 рилсов</b> · faster-whisper · large-v3<div class="hi-sub">19 июн 2026 · вставка ссылок · все готовы</div><div class="hi-note">📝 подборка по Claude Code для Reels-сценария</div></div><button class="btn ghost sm">Открыть</button></div>
+          <div class="hist"><div class="hi-main"><b>12 рилсов</b> · Yandex SpeechKit<div class="hi-sub">12 июн 2026 · файл links.txt · все готовы</div></div><button class="btn ghost sm">Открыть</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROCESSING -->
+  <div class="view" id="vProc">
+    <div class="proc">
+      <div class="bigeq"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <h2 id="procTitle">Обрабатываю рилсы…</h2><div class="psub" id="procSub"></div>
+      <div class="pbar"><i id="pbar"></i></div><div class="pcount" id="pcount">0 / 0</div>
+      <div class="pstats">
+        <div class="pstat"><div class="v" id="ps-down">0</div><div class="l" style="color:var(--sky)">скачивание</div></div>
+        <div class="pstat"><div class="v" id="ps-trans">0</div><div class="l" style="color:var(--amber)">распознавание</div></div>
+        <div class="pstat"><div class="v" id="ps-done">0</div><div class="l" style="color:var(--green)">готово</div></div>
+        <div class="pstat"><div class="v" id="ps-fail">0</div><div class="l" style="color:var(--rose)">ошибки</div></div>
+      </div>
+      <div class="feed" id="feed"></div>
+      <div class="throttle">⏳ Скачиваем с паузами по 1–2 за раз, чтобы Instagram не заблокировал.</div>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="view" id="vResults">
+    <div class="rtop">
+      <div class="ti">Расшифровки <span id="rcount"></span></div><span class="spacer"></span>
+      <div class="toggle"><button class="on" id="tTable">▦ Таблица</button><button id="tAnalytics">📊 Аналитика</button><button id="tRead">▤ Чтение</button></div>
+      <button class="btn ghost sm" id="newBtn">＋ Новый импорт</button>
+      <button class="btn sm" id="expBtn">↓ Экспорт</button>
+    </div>
+    <div class="sessnote" id="sessNote" style="display:none"></div>
+    <div class="subbar">
+      <input class="search" id="q" placeholder="Поиск по подписи и расшифровке…">
+      <button class="chip on" data-f="all">Все</button>
+      <button class="chip fire" data-f="viral">🔥 Залётные</button>
+      <button class="chip" data-f="done">Готово</button>
+      <button class="chip" data-f="failed">Ошибки</button>
+      <button class="chip" id="filtToggle">⚙ Фильтры</button>
+      <button class="chip" id="colsToggle">🧱 Столбцы</button>
+      <span style="flex:1"></span>
+      <button class="chip tr" id="trToggle">🌐 Перевод на русский</button>
+    </div>
+    <div class="filtpanel" id="colsPanel"></div>
+    <div class="filtpanel" id="filtPanel">
+      <div class="fgroup"><label>Автор</label><select id="fAuthor"><option value="">все авторы</option></select></div>
+      <div class="fgroup"><label>Сортировать по</label><select id="fSort">
+        <option value="date">дате</option><option value="author">автору (А-Я)</option><option value="views">просмотрам</option><option value="followers">подписчикам</option><option value="er">залётности</option>
+        <option value="likes">лайкам</option><option value="comments">комментариям</option>
+        <option value="lpf">лайки/подписчики</option><option value="cpf">комменты/подписчики</option><option value="eng">вовлечённости</option></select></div>
+      <div class="fgroup"><label>Мин. просмотры</label><input type="number" id="fViews" placeholder="0"></div>
+      <div class="fgroup"><label>Мин. лайки</label><input type="number" id="fLikes" placeholder="0"></div>
+      <div class="fgroup"><label>Мин. комменты</label><input type="number" id="fComments" placeholder="0"></div>
+      <div class="fgroup"><label>Мин. подписчики</label><input type="number" id="fFollowers" placeholder="0"></div>
+      <div class="fgroup"><label>Мин. залётность ×</label><input type="number" id="fEr" placeholder="0" step="0.5"></div>
+      <button class="btn ghost sm" id="fReset">Сбросить</button>
+    </div>
+    <div class="selbar" id="selbar"><span id="selcount">0 выбрано</span>
+      <button class="btn ghost sm" id="bSum">Саммари по выбранным</button>
+      <button class="btn ghost sm" id="bExp">Экспортировать выбранные</button>
+      <button class="btn ghost sm" id="bClear">Снять выбор</button></div>
+
+    <div class="rwrap" id="tableWrap">
+      <table id="mainTable"><thead id="mainHead"></thead><tbody id="tbody"></tbody></table>
+    </div>
+    <div id="reader"><div class="rlist" id="rlist"></div><div class="rdetail" id="rdetail"><div style="color:var(--faint);margin-top:30px">Выбери рилс слева.</div></div></div>
+  </div>
+</div>
+
+<div class="drawer-back" id="drawerBack"></div>
+<aside class="drawer" id="drawer"></aside>
+
+<div class="modal" id="modal"><div class="sheet">
+  <button class="x" id="mx">×</button><h3>Экспорт расшифровок</h3>
+  <div style="color:var(--mut);font-size:12.5px">Превью ниже — те же колонки, что уйдут в файл (включая просмотры, автора и перевод).</div>
+  <div class="fmts" id="fmts">
+    <button class="fmt on" data-k="csv"><div class="h">📄 CSV <span class="ext">.csv</span></div><div class="d">Google Sheets / Excel.</div></button>
+    <button class="fmt" data-k="xlsx"><div class="h">📊 Excel <span class="ext">.xlsx</span></div><div class="d">Книга с автофильтром.</div></button>
+    <button class="fmt" data-k="json"><div class="h">{ } JSON <span class="ext">.json</span></div><div class="d">Код, повторный импорт, Claude.</div></button>
+    <button class="fmt" data-k="md"><div class="h">📝 Markdown <span class="ext">.md</span></div><div class="d">Notion / Obsidian.</div></button>
+    <button class="fmt" data-k="supabase"><div class="h">🗄 Supabase <span class="ext">MCP</span></div><div class="d">Таблица transcripts.</div></button>
+    <button class="fmt" data-k="notion"><div class="h">◼ Notion <span class="ext">база</span></div><div class="d">База со свойствами.</div></button>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin:6px 0 8px"><span class="label" style="margin:0">Превью таблицы</span><span class="mono" id="prevscope"></span></div>
+  <div class="prevwrap" id="prevwrap"></div>
+  <div class="scope">Объём: <button class="chip on" id="scAll">Все готовые</button><button class="chip" id="scSel">Только выбранные</button></div>
+  <div class="scope">Текст расшифровки: <button class="chip" id="lgOrig">оригинал</button><button class="chip" id="lgRu">на русском</button><button class="chip on" id="lgBoth">оба столбца</button></div>
+  <div class="dlrow"><button class="btn" id="doDl">Скачать <span id="dlfmt">CSV</span></button><span class="mono" id="dlnote" style="color:var(--faint)"></span></div>
+</div></div>
+
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const esc=s=>(s||"").replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const escA=s=>(s||"").replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const ACOLS=new Set(["author","followers","likes","comments","lpf","cpf","eng"]);
+const wantHidden=new Set();
+function colVisible(c){return !wantHidden.has(c) && (!ACOLS.has(c) || viewMode==="analytics");}
+function applyColVis(){document.querySelectorAll("#mainTable [data-col]").forEach(el=>{el.style.display=colVisible(el.dataset.col)?"":"none";});}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const fmtV=n=>!n?"—":n>=1e6?(n/1e6).toFixed(1).replace('.',',')+" млн":n>=1e3?Math.round(n/1e3)+" тыс":""+n;
+const erClass=e=>e>=10?"x10":e>=5?"x5":"x3";
+
+const SEED=[
+ {n:1,type:"reel",date:"2026-06-26",sc:"DaDhJiqtQRQ",cap:"Платишь $22/мес за ElevenLabs и $120/год за Wispr Flow? Voicebox заменяет оба и работает локально.",lang:"ru",dur:48,views:420000,likes:31000,comments:1200,author:"neuro.tools",followers:85000,txt:"Если ты платишь двадцать два доллара в месяц за ElevenLabs только ради озвучки и сверху ещё сто двадцать в год за голосовой ввод — ты переплачиваешь. Покажу бесплатную утилиту Voicebox, которая делает и то и другое локально, без подписки.",sum:{s:"Voicebox как бесплатная локальная замена ElevenLabs и Wispr Flow.",tags:["инструменты","озвучка","локальный AI"]}},
+ {n:8,type:"reel",date:"2026-06-22",sc:"DZr4ZONAihO",cap:"Хочешь с нуля разобраться в вайбкодинге в Claude Code? Пиши «ВАЙБ».",lang:"ru",dur:35,views:1200000,likes:88000,comments:3400,author:"ai.builder.ru",followers:140000,txt:"Если слышал про вайбкодинг, но не знаешь, с чего начать в Claude Code — по-простому: ставишь одной командой, описываешь словами, что хочешь, он сам пишет код и правит ошибки. Собрал практикум с нуля до первого рабочего проекта.",sum:{s:"Практикум по вайбкодингу в Claude Code, лид-магнит по слову «ВАЙБ».",tags:["Claude Code","обучение"]}},
+ {n:9,type:"reel",date:"2026-06-22",sc:"DZfcqCBoaMA",cap:"Есть целая база скиллов под русские сервисы: 1С, Битрикс24, GigaChat, Яндекс.",lang:"ru",dur:52,views:210000,likes:14000,comments:600,author:"claude.skills",followers:62000,txt:"А ты знал, что есть целая база готовых скиллов под русские сервисы? 1С, Битрикс24, GigaChat, Яндекс, Wildberries, Ozon — подключаешь скилл, и модель сразу в контексте.",sum:{s:"Библиотека скиллов под рос-сервисы.",tags:["скиллы","рос-сервисы"]}},
+ {n:156,type:"reel",date:"2026-04-05",sc:"DUjNGspDna0",cap:"Как разблокировать платные функции CapCut бесплатно — 5 способов.",lang:"ru",dur:41,views:2100000,likes:95000,comments:2100,author:"capcut.hacks",followers:320000,txt:"Покажу, как открыть платные функции CapCut без подписки. Самый простой способ — сменить регион аккаунта, часть PRO-эффектов открывается бесплатно.",sum:{s:"Разблокировка платных функций CapCut.",tags:["CapCut","лайфхак"]}},
+ {n:4,type:"post",date:"2026-06-25",sc:"DZnVG0DtK3g",cap:"Hot take: 90% of people calling themselves AI builders never get past prompting ChatGPT.",lang:"en",dur:58,views:56000,likes:4200,comments:310,author:"ai.philosophy",followers:220000,txt:"Hot take: ninety percent of people who call themselves AI builders never get past prompting ChatGPT and copy-pasting code. There's a whole world underneath — agents that write their own tools.",txt_ru:"Непопулярное мнение: девяносто процентов тех, кто называет себя AI-билдерами, не идут дальше промптов в ChatGPT и копипасты кода. А под этим — целый мир: агенты, которые сами пишут себе инструменты."},
+ {n:6,type:"reel",date:"2026-06-24",sc:"DZ8PQckReIq",cap:"Ещё 5 дней: вступление в команду по коду, запись на занятие.",lang:"ru",dur:44,views:38000,likes:1100,comments:90,author:"court.app",followers:12000,txt:"Через пять дней большое обновление. Игрок вступает в команду по коду или ссылке-приглашению. Появилась запись на занятие — можно записать гостя."},
+ {n:7,type:"reel",date:"2026-06-22",sc:"DZ2UmfHtnNZ",cap:"сам использую во всех проектах 🐗 шарю как мощно в этой теме",lang:"ru",dur:18,views:18000,likes:900,comments:40,author:"tools.guy",followers:5000,txt:"Сам пользуюсь этим во всех проектах. Одна из самых мощных штук в теме, и я реально шарю, как её выжимать."},
+ {n:10,type:"reel",date:"2026-06-22",sc:"DZ1oc0PNxyk",cap:"Comment Aicines to get the full guide to regenerate. Made using @aicines.ai",lang:"en",dur:27,views:890000,likes:67000,comments:2800,author:"aicines.ai",followers:45000,txt:"Comment Aicines to get the full guide on how I regenerated this. Everything was made using the Aicines app — Spider-Man style transformation, frame by frame.",txt_ru:"Напиши Aicines, и я пришлю полный гайд, как я это сгенерил. Всё сделано в приложении Aicines — превращение в стиле Человека-паука, кадр за кадром."},
+ {n:12,type:"reel",date:"2026-06-22",sc:"DZxWpFbqCfJ",cap:"Turn your workflows into one-click skill with Luma Agents. Comment LUMA.",lang:"en",dur:49,views:340000,likes:22000,comments:1100,author:"lumalabs.ai",followers:380000,txt:"You can now turn entire workflows into a one-click skill with Luma Agents — they orchestrate image, video and audio models in one project.",txt_ru:"Теперь можно превратить целый воркфлоу в скилл одной кнопкой через Luma Agents — они оркестрируют модели изображения, видео и аудио в одном проекте."},
+ {n:157,type:"reel",date:"2026-04-05",sc:"DWZGAmMjCdx",cap:"Делаем 4К-качество на фото через Gemini ✨ Сохраняйте",lang:"ru",dur:31,views:1600000,likes:120000,comments:4500,author:"ai.photo.tricks",followers:95000,txt:"Показываю, как вытянуть фото до четырёхкашного качества через Gemini. Даёшь промпт на апскейл, нейронка дорисовывает резкость.",sum:{s:"Апскейл фото до 4К через Gemini.",tags:["Gemini","фото","лайфхак"]}},
+ {n:159,type:"reel",date:"2026-04-04",sc:"DRM2o7fCgzE",cap:"Тренд на старые русские песни прекрасен, но Яндекс выдал каверы на татарские песни.",lang:"ru",dur:39,views:95000,likes:8200,comments:540,author:"music.lover",followers:28000,txt:"Тренд на старые русские песни — прекрасно. Но Яндекс.Музыка выдала каверы на старые татарские песни, всплыли тёплые воспоминания."},
+ {n:160,type:"reel",date:"2026-04-04",sc:"DSW7yivCOPp",cap:"Сохраняй инструкцию по обработке фото…",fail:"private — рилс стал приватным, аудио недоступно"},
+];
+SEED.forEach(d=>{d.url=`https://www.instagram.com/${d.type==="post"?"p":"reel"}/${d.sc}/`; d.er = d.followers?+(d.views/d.followers).toFixed(1):0;
+  d.lpf = d.followers?+(d.likes/d.followers*100).toFixed(1):0;
+  d.cpf = d.followers?+(d.comments/d.followers*100).toFixed(1):0;
+  d.eng = d.views?+((d.likes+d.comments)/d.views*100).toFixed(1):0;});
+const GENERIC="[демо-расшифровка] Здесь будет распознанная речь из рилса.";
+const TOTAL_DEMO=873;
+let data=[],total=0,parsed={},engine="fw",model="medium",showTr=false,importNote="";
+
+/* model cards */
+function refreshEngine(){
+  if(engine==="fw"){$("#modelArea").style.display="block";$("#cloudNote").style.display="none";}
+  else{$("#modelArea").style.display="none";$("#cloudNote").style.display="block";}
+}
+$("#engine").onchange=e=>{engine=e.target.value;refreshEngine();};
+$$("#modelCards .mcard").forEach(c=>c.onclick=()=>{$$("#modelCards .mcard").forEach(x=>x.classList.remove("on"));c.classList.add("on");model=c.dataset.m;});
+function engineLabel(){return engine==="fw"?`faster-whisper · ${model}`:({yandex:"Yandex SpeechKit",deepgram:"Deepgram",openai:"OpenAI Whisper"})[engine];}
+
+/* import parse */
+const RE=/instagram\.com\/(reel|p|tv)\/([A-Za-z0-9_-]+)/g;
+function parseText(t){const seen=new Set(),out=[];let m,dup=0;
+  while((m=RE.exec(t))){const sc=m[2],type=m[1]==="p"?"post":"reel";if(seen.has(sc)){dup++;continue;}seen.add(sc);out.push({sc,type,url:`https://www.instagram.com/${m[1]==="p"?"p":"reel"}/${sc}/`});}return {out,dup};}
+function showDetected(){const r=parseText(parsed.raw||"");parsed.links=r.out;
+  $("#detNum").textContent=r.out.length;$("#detReel").textContent=r.out.filter(x=>x.type==="reel").length;
+  $("#detPost").textContent=r.out.filter(x=>x.type==="post").length;$("#detDup").textContent=r.dup;
+  $("#prev").innerHTML=r.out.length?r.out.slice(0,40).map(x=>`<div>${x.type==="post"?"📄":"🎬"} ${esc(x.url)}</div>`).join(""):`<div style="color:var(--faint)">ссылок не найдено</div>`;
+  $("#startBtn").disabled=r.out.length===0;$("#startBtn").textContent=r.out.length?`Начать транскрибацию (${r.out.length})`:"Начать транскрибацию";}
+$("#paste").addEventListener("input",e=>{parsed.raw=e.target.value;showDetected();});
+$("#pick").onclick=()=>$("#file").click();
+$("#file").addEventListener("change",e=>{const f=e.target.files[0];if(f)readFile(f);});
+function readFile(f){const fr=new FileReader();fr.onload=()=>{parsed.raw=String(fr.result);$("#paste").value=parsed.raw.length>3000?`… загружен ${f.name}`:parsed.raw;showDetected();};fr.readAsText(f);}
+const drop=$("#drop");
+["dragover","dragenter"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("hot");}));
+["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("hot");}));
+drop.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)readFile(f);});
+$("#demoBtn").onclick=()=>{importNote=$("#importNote").value.trim();data=SEED.map(s=>({...s,status:s.fail?"failed":"queued",reason:s.fail||null}));total=TOTAL_DEMO;startProcessing();};
+$("#startBtn").onclick=()=>{importNote=$("#importNote").value.trim();data=parsed.links.map((l,i)=>({n:i+1,type:l.type,sc:l.sc,url:l.url,date:"",cap:"",status:"queued",er:0}));total=data.length;startProcessing();};
+
+function setView(v){$("#vImport").classList.toggle("on",v==="import");$("#vProc").classList.toggle("on",v==="proc");$("#vResults").classList.toggle("on",v==="results");
+  $("#stepper").style.visibility=v==="results"?"hidden":"visible";
+  $("#st1").className="step "+(v==="import"?"on":"done");$("#st2").className="step "+(v==="proc"?"on":(v==="results"?"done":""));$("#st3").className="step "+(v==="results"?"on":"");}
+
+/* processing */
+function startProcessing(){
+  setView("proc");$("#procSub").textContent="Движок: "+engineLabel();
+  const visible=data.filter(d=>d.status!=="failed");const failedCount=data.filter(d=>d.status==="failed").length;
+  const INIT=Math.min(50,total-failedCount); // показываем результаты после первой партии
+  visible.forEach(d=>{if(!d.txt){d.txt=GENERIC;d.lang=d.lang||"ru";d.dur=d.dur||(15+Math.floor(Math.random()*40));}d.engine=engineLabel();});
+  const ROT=visible.slice(0,Math.min(visible.length,6));let ri=0;
+  const start=performance.now(),dur=Math.min(3000,1200+visible.length*120),ease=p=>1-Math.pow(1-p,2.2);
+  function paintFeed(){$("#feed").innerHTML=ROT.map((d,i)=>{const st=(i+ri)%3;const map=[["скачивание","var(--sky)"],["распознавание","var(--amber)"],["готово","var(--green)"]][st];
+    return `<div class="f"><span class="tag t-${d.type}">${d.type}</span><span class="sc">${d.sc}</span><span style="color:${map[1]};font-weight:600">${st===1?'〰 ':''}${map[0]}</span></div>`;}).join("");}
+  function frame(t){const p=Math.min(1,(t-start)/dur);const done=Math.floor(INIT*ease(p));
+    $("#pbar").style.width=(p*100).toFixed(1)+"%";$("#pcount").textContent=`${done+failedCount} / ${total} · первая партия`;
+    $("#procTitle").textContent=p<1?`Загружаю первую партию…`:"Открываю результаты…";
+    $("#ps-down").textContent=p<1?1+Math.floor(Math.random()*2):0;$("#ps-trans").textContent=p<1?1+Math.floor(Math.random()*2):0;
+    $("#ps-done").textContent=done;$("#ps-fail").textContent=failedCount;
+    if(Math.floor(t/420)!==ri){ri=Math.floor(t/420);paintFeed();}
+    if(p<1)requestAnimationFrame(frame);else fin(visible,INIT+failedCount);}
+  paintFeed();requestAnimationFrame(frame);
+}
+let loadedCount=0,bgTimer=null;
+async function fin(visible,initialLoaded){visible.forEach(d=>d.status="done");loadedCount=initialLoaded;await sleep(350);buildResults();setView("results");startBgLoad();}
+function startBgLoad(){clearInterval(bgTimer);
+  if(loadedCount>=total){updateCount();return;}
+  bgTimer=setInterval(()=>{
+    loadedCount=Math.min(total,loadedCount+Math.max(3,Math.round((total-loadedCount)*0.08)));
+    updateCount();
+    if(loadedCount>=total){clearInterval(bgTimer);}
+  },280);
+}
+function updateCount(){const remaining=total-loadedCount;
+  $("#rcount").innerHTML=`· ${loadedCount} из ${total}`+(remaining>0?` · <span style="color:var(--amber)">⏳ ещё ${remaining} догружается…</span>`:` · <span style="color:var(--green)">всё готово ✓</span>`)+` · ${engineLabel()}`;}
+
+/* results */
+let viewMode="table",filter="all",q="",sort={k:"date",dir:-1},sel=null;
+const flt={author:"",views:0,likes:0,comments:0,followers:0,er:0};
+function rows(){const ql=q.toLowerCase();let r=data.filter(d=>{
+  const okF = filter==="all"?true: filter==="viral"?(d.er>=5):(d.status===filter);
+  const okQ = !ql||((d.cap||"")+" "+(d.txt||"")+" "+(d.txt_ru||"")).toLowerCase().includes(ql);
+  const okA = !flt.author||d.author===flt.author;
+  const okM = (d.views||0)>=flt.views&&(d.likes||0)>=flt.likes&&(d.comments||0)>=flt.comments&&(d.followers||0)>=flt.followers&&(d.er||0)>=flt.er;
+  return okF&&okQ&&okA&&okM;});
+  const{k,dir}=sort;r.sort((a,b)=>{let x=a[k]??0,y=b[k]??0;if(typeof x==="string"||typeof y==="string"){x=""+x;y=""+y;}return(x>y?1:x<y?-1:0)*dir;});return r;}
+function txtFor(d){return showTr&&d.lang!=="ru"&&d.txt_ru?d.txt_ru:d.txt;}
+function buildResults(){
+  updateCount();
+  $("#sessNote").innerHTML = importNote?`🗒 <span>${esc(importNote)}</span>`:"";
+  $("#sessNote").style.display = importNote?"flex":"none";
+  const authors=[...new Set(data.map(d=>d.author).filter(Boolean))].sort();
+  $("#fAuthor").innerHTML=`<option value="">все авторы</option>`+authors.map(a=>`<option value="${esc(a)}">@${esc(a)}</option>`).join("");
+  viewMode="analytics";$$(".toggle button").forEach(b=>b.classList.remove("on"));$("#tAnalytics").classList.add("on");
+  $("#tableWrap").style.display="block";$("#tableWrap").classList.add("analytics");$("#reader").classList.remove("on");
+  renderTable();}
+function applyView(){viewMode==="read"?renderReader():renderTable();}
+const fmtPct=n=>!n?"—":n.toFixed(1).replace('.',',')+"%";
+$("#filtToggle").onclick=()=>{const p=$("#filtPanel");p.classList.toggle("on");$("#filtToggle").classList.toggle("on",p.classList.contains("on"));};
+const COLDEF=[["date","Дата"],["cap","Текст поста"],["tx","Расшифровка"],["author","Автор"],["views","Просмотры"],["er","Залётность"],["followers","Подписчики"],["likes","Лайки"],["comments","Комментарии"],["lpf","Лайки/подп"],["cpf","Комм/подп"],["eng","Вовлеч."],["status","Статус"]];
+function buildColsPanel(){$("#colsPanel").innerHTML=COLDEF.map(([k,l])=>`<label class="chkline" style="font-size:12.5px"><input type="checkbox" data-col-tog="${k}" ${wantHidden.has(k)?"":"checked"}> ${l}${ACOLS.has(k)?' <span style="color:var(--faint);font-size:10px">(аналитика)</span>':''}</label>`).join("")+`<button class="btn ghost sm" id="colsReset">Показать все</button>`;
+  $("#colsPanel").querySelectorAll("[data-col-tog]").forEach(cb=>cb.onchange=e=>{const k=e.target.dataset.colTog;e.target.checked?wantHidden.delete(k):wantHidden.add(k);applyColVis();});
+  $("#colsReset").onclick=()=>{wantHidden.clear();buildColsPanel();applyColVis();};}
+$("#colsToggle").onclick=()=>{const p=$("#colsPanel");p.classList.toggle("on");$("#colsToggle").classList.toggle("on",p.classList.contains("on"));buildColsPanel();};
+$("#fAuthor").onchange=e=>{flt.author=e.target.value;applyView();};
+$("#fSort").onchange=e=>{sort.k=e.target.value;sort.dir=e.target.value==="author"?1:-1;$$("thead th .ar").forEach(a=>a.textContent="▾");applyView();};
+[["fViews","views"],["fLikes","likes"],["fComments","comments"],["fFollowers","followers"],["fEr","er"]].forEach(([id,key])=>{
+  $("#"+id).addEventListener("input",e=>{flt[key]=+e.target.value||0;applyView();});});
+$("#fReset").onclick=()=>{flt.author="";["views","likes","comments","followers","er"].forEach(k=>flt[k]=0);
+  $("#fAuthor").value="";["fViews","fLikes","fComments","fFollowers","fEr"].forEach(id=>$("#"+id).value="");applyView();};
+const COLMETA={
+  type:{th:"Тип",cls:"nos c-type",cell:d=>`<span class="tag t-${d.type}">${d.type}</span>`},
+  date:{th:"Дата",sort:"date",cls:"c-date mono",cell:d=>d.date||"—"},
+  cap:{th:"Текст поста",cls:"nos c-cap",cell:d=>`<div class="capcol" title="${escA(d.cap)}">${d.note?`<span class="noteic" title="${escA(d.note)}">📝</span>`:""}${esc(d.cap)|| '<span style="color:var(--faint)">—</span>'}</div>`},
+  tx:{th:"Расшифровка",cls:"nos",cell:d=>d.status==="failed"?'<span class="failtx">— нет аудио —</span>':`<div class="txcell" title="${escA(txtFor(d))}">${showTr&&d.lang!=="ru"&&d.txt_ru?'<span class="trbadge">RU</span>':""}${esc(txtFor(d))}</div>`},
+  author:{th:"Автор",title:"Логин автора — клик открывает карточку рилса",sort:"author",cls:"grp-auth",cell:d=>d.author?`<span class="authlink">@${esc(d.author)}</span>`:"—"},
+  views:{th:"👁",title:"Просмотры — сколько раз посмотрели видео",sort:"views",cls:"c-num grp-reach",cell:d=>`<span class="views">${fmtV(d.views)}</span>`},
+  er:{th:"🔥",title:"🔥 Залётность = просмотры ÷ подписчики. Во сколько раз больше людей увидели рилс, чем у автора подписчиков. Больше 1 — разлетелось за пределы аудитории.",sort:"er",cls:"c-num grp-reach",cell:d=>d.status==="failed"||!d.er?'<span class="mono">—</span>':`<span class="er ${erClass(d.er)}">${d.er}×</span>`},
+  followers:{th:"👥",title:"Подписчиков у автора",sort:"followers",cls:"c-num grp-raw",cell:d=>`<span class="mono">${fmtV(d.followers)}</span>`},
+  likes:{th:"❤️",title:"Лайки",sort:"likes",cls:"c-num grp-raw",cell:d=>`<span class="mono">${fmtV(d.likes)}</span>`},
+  comments:{th:"💬",title:"Комментарии",sort:"comments",cls:"c-num grp-raw",cell:d=>`<span class="mono">${fmtV(d.comments)}</span>`},
+  lpf:{th:"❤️/👥",title:"Лайки ÷ подписчики — насколько активно реагирует аудитория автора (в %)",sort:"lpf",cls:"c-num grp-ratio",cell:d=>`<span class="mono">${fmtPct(d.lpf)}</span>`},
+  cpf:{th:"💬/👥",title:"Комментарии ÷ подписчики — насколько контент провоцирует обсуждение (в %)",sort:"cpf",cls:"c-num grp-ratio",cell:d=>`<span class="mono">${fmtPct(d.cpf)}</span>`},
+  eng:{th:"💞",title:"💞 Вовлечённость = (лайки+комменты) ÷ просмотры — какая доля посмотревших отреагировала. Честно показывает, зашло ли видео.",sort:"eng",cls:"c-num grp-ratio",cell:d=>`<span class="mono">${fmtPct(d.eng)}</span>`},
+  status:{th:"Статус",sort:"status",cls:"c-st",cell:d=>d.status==="failed"?`<span class="pill p-fail">ошибка</span>`:`<span class="pill p-done">готово</span>`}
+};
+let colOrder=["type","date","cap","tx","author","views","er","followers","likes","comments","lpf","cpf","eng","status"];
+function renderHead(){
+  $("#mainHead").innerHTML=`<tr><th class="nos c-chk"><input type="checkbox" id="all"></th>`+
+    colOrder.map(k=>{const m=COLMETA[k];const ar=m.sort?` <span class="ar">${sort.k===k?(sort.dir===1?"▴":"▾"):"▾"}</span>`:"";
+      return `<th class="${m.cls||""} colh" draggable="true" data-col="${k}" ${m.sort?`data-s="${m.sort}"`:""} title="${escA(m.title||m.th)}">${m.th}${ar}</th>`;}).join("")+`</tr>`;
+  // sort
+  $("#mainHead").querySelectorAll("th[data-s]").forEach(th=>th.onclick=ev=>{if(th.dataset.dragging)return;const k=th.dataset.s;sort.dir=sort.k===k?-sort.dir:(k==="author"?1:-1);sort.k=k;applyView();});
+  $("#all").onchange=e=>{rows().forEach(d=>d.sel=e.target.checked);updateSel();renderTable();};
+  // drag reorder
+  let dragKey=null;
+  $("#mainHead").querySelectorAll("th.colh").forEach(th=>{
+    th.addEventListener("dragstart",e=>{dragKey=th.dataset.col;th.dataset.dragging="1";th.classList.add("dragging");});
+    th.addEventListener("dragend",()=>{th.classList.remove("dragging");delete th.dataset.dragging;$$("#mainHead th").forEach(x=>x.classList.remove("dragover"));});
+    th.addEventListener("dragover",e=>{e.preventDefault();th.classList.add("dragover");});
+    th.addEventListener("dragleave",()=>th.classList.remove("dragover"));
+    th.addEventListener("drop",e=>{e.preventDefault();const tgt=th.dataset.col;if(!dragKey||dragKey===tgt)return;
+      const a=colOrder.indexOf(dragKey),b=colOrder.indexOf(tgt);colOrder.splice(a,1);colOrder.splice(colOrder.indexOf(tgt)+(a<b?1:0),0,dragKey);
+      renderHead();renderTable();});
+  });
+  applyColVis();
+}
+function renderTable(){renderHead();const r=rows();
+  $("#tbody").innerHTML=r.map(d=>`<tr class="main" data-n="${d.n}">
+    <td class="c-chk"><input type="checkbox" data-chk="${d.n}" ${d.sel?'checked':''}></td>`+
+    colOrder.map(k=>`<td class="${COLMETA[k].cls||""}" data-col="${k}">${COLMETA[k].cell(d)}</td>`).join("")+`</tr>`).join("");
+  applyColVis();}
+$("#tbody").addEventListener("click",e=>{
+  if(e.target.matches("input[type=checkbox]")){const n=+e.target.dataset.chk;data.find(d=>d.n===n).sel=e.target.checked;updateSel();return;}
+  const tr=e.target.closest("tr.main");if(!tr)return;openDrawer(+tr.dataset.n);});
+function updateSel(){const s=data.filter(d=>d.sel);$("#selbar").classList.toggle("on",s.length>0);$("#selcount").textContent=`${s.length} выбрано`;}
+$("#bClear").onclick=()=>{data.forEach(d=>d.sel=false);updateSel();applyView();const a=$("#all");if(a)a.checked=false;};
+$("#bSum").onclick=()=>{data.filter(d=>d.sel&&d.status==="done"&&!d.sum).forEach(d=>d.sum={s:"Краткое содержание (демо).",tags:["демо"]});applyView();};
+$("#bExp").onclick=()=>openModal(true);
+$("#trToggle").onclick=()=>{showTr=!showTr;$("#trToggle").classList.toggle("on",showTr);applyView();};
+
+/* detail drawer with video preview */
+function openDrawer(n){const d=data.find(x=>x.n===n);if(!d)return;sel=n;
+  const initial=((d.author||"?")[0]||"?").toUpperCase();
+  const metrics = d.status==="failed"?"":`<div class="dmetrics">
+    <div class="dm" title="Просмотры — сколько раз посмотрели видео"><div class="dm-ic">👁</div><div class="v">${fmtV(d.views)}</div><div class="l">просмотры</div></div>
+    <div class="dm" title="Подписчиков у автора"><div class="dm-ic">👥</div><div class="v">${fmtV(d.followers)}</div><div class="l">подписчики</div></div>
+    <div class="dm" title="Лайки"><div class="dm-ic">❤️</div><div class="v">${fmtV(d.likes)}</div><div class="l">лайки</div></div>
+    <div class="dm" title="Комментарии"><div class="dm-ic">💬</div><div class="v">${fmtV(d.comments)}</div><div class="l">комменты</div></div>
+    <div class="dm" title="🔥 Залётность = просмотры ÷ подписчики. Во сколько раз больше людей увидели рилс, чем у автора подписчиков."><div class="dm-ic">🔥</div><div class="v"><span class="er ${erClass(d.er)}">${d.er}×</span></div><div class="l">залётность</div></div>
+    <div class="dm" title="Лайки ÷ подписчики — насколько активно реагирует аудитория автора"><div class="dm-ic">❤️/👥</div><div class="v">${fmtPct(d.lpf)}</div><div class="l">лайки/подп</div></div>
+    <div class="dm" title="Комментарии ÷ подписчики — насколько контент провоцирует обсуждение"><div class="dm-ic">💬/👥</div><div class="v">${fmtPct(d.cpf)}</div><div class="l">комм/подп</div></div>
+    <div class="dm" title="💞 Вовлечённость = (лайки+комменты) ÷ просмотры — какая доля посмотревших отреагировала. Честно показывает, зашло ли видео."><div class="dm-ic">💞</div><div class="v">${fmtPct(d.eng)}</div><div class="l">вовлеч.</div></div></div>`;
+  const body=d.status==="failed"?`<div class="failtx">${esc(d.reason)}</div>`:
+    (d.lang!=="ru"&&d.txt_ru?`<div class="seclabel">📝 Расшифровка <span class="trbadge">перевод RU</span></div>
+      <div class="paper ru" id="paperRu">${esc(d.txt_ru)}</div>
+      <div class="paper" id="paperOrig" style="display:none">${esc(d.txt)}</div>
+      <button class="btn ghost sm" id="origToggle" style="margin-top:10px">Показать оригинал (${d.lang})</button>`
+     :`<div class="seclabel">📝 Расшифровка</div><div class="paper">${esc(d.txt)}</div>`);
+  const postBlock = d.cap?`<div class="seclabel posthead" id="postToggle">📄 Текст поста <span class="chev" id="postChev">▾</span></div>
+      <div class="postcard" id="postCard">${esc(d.cap)}</div>`:'';
+  $("#drawer").innerHTML=`<button class="dclose" id="dclose">×</button>
+    <a class="vprev" href="${d.url}" target="_blank" rel="noopener">
+      <span class="vtag tag t-${d.type}">${d.type}</span>
+      <span class="vopen">в Instagram ↗</span>
+      <span class="play"></span>
+      <span class="vlabel">${esc(d.cap||d.sc)}</span></a>
+    <div class="dbody">
+      <div class="author-row"><div class="av">${esc(initial)}</div><div><div class="an">@${esc(d.author||"—")}</div><div class="af">${fmtV(d.followers)} подписчиков · ${d.date||""}</div></div></div>
+      ${postBlock}
+      ${body}
+      ${metrics}
+      ${d.status!=="failed"?`<div class="expact"><button class="btn sm" id="dsum" ${d.sum?'disabled':''}>${d.sum?'Саммари готово':'Саммари через Claude'}</button><a class="btn ghost sm" href="${d.url}" target="_blank" rel="noopener">Открыть рилс ↗</a></div>${d.sum?`<div class="summary"><div class="label" style="color:var(--iris)">Саммари</div>${esc(d.sum.s)}<div class="tags">${d.sum.tags.map(t=>`<span class="tagx">#${esc(t)}</span>`).join("")}</div></div>`:''}`:''}
+      <div class="seclabel">🗒 Моё примечание <span style="color:var(--faint);font-weight:400;text-transform:none;letter-spacing:0">— к этому рилсу</span></div>
+      <textarea id="dnote" class="dnote" placeholder="Заметка к рилсу — идея, что переснять, почему сохранил…">${escA(d.note||"")}</textarea>
+      <div class="expact"><button class="btn sm" id="dnoteSave">Сохранить заметку</button><span id="dnoteOk" class="mono" style="color:var(--green);opacity:0">сохранено ✓</span></div>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--faint);margin-top:16px">${d.sc} · ${d.engine||engineLabel()} · ${d.dur||"—"}с</div>
+    </div>`;
+  $("#drawer").classList.add("on");$("#drawerBack").classList.add("on");
+  const pt=$("#postToggle");if(pt)pt.onclick=()=>{const c=$("#postCard"),ch=$("#postChev");const open=c.style.display!=="none";c.style.display=open?"none":"block";ch.textContent=open?"▸":"▾";};
+  const ot=$("#origToggle");if(ot)ot.onclick=()=>{const ro=$("#paperRu"),og=$("#paperOrig");const showing=og.style.display!=="none";
+    og.style.display=showing?"none":"block";ro.style.display=showing?"block":"none";ot.textContent=showing?`Показать оригинал (${d.lang})`:"Показать перевод (RU)";};
+  const sb=$("#dsum");if(sb)sb.onclick=()=>{sb.disabled=true;sb.textContent="Claude думает…";setTimeout(()=>{d.sum=d.sum||{s:"Краткое содержание по транскрибации (демо).",tags:["демо"]};openDrawer(n);applyView();},800);};
+  const ns=$("#dnoteSave");if(ns)ns.onclick=()=>{d.note=$("#dnote").value.trim();const ok=$("#dnoteOk");ok.style.opacity=1;setTimeout(()=>ok.style.opacity=0,1500);applyView();};}
+function closeDrawer(){$("#drawer").classList.remove("on");$("#drawerBack").classList.remove("on");}
+$("#drawerBack").onclick=closeDrawer;
+document.addEventListener("click",e=>{if(e.target.id==="dclose")closeDrawer();});
+
+/* reader */
+function renderReader(){const r=rows();
+  $("#rlist").innerHTML=r.map((d,i)=>`<button class="row ${sel===d.n?'sel':''}" data-n="${d.n}">
+    <div class="top"><span class="tag t-${d.type}">${d.type}</span><span class="mono">${d.date||"—"}</span>
+      ${d.er?`<span class="er ${erClass(d.er)}" style="margin-left:auto">${d.er}×</span>`:'<span style="margin-left:auto"></span>'}</div>
+    <div class="capcell">${esc(d.cap||txtFor(d))||esc(d.url)}</div></button>`).join("");
+  if(sel===null&&r.length)sel=r[0].n;
+  renderRDetail();}
+function renderRDetail(){const r=rows();const idx=r.findIndex(x=>x.n===sel);const d=r[idx];const el=$("#rdetail");
+  if(!d){el.innerHTML='<div style="color:var(--faint);margin-top:30px">Выбери рилс слева.</div>';return;}
+  const initial=((d.author||"?")[0]||"?").toUpperCase();
+  const body=d.status==="failed"?`<div class="failtx">${esc(d.reason)}</div>`:
+    (d.lang!=="ru"&&d.txt_ru?`<div class="plabel">Расшифровка <span class="trbadge">перевод RU</span></div>
+       <div class="paper ru rd-paper" id="rPaperRu">${esc(d.txt_ru)}</div>
+       <div class="paper rd-paper" id="rPaperOrig" style="display:none">${esc(d.txt)}</div>
+       <button class="btn ghost sm" id="rOrigToggle" style="margin-top:10px">Показать оригинал (${d.lang})</button>`
+     :`<div class="plabel">Расшифровка</div><div class="paper rd-paper">${esc(d.txt)}</div>`);
+  el.innerHTML=`<div class="rd-wrap">
+    <div class="rd-head">
+      <a class="rd-thumb" href="${d.url}" target="_blank" rel="noopener"><span class="play"></span></a>
+      <div>
+        <div class="author-row" style="margin:0 0 8px"><div class="av">${esc(initial)}</div><div><div class="an">@${esc(d.author||"—")}</div><div class="af">${fmtV(d.followers)} подписчиков · ${d.date||""}</div></div></div>
+        <div class="rd-stats"><span>👁 ${fmtV(d.views)}</span><span>❤ ${fmtV(d.likes)}</span><span>💬 ${fmtV(d.comments)}</span>${d.er?`<span class="er ${erClass(d.er)}">🔥 ${d.er}×</span>`:""}</div>
+      </div>
+    </div>
+    ${d.cap?`<div class="plabel">Текст поста</div><div style="color:var(--mut);margin-bottom:14px">${esc(d.cap)}</div>`:''}
+    ${body}
+    ${d.sum?`<div class="summary"><div class="label" style="color:var(--iris)">Саммари</div>${esc(d.sum.s)}<div class="tags">${d.sum.tags.map(t=>`<span class="tagx">#${esc(t)}</span>`).join("")}</div></div>`:''}
+    <div class="plabel" style="margin-top:18px">Моё примечание</div>
+    <textarea id="rdnote" class="dnote" placeholder="Заметка к рилсу…">${escA(d.note||"")}</textarea>
+    <div class="expact"><button class="btn sm" id="rdnoteSave">Сохранить</button><span id="rdnoteOk" class="mono" style="color:var(--green);opacity:0">сохранено ✓</span>
+      <a class="btn ghost sm" href="${d.url}" target="_blank" rel="noopener">Открыть рилс ↗</a></div>
+    <div class="rd-nav">
+      <button class="btn ghost sm" id="rdPrev" ${idx<=0?'disabled':''}>‹ Предыдущий</button>
+      <span class="mono" style="color:var(--faint)">${idx+1} из ${r.length}</span>
+      <button class="btn ghost sm" id="rdNext" ${idx>=r.length-1?'disabled':''}>Следующий ›</button>
+    </div>
+  </div>`;
+  const ot=$("#rOrigToggle");if(ot)ot.onclick=()=>{const ro=$("#rPaperRu"),og=$("#rPaperOrig");const sh=og.style.display!=="none";og.style.display=sh?"none":"block";ro.style.display=sh?"block":"none";ot.textContent=sh?`Показать оригинал (${d.lang})`:"Показать перевод (RU)";};
+  const ns=$("#rdnoteSave");if(ns)ns.onclick=()=>{d.note=$("#rdnote").value.trim();const ok=$("#rdnoteOk");ok.style.opacity=1;setTimeout(()=>ok.style.opacity=0,1500);};
+  const pv=$("#rdPrev");if(pv)pv.onclick=()=>{sel=r[idx-1].n;renderReader();$("#rdetail").scrollTop=0;};
+  const nx=$("#rdNext");if(nx)nx.onclick=()=>{sel=r[idx+1].n;renderReader();$("#rdetail").scrollTop=0;};}
+$("#rlist").addEventListener("click",e=>{const b=e.target.closest(".row");if(!b)return;sel=+b.dataset.n;renderReader();$("#rdetail").scrollTop=0;});
+$("#tTable").onclick=()=>{viewMode="table";$$(".toggle button").forEach(b=>b.classList.remove("on"));$("#tTable").classList.add("on");$("#tableWrap").style.display="block";$("#tableWrap").classList.remove("analytics");$("#reader").classList.remove("on");renderTable();};
+$("#tAnalytics").onclick=()=>{viewMode="analytics";$$(".toggle button").forEach(b=>b.classList.remove("on"));$("#tAnalytics").classList.add("on");$("#tableWrap").style.display="block";$("#tableWrap").classList.add("analytics");$("#reader").classList.remove("on");renderTable();};
+$("#tRead").onclick=()=>{viewMode="read";$$(".toggle button").forEach(b=>b.classList.remove("on"));$("#tRead").classList.add("on");$("#tableWrap").style.display="none";$("#reader").classList.add("on");renderReader();};
+$$(".subbar .chip[data-f]").forEach(c=>c.onclick=()=>{$$(".subbar .chip[data-f]").forEach(x=>x.classList.remove("on"));c.classList.add("on");filter=c.dataset.f;applyView();});
+$("#q").addEventListener("input",e=>{q=e.target.value;applyView();});
+$("#newBtn").onclick=()=>{clearInterval(bgTimer);sel=null;parsed={};$("#paste").value="";showDetected();setView("import");};
+
+/* export */
+let efmt="csv",scope="all",exLang="ru";
+const LABELS={shortcode:"код",url:"ссылка",caption:"текст поста",type:"тип",date:"дата",views:"просмотры",likes:"лайки",comments:"комментарии",author:"автор",followers:"подписчики",er:"залётность (просм/подп)",likes_per_follower_pct:"лайки/подп %",comments_per_follower_pct:"комм/подп %",engagement_pct:"вовлечённость % (реакции/просмотры)",language:"язык",status:"статус",engine:"движок",note:"моя заметка",transcript:"расшифровка",transcript_ru:"перевод (RU)",summary:"саммари",tags:"теги"};
+const LBL=c=>LABELS[c]||c;
+function COLSf(){const base=["shortcode","url","caption","type","date","views","likes","comments","author","followers","er","likes_per_follower_pct","comments_per_follower_pct","engagement_pct","language","status","engine","note"];
+  return exLang==="both"?[...base,"transcript","transcript_ru","summary","tags"]:[...base,"transcript","summary","tags"];}
+function exportRows(){return data.filter(d=>d.status==="done"&&(scope==="all"||d.sel));}
+function rowObj(d){const base={shortcode:d.sc,url:d.url,caption:d.cap||"",type:d.type,date:d.date,views:d.views||"",likes:d.likes||"",comments:d.comments||"",author:d.author||"",followers:d.followers||"",er:d.er||"",likes_per_follower_pct:d.lpf||"",comments_per_follower_pct:d.cpf||"",engagement_pct:d.eng||"",language:d.lang||"",status:d.status,engine:d.engine||engineLabel(),note:d.note||"",summary:d.sum?d.sum.s:"",tags:d.sum?d.sum.tags.join("|"):""};
+  const ru=d.txt_ru||(d.lang==="ru"?d.txt:"");
+  if(exLang==="both"){base.transcript=d.txt||"";base.transcript_ru=ru;}
+  else if(exLang==="ru"){base.transcript=ru||d.txt||"";}
+  else{base.transcript=d.txt||"";}
+  return base;}
+function openModal(s){scope=s?"sel":"all";$("#scAll").classList.toggle("on",scope==="all");$("#scSel").classList.toggle("on",scope==="sel");setLang("ru");$("#modal").classList.add("on");paintPreview();}
+$("#expBtn").onclick=()=>openModal(false);$("#mx").onclick=()=>$("#modal").classList.remove("on");
+$("#modal").addEventListener("click",e=>{if(e.target.id==="modal")$("#modal").classList.remove("on");});
+$$("#fmts .fmt").forEach(b=>b.onclick=()=>{$$("#fmts .fmt").forEach(x=>x.classList.remove("on"));b.classList.add("on");efmt=b.dataset.k;
+  $("#dlfmt").textContent=({csv:"CSV",xlsx:"Excel",json:"JSON",md:"Markdown",supabase:"в Supabase",notion:"в Notion"})[efmt];paintPreview();});
+$("#scAll").onclick=()=>{scope="all";$("#scAll").classList.add("on");$("#scSel").classList.remove("on");paintPreview();};
+$("#scSel").onclick=()=>{scope="sel";$("#scSel").classList.add("on");$("#scAll").classList.remove("on");paintPreview();};
+function setLang(l){exLang=l;["lgOrig","lgRu","lgBoth"].forEach(id=>$("#"+id).classList.remove("on"));$("#"+({orig:"lgOrig",ru:"lgRu",both:"lgBoth"})[l]).classList.add("on");paintPreview();}
+$("#lgOrig").onclick=()=>setLang("orig");$("#lgRu").onclick=()=>setLang("ru");$("#lgBoth").onclick=()=>setLang("both");
+function paintPreview(){const rs=exportRows();const COLS=COLSf();$("#prevscope").textContent=`${rs.length} строк · колонок: ${COLS.length}`;
+  const machine=efmt==="json"; // JSON keeps technical keys; others get Russian headers
+  if(efmt==="supabase"||efmt==="notion"){$("#prevwrap").innerHTML=`<div style="padding:16px;color:var(--tx);font-size:12.5px;line-height:1.6">${efmt==="supabase"?"В таблицу <b style='color:var(--iris)'>transcripts</b> через Supabase MCP. Поля: <span style='color:var(--mut)'>"+COLS.join(", ")+"</span>.":"База Notion со свойствами: <span style='color:var(--mut)'>ссылка, текст поста, просмотры, автор, залётность, расшифровка, перевод, теги</span>."}</div>`;$("#dlnote").textContent=efmt==="supabase"?"требует подключённый Supabase":"требует доступ к Notion";return;}
+  $("#dlnote").textContent="";const sample=rs.slice(0,4).map(rowObj);
+  $("#prevwrap").innerHTML=`<table><thead><tr>${COLS.map(c=>`<th>${machine?c:esc(LBL(c))}</th>`).join("")}</tr></thead><tbody>${sample.map(o=>`<tr>${COLS.map(c=>`<td title="${escA(String(o[c]))}">${esc(String(o[c]))}</td>`).join("")}</tr>`).join("")}${rs.length>4?`<tr><td colspan="${COLS.length}" style="color:var(--faint)">… ещё ${rs.length-4}</td></tr>`:""}</tbody></table>`;}
+function download(name,text,mime){try{const b=new Blob([text],{type:mime});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(u);}catch(e){alert("Прототип: скачивание заблокировано песочницей. В реальном сервисе файл скачается: "+name);}}
+$("#doDl").onclick=()=>{const COLS=COLSf();const rs=exportRows().map(rowObj);
+  if(efmt==="csv"){const head=COLS.map(c=>LBL(c)).join(",");const body=rs.map(o=>COLS.map(c=>`"${String(o[c]).replace(/"/g,'""')}"`).join(",")).join("\n");download("reelscribe.csv","\uFEFF"+head+"\n"+body,"text/csv");}
+  else if(efmt==="json"){download("reelscribe.json",JSON.stringify(rs,null,2),"application/json");}
+  else if(efmt==="md"){const md=rs.map(o=>`## ${o.shortcode} · ${o.date} · 👁 ${fmtV(o.views)} · 🔥 ${o.er}×\n${o.url}\n\n${o.transcript}\n${o.transcript_ru&&o.transcript_ru!==o.transcript?"\n**RU:** "+o.transcript_ru+"\n":""}${o.summary?`\n> ${o.summary}\n`:""}`).join("\n---\n\n");download("reelscribe.md","# Расшифровки рилсов\n\n"+md,"text/markdown");}
+  else{alert("Прототип: «"+efmt+"» выполнится на бэкенде.");}};
+
+refreshEngine();showDetected();
+</script>
+</body>
+</html>
