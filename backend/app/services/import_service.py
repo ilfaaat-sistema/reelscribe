@@ -100,6 +100,14 @@ async def handle_import(
             'state': 'queued',
         }).execute()
 
+    # Если модель large-v3 и Kaggle настроен — тригерим ноутбук
+    if req.model == 'large-v3':
+        from app.pipeline.kaggle_trigger import trigger_kaggle_notebook
+        triggered = trigger_kaggle_notebook()
+        if triggered:
+            import logging
+            logging.getLogger(__name__).info('Kaggle notebook triggered for session %s', session_id)
+
     return ImportResponse(
         session_id=session_id,
         total=len(unique),
