@@ -17,11 +17,12 @@ async def get_progress(session: UUID = Query(...)) -> ProgressResponse:
     sess = db.table('import_sessions').select('total').eq('id', str(session)).execute()
     total = sess.data[0].get('total', 0) if sess.data else 0
     done_ids = [j['reel_id'] for j in jobs.data if j['state'] == 'done']
-    failed = sum(1 for j in jobs.data if j['state'] == 'failed')
+    failed_ids = [j['reel_id'] for j in jobs.data if j['state'] == 'failed']
     return ProgressResponse(
         session_id=session,
         loaded=len(done_ids),
         total=total,
-        failed=failed,
+        failed=len(failed_ids),
         done_ids=done_ids,
+        failed_ids=failed_ids,
     )

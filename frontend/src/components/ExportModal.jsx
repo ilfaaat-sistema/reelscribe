@@ -4,6 +4,7 @@ import { fmtV } from '../lib/utils'
 
 const FMTS = [
   { v: 'csv', label: 'CSV', icon: '📊', desc: 'Excel, Google Sheets, любой табличный редактор', ext: '.csv' },
+  { v: 'xlsx', label: 'XLSX', icon: '📗', desc: 'Excel с форматированием, заголовки на русском', ext: '.xlsx' },
   { v: 'json', label: 'JSON', icon: '{ }', desc: 'Для разработчиков, API, Make/n8n интеграции', ext: '.json' },
 ]
 
@@ -19,19 +20,13 @@ export default function ExportModal({ reels, selected, onClose }) {
   ).slice(0, 5)
 
   function doExport() {
-    const params = { format: fmt, lang, scope }
     if (scope === 'selected' && selected.length) {
-      selected.forEach(id => {
-        const url = exportUrl({ format: fmt, lang, scope, ids: id })
-        window.open(url, '_blank')
-        return
-      })
       const url = new URL(exportUrl({ format: fmt, lang, scope }), window.location.href)
       selected.forEach(id => url.searchParams.append('ids', id))
       window.open(url.toString(), '_blank')
       return
     }
-    window.open(exportUrl(params), '_blank')
+    window.open(exportUrl({ format: fmt, lang }), '_blank')
   }
 
   return (

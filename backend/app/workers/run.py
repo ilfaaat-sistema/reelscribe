@@ -20,10 +20,32 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
 
 
+def _session_flags(db, session_id: str) -> tuple[bool, bool]:
+    """Возвращает (pull_stats, translate) для сессии."""
+    if not session_id:
+        return True, False
+    sess = db.table('import_sessions').select('pull_stats, translate').eq('id', session_id).execute()
+    row = sess.data[0] if sess.data else {}
+    return row.get('pull_stats', True), row.get('translate', False)
+
+
+def _maybe_close_session(db, session_id: str) -> None:
+    """Помечает сессию как done, если все её джобы завершены."""
+    if not session_id:
+        return
+    jobs = db.table('jobs').select('state').eq('session_id', session_id).execute()
+    if not jobs.data:
+        return
+    pending = [j for j in jobs.data if j['state'] not in ('done', 'failed')]
+    if not pending:
+        db.table('import_sessions').update({'status': 'done'}).eq('id', session_id).execute()
+
+
 async def _process_job(job: dict) -> None:
     db = get_db()
     job_id: str = job['id']
     reel_id: str = job['reel_id']
+    session_id: str = job.get('session_id') or ''
     attempts: int = job.get('attempts', 0) + 1
 
     db.table('jobs').update({'state': 'in_progress', 'attempts': attempts}).eq('id', job_id).execute()
@@ -38,14 +60,7 @@ async def _process_job(job: dict) -> None:
         )
         model_name: str = (transcript_resp.data[0] if transcript_resp.data else {}).get('model') or 'medium'
 
-        session_resp = (
-            db.table('jobs').select('session_id').eq('id', job_id).execute()
-        )
-        session_id: str = (session_resp.data[0] if session_resp.data else {}).get('session_id', '')
-        pull_stats = True
-        if session_id:
-            sess = db.table('import_sessions').select('pull_stats').eq('id', session_id).execute()
-            pull_stats = (sess.data[0] if sess.data else {}).get('pull_stats', True)
+        pull_stats, do_translate = _session_flags(db, session_id)
 
         # скачиваем аудио (throttle внутри download_audio)
         audio_path, info = await download_audio(url, AUDIO_DIR)
@@ -61,8 +76,17 @@ async def _process_job(job: dict) -> None:
         db.table('transcripts').update({'status': 'transcribing'}).eq('reel_id', reel_id).execute()
         text, language, duration_sec = await asyncio.to_thread(transcribe_audio, audio_path, model_name)
 
+        # переводим на русский если запрошено и язык не русский
+        text_ru: str | None = None
+        if do_translate and text and language and language != 'ru':
+            logger.info('Перевожу %s → ru…', language)
+            db.table('transcripts').update({'status': 'translating'}).eq('reel_id', reel_id).execute()
+            from app.pipeline.translate import translate_to_ru
+            text_ru = await asyncio.to_thread(translate_to_ru, text)
+
         db.table('transcripts').update({
             'text': text,
+            'text_ru': text_ru,
             'language': language,
             'duration_sec': int(duration_sec),
             'status': 'done',
@@ -70,7 +94,7 @@ async def _process_job(job: dict) -> None:
         }).eq('reel_id', reel_id).execute()
 
         db.table('jobs').update({'state': 'done', 'error': None}).eq('id', job_id).execute()
-        logger.info('✓ %s', url)
+        logger.info('✓ %s (lang=%s, translate=%s)', url, language, do_translate)
 
     except Exception as exc:  # noqa: BLE001
         logger.error('✗ job %s: %s', job_id, exc)
@@ -94,6 +118,7 @@ async def _process_job(job: dict) -> None:
                     f.unlink(missing_ok=True)
         except Exception:  # noqa: BLE001
             pass
+        _maybe_close_session(db, session_id)
 
 
 async def run_worker() -> None:

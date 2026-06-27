@@ -16,10 +16,11 @@ function FeedItem({ item }) {
 }
 
 export default function Processing({ sessionId, total, onDone }) {
-  const [prog, setProg] = useState({ loaded: 0, total: total || 0, failed: 0 })
+  const [prog, setProg] = useState({ loaded: 0, total: total || 0, failed: 0, done_ids: [], failed_ids: [] })
   const [feed, setFeed] = useState([])
   const [done, setDone] = useState(false)
-  const seenRef = useRef(new Set())
+  const seenDoneRef = useRef(new Set())
+  const seenFailRef = useRef(new Set())
   const doneRef = useRef(false)
 
   useEffect(() => {
@@ -30,11 +31,19 @@ export default function Processing({ sessionId, total, onDone }) {
       try {
         const p = await getProgress(sessionId)
         setProg(p)
-        const newIds = (p.done_ids || []).filter(id => !seenRef.current.has(id))
-        newIds.forEach(id => {
-          seenRef.current.add(id)
-          setFeed(f => [{ sc: id.slice(0, 8) + '…', state: 'done' }, ...f].slice(0, 12))
+
+        const newDone = (p.done_ids || []).filter(id => !seenDoneRef.current.has(id))
+        newDone.forEach(id => {
+          seenDoneRef.current.add(id)
+          setFeed(f => [{ sc: id.slice(0, 8) + '…', state: 'done' }, ...f].slice(0, 15))
         })
+
+        const newFailed = (p.failed_ids || []).filter(id => !seenFailRef.current.has(id))
+        newFailed.forEach(id => {
+          seenFailRef.current.add(id)
+          setFeed(f => [{ sc: id.slice(0, 8) + '…', state: 'failed' }, ...f].slice(0, 15))
+        })
+
         const finished = p.total > 0 && (p.loaded + p.failed) >= p.total
         if (finished && !doneRef.current) {
           doneRef.current = true
@@ -51,7 +60,7 @@ export default function Processing({ sessionId, total, onDone }) {
   }, [sessionId])
 
   const pct = prog.total > 0 ? Math.round((prog.loaded + prog.failed) / prog.total * 100) : 0
-  const downloading = prog.total > 0 ? Math.max(0, prog.total - prog.loaded - prog.failed) : 0
+  const inProgress = prog.total > 0 ? Math.max(0, prog.total - prog.loaded - prog.failed) : 0
 
   return (
     <div className="procview">
@@ -73,12 +82,8 @@ export default function Processing({ sessionId, total, onDone }) {
 
         <div className="pstats">
           <div className="pstat">
-            <div className="v">{downloading}</div>
-            <div className="l">⏬ скачивание</div>
-          </div>
-          <div className="pstat">
-            <div className="v">{Math.max(0, prog.total - prog.loaded - prog.failed - downloading)}</div>
-            <div className="l">🎙 распознавание</div>
+            <div className="v">{inProgress}</div>
+            <div className="l">⏳ в обработке</div>
           </div>
           <div className="pstat">
             <div className="v" style={{color:'var(--green)'}}>{prog.loaded}</div>

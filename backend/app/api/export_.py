@@ -6,6 +6,7 @@ import json
 from typing import Annotated, Literal, Optional
 from uuid import UUID
 
+import openpyxl
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response, StreamingResponse
 
@@ -84,6 +85,8 @@ async def export_reels(
 
     if format == 'csv':
         return _as_csv(rows, lang)
+    if format == 'xlsx':
+        return _as_xlsx(rows, lang)
     if format == 'json':
         return _as_json(rows, lang)
     raise HTTPException(501, f"формат {format} ещё не реализован")
@@ -100,6 +103,34 @@ def _as_csv(rows: list[dict], lang: str) -> StreamingResponse:
         iter([buf.getvalue()]),
         media_type='text/csv; charset=utf-8',
         headers={'Content-Disposition': 'attachment; filename="reelscribe.csv"'},
+    )
+
+
+def _as_xlsx(rows: list[dict], lang: str) -> Response:
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'ReelScribe'
+    fields = list(_to_flat({}, lang).keys())
+    header_fill = openpyxl.styles.PatternFill('solid', fgColor='1a1a2e')
+    header_font = openpyxl.styles.Font(bold=True, color='FFFFFF')
+    ws.append([_RU.get(f, f) for f in fields])
+    for cell in ws[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+    for r in rows:
+        flat = _to_flat(r, lang)
+        ws.append([flat.get(f, '') for f in fields])
+    # авто-ширина колонок
+    for col in ws.columns:
+        max_len = max((len(str(c.value or '')) for c in col), default=10)
+        ws.column_dimensions[col[0].column_letter].width = min(max_len + 2, 60)
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return Response(
+        content=buf.getvalue(),
+        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': 'attachment; filename="reelscribe.xlsx"'},
     )
 
 

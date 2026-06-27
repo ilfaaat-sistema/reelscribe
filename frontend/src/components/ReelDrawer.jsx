@@ -180,6 +180,7 @@ export default function ReelDrawer({ reelId, onClose }) {
                     {reel.transcript_status === 'queued' ? '— в очереди' :
                      reel.transcript_status === 'downloading' ? '— скачиваем…' :
                      reel.transcript_status === 'transcribing' ? '— распознаём…' :
+                     reel.transcript_status === 'translating' ? '— переводим…' :
                      '— нет данных'}
                   </span>
                 </div>

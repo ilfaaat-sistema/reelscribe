@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     apify_api_token: str = ""
     anthropic_api_key: str = ""
+    deepl_api_key: str = ""       # free tier: 500k символов/мес, регистрация на deepl.com
+
+    instagram_cookies_file: str = ""  # путь к cookies.txt для yt-dlp
 
     audio_tmp_dir: str = "/tmp/reelscribe_audio"
     worker_concurrency: int = 2

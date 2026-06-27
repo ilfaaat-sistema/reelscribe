@@ -10,6 +10,8 @@ from typing import Any
 import imageio_ffmpeg
 import yt_dlp
 
+from app.core.config import settings
+
 logger = logging.getLogger(__name__)
 
 _semaphore = asyncio.Semaphore(2)   # max 2 параллельных скачивания
@@ -22,7 +24,15 @@ def _get_ffmpeg() -> str:
 async def download_audio(url: str, dest_dir: Path) -> tuple[Path, dict[str, Any]]:
     dest_dir.mkdir(parents=True, exist_ok=True)
     async with _semaphore:
-        path, info = await asyncio.to_thread(_download_sync, url, dest_dir)
+        try:
+            path, info = await asyncio.to_thread(_download_sync, url, dest_dir)
+        except Exception as exc:
+            if settings.apify_api_token:
+                logger.warning("yt-dlp: %s — пробую Apify-фолбэк…", exc)
+                from app.pipeline.apify_downloader import fetch_via_apify
+                path, info = await fetch_via_apify(url, dest_dir)
+            else:
+                raise
         await asyncio.sleep(random.uniform(1.5, 4.0))   # throttle jitter
     return path, info
 
@@ -46,6 +56,9 @@ def _download_sync(url: str, dest_dir: Path) -> tuple[Path, dict[str, Any]]:
         'ignoreerrors': False,
         'retries': 3,
     }
+
+    if settings.instagram_cookies_file:
+        ydl_opts['cookiefile'] = settings.instagram_cookies_file
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)

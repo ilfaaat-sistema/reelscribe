@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { getReels } from '../api/client'
+import { getReels, getSession } from '../api/client'
 import { fmtV, fmtPct, erClass } from '../lib/utils'
 import ReelDrawer from '../components/ReelDrawer'
 import ExportModal from '../components/ExportModal'
@@ -19,6 +19,7 @@ function StatusPill({ status }) {
   if (status === 'done') return <span className="pill p-done">✓ готово</span>
   if (status === 'failed') return <span className="pill p-fail">✗ ошибка</span>
   if (status === 'transcribing') return <span style={{color:'var(--amber)',fontSize:11}}>🎙 расшифровка</span>
+  if (status === 'translating') return <span style={{color:'var(--iris)',fontSize:11}}>🌐 перевод</span>
   if (status === 'downloading') return <span style={{color:'var(--sky)',fontSize:11}}>⬇ скачивание</span>
   return <span style={{color:'var(--faint)',fontSize:11}}>⏳ очередь</span>
 }
@@ -190,6 +191,7 @@ export default function Results({ sessionId }) {
   const [showExport, setShowExport] = useState(false)
   const [filters, setFilters] = useState({ author: '', min_views: '', min_er: '' })
   const [dragSrc, setDragSrc] = useState(null)
+  const [sessionNote, setSessionNote] = useState(null)
   const searchTimer = useRef(null)
 
   const load = useCallback(async () => {
@@ -215,6 +217,10 @@ export default function Results({ sessionId }) {
   }, [sessionId, chip, sortKey, sortDesc, search, filters])
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    if (sessionId) getSession(sessionId).then(s => setSessionNote(s.comment || null)).catch(() => {})
+  }, [sessionId])
 
   function handleSearch(v) {
     clearTimeout(searchTimer.current)
@@ -248,8 +254,6 @@ export default function Results({ sessionId }) {
 
   const visibleCols = DEFAULT_COLS.filter(c => cols.includes(c.key))
     .sort((a, b) => cols.indexOf(a.key) - cols.indexOf(b.key))
-
-  const sessionNote = null
 
   return (
     <div className="resview">

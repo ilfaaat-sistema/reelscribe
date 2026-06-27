@@ -9,3 +9,4 @@ node_modules/
 dist/
 *.egg-info/
 .pytest_cache/
+.mcp.json

@@ -105,3 +105,4 @@ class ProgressResponse(BaseModel):
     total: int
     failed: int
     done_ids: list[UUID]
+    failed_ids: list[UUID] = []

@@ -21,6 +21,8 @@ services:
         value: "3.11.9"
       - key: FRONTEND_URL
         value: https://reelscribe-ui.onrender.com
+      - key: DEEPL_API_KEY
+        sync: false                # опционально: free tier deepl.com/pro#developer
 
   # ── Worker (Whisper-воркер) ───────────────────────────────────────────────
   - type: worker
