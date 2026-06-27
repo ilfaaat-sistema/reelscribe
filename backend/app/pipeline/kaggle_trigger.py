@@ -9,7 +9,7 @@ def trigger_kaggle_notebook() -> bool:
     """Запускает Kaggle-ноутбук через API. Возвращает True если успешно."""
     from app.core.config import settings
 
-    if not (settings.kaggle_username and settings.kaggle_key and settings.kaggle_notebook_id):
+    if not (settings.kaggle_api_token and settings.kaggle_notebook_id):
         return False
 
     import httpx
@@ -25,14 +25,14 @@ def trigger_kaggle_notebook() -> bool:
     try:
         resp = httpx.post(
             url,
-            auth=(settings.kaggle_username, settings.kaggle_key),
+            headers={"Authorization": f"Bearer {settings.kaggle_api_token}"},
             timeout=15,
         )
         if resp.status_code in (200, 201):
-            logger.info("Kaggle notebook запущен: %s", notebook_id)
+            logger.info("Kaggle notebook triggered: %s", notebook_id)
             return True
         else:
-            logger.warning("Kaggle API: %s %s", resp.status_code, resp.text[:200])
+            logger.warning("Kaggle API %s: %s", resp.status_code, resp.text[:300])
             return False
     except Exception as exc:
         logger.warning("Ошибка тригера Kaggle: %s", exc)
