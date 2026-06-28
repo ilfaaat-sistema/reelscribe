@@ -17,8 +17,9 @@ class Settings(BaseSettings):
 
     instagram_cookies_file: str = ""  # путь к cookies.txt для yt-dlp
 
-    kaggle_api_token: str = ""     # из kaggle.com/settings/api → Generate New Token (KGAT_...)
-    kaggle_notebook_id: str = ""   # slug ноутбука: ilfatgilmutdinov/notebook008db83901
+    kaggle_username: str = "ilfatgilmutdinov"
+    kaggle_key: str = ""           # из kaggle.json (Legacy API) → kaggle.com/settings/api
+    kaggle_notebook_id: str = ""   # slug: ilfatgilmutdinov/notebook008db83901
 
     audio_tmp_dir: str = "/tmp/reelscribe_audio"
     worker_concurrency: int = 2
