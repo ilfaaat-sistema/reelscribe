@@ -2,22 +2,56 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { parseLinks } from '../lib/utils'
 import { importLinks, getSessions } from '../api/client'
 
-const ENGINES = [
-  { v: 'faster-whisper', l: 'faster-whisper (локально)' },
-  { v: 'yandex', l: 'Yandex SpeechKit' },
-  { v: 'deepgram', l: 'Deepgram' },
-  { v: 'openai', l: 'OpenAI Whisper' },
-]
-
 function fmtDate(iso) {
   if (!iso) return ''
   return new Date(iso).toLocaleString('ru', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
+const MODELS = [
+  {
+    v: 'medium',
+    label: 'medium',
+    desc: 'MLX Whisper на Apple Silicon. Быстро, точность ~85%.',
+    badge: '~1 мин / рилс',
+    tip: 'Работает локально через mlx-whisper — использует Neural Engine M1/M2. Не требует интернета и внешних сервисов.',
+  },
+  {
+    v: 'large-v3',
+    label: 'large-v3',
+    desc: 'Запускается на Kaggle GPU. Точность ~95%, акценты и шум.',
+    badge: '~2 мин / рилс (GPU)',
+    tip: 'Обрабатывается на бесплатном T4 GPU в Kaggle. Требует настроенного KAGGLE_KEY и KAGGLE_NOTEBOOK_ID в .env. Запускается автоматически при нажатии «Запустить».',
+  },
+]
+
+async function readFileAsText(file) {
+  const name = file.name.toLowerCase()
+  if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+    const { read, utils } = await import('xlsx')
+    const buf = await file.arrayBuffer()
+    const wb = read(buf, { type: 'array' })
+    const lines = []
+    for (const sheetName of wb.SheetNames) {
+      const rows = utils.sheet_to_json(wb.Sheets[sheetName], { header: 1 })
+      for (const row of rows) {
+        for (const cell of row) {
+          if (typeof cell === 'string' && cell.includes('instagram.com')) lines.push(cell)
+        }
+      }
+    }
+    return lines.join('\n')
+  }
+  return new Promise((res, rej) => {
+    const r = new FileReader()
+    r.onload = e => res(e.target.result)
+    r.onerror = rej
+    r.readAsText(file, 'utf-8')
+  })
+}
+
 export default function Import({ onDone }) {
   const [text, setText] = useState('')
   const [model, setModel] = useState('medium')
-  const [engine, setEngine] = useState('faster-whisper')
   const [translate, setTranslate] = useState(true)
   const [pullStats, setPullStats] = useState(true)
   const [comment, setComment] = useState('')
@@ -25,7 +59,8 @@ export default function Import({ onDone }) {
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
   const [dragging, setDragging] = useState(false)
-  const dropRef = useRef()
+  const [tooltip, setTooltip] = useState(null)
+  const fileRef = useRef()
 
   const parsed = parseLinks(text)
 
@@ -33,10 +68,13 @@ export default function Import({ onDone }) {
     getSessions().then(setSessions).catch(() => {})
   }, [])
 
-  const handleFile = useCallback((file) => {
-    const r = new FileReader()
-    r.onload = (e) => setText((p) => p ? p + '\n' + e.target.result : e.target.result)
-    r.readAsText(file, 'utf-8')
+  const handleFile = useCallback(async (file) => {
+    try {
+      const content = await readFileAsText(file)
+      setText(p => p ? p + '\n' + content : content)
+    } catch (e) {
+      console.error('Ошибка чтения файла', e)
+    }
   }, [])
 
   function onDrop(e) {
@@ -54,7 +92,7 @@ export default function Import({ onDone }) {
       const res = await importLinks({
         links_text: text,
         source_type: 'paste',
-        engine,
+        engine: 'faster-whisper',
         model,
         translate,
         pull_stats: pullStats,
@@ -75,74 +113,80 @@ export default function Import({ onDone }) {
     <div className="imp">
       <p className="kicker">Шаг 1 из 3</p>
       <h2 className="hero">Загрузи ссылки<br/>на Instagram Reels</h2>
-      <p className="lead">Вставь ссылки или перетащи файл — сервис расшифрует речь, переведёт и покажет метрики</p>
+      <p className="lead">Вставь ссылки или прикрепи файл — сервис расшифрует речь, переведёт и покажет метрики</p>
 
       <div className="grid">
         <div>
+          {/* Textarea с drag-and-drop и скрепкой */}
           <div
-            ref={dropRef}
-            className={`drop ${dragging ? 'hot' : ''}`}
-            onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+            className={`textarea-wrap ${dragging ? 'hot' : ''}`}
+            onDragOver={e => { e.preventDefault(); setDragging(true) }}
             onDragLeave={() => setDragging(false)}
             onDrop={onDrop}
           >
-            <label className="up">
-              <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              <span className="t">Перетащи файл сюда</span>
-              <span className="s">.txt, .csv, .json — ссылки или экспорт из Telegram</span>
-              <input type="file" accept=".txt,.csv,.json" style={{display:'none'}} onChange={e => e.target.files[0] && handleFile(e.target.files[0])} />
-            </label>
-            <div className="or">или</div>
             <textarea
-              rows={5}
-              style={{height: 104}}
-              placeholder={"https://www.instagram.com/reel/ABC123/\nhttps://www.instagram.com/p/DEF456/\n…"}
+              rows={6}
+              placeholder={"https://www.instagram.com/reel/ABC123/\nhttps://www.instagram.com/p/DEF456/\n\nИли перетащи сюда файл (.txt, .csv, .json, .xlsx)"}
               value={text}
               onChange={e => setText(e.target.value)}
+            />
+            <button
+              className="clip-btn"
+              title="Прикрепить файл (.txt, .csv, .json, .xlsx)"
+              onClick={() => fileRef.current?.click()}
+            >
+              📎
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".txt,.csv,.json,.xlsx,.xls"
+              style={{ display: 'none' }}
+              onChange={e => e.target.files[0] && handleFile(e.target.files[0])}
             />
           </div>
 
           <div className="block">
             <div className="bt">🤖 Модель распознавания</div>
             <div className="cards2">
-              <button className={`mcard ${model === 'medium' ? 'on' : ''}`} onClick={() => setModel('medium')}>
-                {model === 'medium' && <span className="check">✓</span>}
-                <div className="mh">medium</div>
-                <div className="mb">Быстро, точность ~85%. Подходит для большинства задач.</div>
-                <span className="mt">~10 мин / час аудио</span>
-              </button>
-              <button className={`mcard ${model === 'large-v3' ? 'on' : ''}`} onClick={() => setModel('large-v3')}>
-                {model === 'large-v3' && <span className="check">✓</span>}
-                <div className="mh">large-v3</div>
-                <div className="mb">Точность ~95%. Лучше для акцентов и шума. Медленнее.</div>
-                <span className="mt">~30 мин / час аудио</span>
-              </button>
+              {MODELS.map(m => (
+                <button
+                  key={m.v}
+                  className={`mcard ${model === m.v ? 'on' : ''}`}
+                  onClick={() => setModel(m.v)}
+                  onMouseEnter={() => setTooltip(m.v)}
+                  onMouseLeave={() => setTooltip(null)}
+                  style={{ position: 'relative' }}
+                >
+                  {model === m.v && <span className="check">✓</span>}
+                  <div className="mh">{m.label}</div>
+                  <div className="mb">{m.desc}</div>
+                  <span className="mt">{m.badge}</span>
+                  {tooltip === m.v && (
+                    <div className="model-tip">{m.tip}</div>
+                  )}
+                </button>
+              ))}
             </div>
 
             <div className="opts">
-              <div className="setting">
-                <label>Движок ASR</label>
-                <select value={engine} onChange={e => setEngine(e.target.value)}>
-                  {ENGINES.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
-                </select>
-              </div>
-              <div className="setting" style={{justifyContent:'flex-end',paddingBottom:2}}>
+              <div className="setting" style={{ justifyContent: 'flex-end', paddingBottom: 2 }}>
                 <label className="chkline">
                   <input type="checkbox" checked={translate} onChange={e => setTranslate(e.target.checked)} />
                   Переводить на русский
                 </label>
-                <label className="chkline" style={{marginTop:6}}>
+                <label className="chkline" style={{ marginTop: 6 }}>
                   <input type="checkbox" checked={pullStats} onChange={e => setPullStats(e.target.checked)} />
                   Подтягивать метрики
                 </label>
               </div>
             </div>
 
-            <div style={{marginTop:14}}>
+            <div style={{ marginTop: 14 }}>
               <div className="label">Заметка к сессии (необязательно)</div>
               <textarea
                 rows={2}
-                style={{height:52}}
+                style={{ height: 52 }}
                 placeholder="Например: подборка за июнь, ниша фитнес..."
                 value={comment}
                 onChange={e => setComment(e.target.value)}
@@ -151,14 +195,10 @@ export default function Import({ onDone }) {
           </div>
 
           <div className="cta">
-            <button
-              className="btn"
-              disabled={!count || loading}
-              onClick={submit}
-            >
-              {loading ? 'Отправка…' : `Запустить обработку ${count ? `· ${count} рилс` : ''}`}
+            <button className="btn" disabled={!count || loading} onClick={submit}>
+              {loading ? 'Отправка…' : `Запустить обработку${count ? ` · ${count} рилс` : ''}`}
             </button>
-            {err && <span style={{color:'var(--rose)',fontSize:12}}>{err}</span>}
+            {err && <span style={{ color: 'var(--rose)', fontSize: 12 }}>{err}</span>}
           </div>
         </div>
 
@@ -176,7 +216,7 @@ export default function Import({ onDone }) {
                 <div className="prev-list">
                   {parsed.out.slice(0, 30).map(x => (
                     <div key={x.sc}>
-                      <span style={{color: x.type === 'reel' ? 'var(--iris)' : 'var(--teal)'}}>
+                      <span style={{ color: x.type === 'reel' ? 'var(--iris)' : 'var(--teal)' }}>
                         [{x.type}]
                       </span>{' '}
                       {x.sc}
@@ -186,22 +226,20 @@ export default function Import({ onDone }) {
                 </div>
               </>
             )}
-            {!count && <p style={{color:'var(--faint)',fontSize:12,marginTop:12}}>Вставь ссылки слева — здесь появится превью</p>}
+            {!count && <p style={{ color: 'var(--faint)', fontSize: 12, marginTop: 12 }}>Вставь ссылки слева — здесь появится превью</p>}
           </div>
 
           {sessions.length > 0 && (
-            <div style={{marginTop:16}}>
+            <div style={{ marginTop: 16 }}>
               <div className="label">История импортов</div>
               <div className="histlist">
                 {sessions.slice(0, 5).map(s => (
                   <div key={s.id} className="hist">
                     <div className="hi-main">
-                      <div style={{fontWeight:600,fontSize:13}}>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>
                         {s.total} рилс · {fmtDate(s.created_at)}
                       </div>
-                      <div className="hi-sub">
-                        {s.loaded ?? 0} готово · {s.failed ?? 0} ошибок
-                      </div>
+                      <div className="hi-sub">{s.loaded ?? 0} готово · {s.failed ?? 0} ошибок</div>
                       {s.comment && <div className="hi-note">{s.comment}</div>}
                     </div>
                   </div>

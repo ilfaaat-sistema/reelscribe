@@ -36,8 +36,12 @@ h1{font-size:16px;font-weight:680;margin:0}.spacer{flex:1}
 .grid{display:grid;grid-template-columns:1.25fr .9fr;gap:16px;margin-top:22px}
 .drop{border:1.5px dashed var(--line);border-radius:14px;background:var(--panel);padding:18px;transition:.15s}
 .drop.hot{border-color:var(--iris);background:color-mix(in srgb,var(--iris) 8%,var(--panel))}
-.up{display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 0 14px;text-align:center;cursor:pointer}
-.up svg{width:30px;height:30px;stroke:var(--iris);fill:none;stroke-width:1.6}.up .t{font-weight:600}.up .s{font-size:12px;color:var(--mut)}
+.textarea-wrap{position:relative}
+.textarea-wrap textarea{padding-right:36px;min-height:140px}
+.textarea-wrap.hot textarea{border-color:var(--iris);background:color-mix(in srgb,var(--iris) 5%,var(--panel2))}
+.clip-btn{position:absolute;bottom:9px;right:9px;background:none;border:none;font-size:17px;opacity:.55;padding:2px 4px;border-radius:5px;line-height:1;transition:.12s}
+.clip-btn:hover{opacity:1;background:var(--panel)}
+.model-tip{position:absolute;bottom:calc(100% + 8px);left:0;right:0;background:var(--panel2);border:1px solid var(--iris);border-radius:10px;padding:10px 12px;font-size:11.5px;color:var(--mut);z-index:10;pointer-events:none;line-height:1.55;box-shadow:0 4px 16px #0006}
 .or{display:flex;align-items:center;gap:10px;color:var(--faint);font-size:11px;font-family:var(--mono);margin:5px 0}
 .or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
 textarea{width:100%;resize:vertical;background:var(--panel2);border:1px solid var(--line);color:var(--tx);border-radius:10px;padding:11px;font-family:var(--mono);font-size:12.5px;outline:none}
