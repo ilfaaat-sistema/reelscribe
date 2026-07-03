@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { getReel, updateNote } from '../api/client'
 import { fmtV, fmtPct, erClass } from '../lib/utils'
 
@@ -12,18 +12,22 @@ export default function ReelDrawer({ reelId, onClose }) {
   const [showRu, setShowRu] = useState(false)
   const [showCaption, setShowCaption] = useState(true)
   const [note, setNote] = useState('')
+  const [loadError, setLoadError] = useState(null)
   const noteRef = useRef(null)
   const saveTimer = useRef(null)
 
-  useEffect(() => {
+  const fetchReel = useCallback(() => {
     if (!reelId) return
     setReel(null)
     setNote('')
+    setLoadError(null)
     getReel(reelId).then(r => {
       setReel(r)
       setNote(r.note || '')
-    }).catch(() => {})
+    }).catch(e => setLoadError(e.message || 'неизвестная ошибка'))
   }, [reelId])
+
+  useEffect(() => { fetchReel() }, [fetchReel])
 
   function handleNote(val) {
     setNote(val)
@@ -165,7 +169,7 @@ export default function ReelDrawer({ reelId, onClose }) {
                   </div>
                   {reel.transcript_status === 'failed' ? (
                     <div className="failtx">
-                      ✗ Ошибка: {reel.transcript_text || 'неизвестная ошибка'}
+                      ✗ Ошибка: {reel.fail_reason || reel.transcript_text || 'неизвестная ошибка'}
                     </div>
                   ) : (
                     <div className={`paper ${showRu ? 'ru' : ''}`}>
@@ -174,16 +178,25 @@ export default function ReelDrawer({ reelId, onClose }) {
                   )}
                 </>
               ) : (
-                <div className="seclabel">
-                  🎙 Расшифровка
-                  <span style={{color:'var(--faint)',fontFamily:'var(--sans)',textTransform:'none',fontSize:12}}>
-                    {reel.transcript_status === 'queued' ? '— в очереди' :
-                     reel.transcript_status === 'downloading' ? '— скачиваем…' :
-                     reel.transcript_status === 'transcribing' ? '— распознаём…' :
-                     reel.transcript_status === 'translating' ? '— переводим…' :
-                     '— нет данных'}
-                  </span>
-                </div>
+                <>
+                  <div className="seclabel">
+                    🎙 Расшифровка
+                    <span style={{color:'var(--faint)',fontFamily:'var(--sans)',textTransform:'none',fontSize:12}}>
+                      {reel.transcript_status === 'queued' ? '— в очереди' :
+                       reel.transcript_status === 'downloading' ? '— скачиваем…' :
+                       reel.transcript_status === 'transcribing' ? '— распознаём…' :
+                       reel.transcript_status === 'translating' ? '— переводим…' :
+                       reel.transcript_status === 'no_audio' ? '— 📷 фото/карусель, нет аудио' :
+                       reel.transcript_status === 'failed' ? '— ошибка' :
+                       '— нет данных'}
+                    </span>
+                  </div>
+                  {reel.fail_reason && (
+                    <div className="failtx" style={{marginTop:8}}>
+                      Причина: {reel.fail_reason}
+                    </div>
+                  )}
+                </>
               )}
 
               <div className="seclabel" style={{marginTop:20}}>✏️ Заметка</div>
@@ -198,7 +211,16 @@ export default function ReelDrawer({ reelId, onClose }) {
           </>
         )}
 
-        {!reel && reelId && (
+        {!reel && reelId && loadError && (
+          <div style={{padding:40,textAlign:'center',color:'var(--rose)'}}>
+            Не удалось загрузить рилс: {loadError}
+            <div style={{marginTop:14}}>
+              <button className="btn sm ghost" onClick={fetchReel}>Повторить</button>
+            </div>
+          </div>
+        )}
+
+        {!reel && reelId && !loadError && (
           <div style={{padding:40,textAlign:'center',color:'var(--faint)'}}>Загрузка…</div>
         )}
       </div>

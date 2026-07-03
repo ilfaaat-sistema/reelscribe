@@ -14,7 +14,16 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-_semaphore = asyncio.Semaphore(2)   # max 2 параллельных скачивания
+_semaphore: asyncio.Semaphore | None = None   # max 2 параллельных скачивания
+
+
+def _get_semaphore() -> asyncio.Semaphore:
+    # Ленивая инициализация: на Python 3.9 примитивы asyncio привязываются к
+    # текущему event loop в момент создания, поэтому создаём их внутри loop.
+    global _semaphore
+    if _semaphore is None:
+        _semaphore = asyncio.Semaphore(2)
+    return _semaphore
 
 
 def _get_ffmpeg() -> str:
@@ -23,18 +32,52 @@ def _get_ffmpeg() -> str:
 
 async def download_audio(url: str, dest_dir: Path) -> tuple[Path, dict[str, Any]]:
     dest_dir.mkdir(parents=True, exist_ok=True)
-    async with _semaphore:
+
+    async with _get_semaphore():
+        is_instagram = "instagram.com" in url
+
+        # 1) Основной дешёвый источник IG: Apify-профиль (embed→username→актор).
+        if is_instagram and settings.apify_api_token:
+            from app.pipeline.apify_profile_downloader import (
+                NoAudioError,
+                ProfileMissError,
+                fetch_via_apify_profile,
+            )
+            try:
+                path, info = await fetch_via_apify_profile(url, dest_dir)
+                await asyncio.sleep(random.uniform(1.5, 4.0))   # throttle jitter
+                return path, info
+            except NoAudioError:
+                raise   # фото/карусель — аудио нет, добивать другими источниками бессмысленно
+            except ProfileMissError as exc:
+                logger.info("Apify-профиль мимо (%s) — добиваю StarAPI…", exc)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Apify-профиль: %s — добиваю StarAPI…", exc)
+
+        # 2) StarAPI по shortcode — добивает промахи профиля + даёт подписчиков.
+        if is_instagram and settings.rapidapi_key_list:
+            from app.pipeline.starapi_downloader import QuotaExceededError, fetch_via_starapi
+            try:
+                path, info = await fetch_via_starapi(url, dest_dir)
+                await asyncio.sleep(random.uniform(1.5, 4.0))   # throttle jitter
+                return path, info
+            except QuotaExceededError:
+                raise   # квота — пробрасываем, фолбэки не помогут
+            except Exception as exc:
+                logger.warning("StarAPI: %s — пробую yt-dlp/Apify…", exc)
+
+        # Фолбэк: yt-dlp (с cookies, если заданы). Платный одиночный Apify-актор —
+        # только если явно разрешён флагом apify_single_fallback (по умолчанию выкл, не жжём деньги).
         try:
             path, info = await asyncio.to_thread(_download_sync, url, dest_dir)
         except Exception as exc:
-            if settings.apify_api_token:
-                logger.warning("yt-dlp: %s — пробую Apify-фолбэк…", exc)
-                from app.pipeline.apify_downloader import fetch_via_apify
-                path, info = await fetch_via_apify(url, dest_dir)
-            else:
+            if not (settings.apify_api_token and settings.apify_single_fallback):
                 raise
+            logger.warning("yt-dlp: %s — пробую платный Apify-фолбэк…", exc)
+            from app.pipeline.apify_downloader import fetch_via_apify
+            path, info = await fetch_via_apify(url, dest_dir)
         await asyncio.sleep(random.uniform(1.5, 4.0))   # throttle jitter
-    return path, info
+        return path, info
 
 
 def _download_sync(url: str, dest_dir: Path) -> tuple[Path, dict[str, Any]]:

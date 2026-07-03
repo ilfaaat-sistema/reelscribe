@@ -119,6 +119,7 @@ input[type=checkbox]{accent-color:var(--iris);width:15px;height:15px}
 .fgroup input:focus,.fgroup select:focus{border-color:var(--iris)}
 .sessnote{flex-shrink:0;display:flex;align-items:center;gap:8px;padding:8px 18px;background:color-mix(in srgb,var(--teal) 8%,var(--bg));border-bottom:1px solid var(--line);font-size:12.5px;color:var(--teal)}
 .sessnote span{color:var(--tx)}
+.errbanner{display:flex;align-items:center;gap:10px;justify-content:center;flex-wrap:wrap;padding:10px 14px;margin:14px 0;border-radius:9px;background:color-mix(in srgb,var(--rose) 12%,transparent);border:1px solid color-mix(in srgb,var(--rose) 40%,transparent);color:var(--rose);font-size:12.5px}
 table{width:100%;border-collapse:collapse;font-size:13px}
 thead th{position:sticky;top:0;background:var(--bg);text-align:left;color:var(--mut);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:10px;border-bottom:1px solid var(--line);white-space:nowrap;cursor:pointer;z-index:2}
 thead th.nos{cursor:default}

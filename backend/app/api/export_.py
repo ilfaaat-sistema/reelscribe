@@ -29,18 +29,64 @@ _RU = {
     'lpf': 'Лайки/подп %',
     'cpf': 'Комм/подп %',
     'eng': 'Вовлечённость %',
+    'language': 'Язык',
+    'status': 'Статус',
     'transcript': 'Расшифровка',
     'transcript_ru': 'Расшифровка RU',
     'note': 'Заметка',
 }
 
 
-def _fetch(ids: Optional[list[UUID]]) -> list[dict]:
+def _fetch(
+    ids: Optional[list[UUID]],
+    session: Optional[UUID] = None,
+    author: Optional[str] = None,
+    min_views: Optional[int] = None,
+    min_er: Optional[float] = None,
+    filt: str = 'all',
+    q: Optional[str] = None,
+    sort: str = 'created_at',
+    desc: bool = True,
+) -> list[dict]:
     db = get_db()
-    q = db.table('reels').select('*, transcripts(text, text_ru, status), reel_notes(note)')
+    query = db.table('reels').select('*, transcripts(text, text_ru, status, language), reel_notes(note)')
+    from app.api.reels import _SORT_MAP
+    query = query.order(_SORT_MAP.get(sort, 'created_at'), desc=desc, nullsfirst=False)
     if ids:
-        q = q.in_('id', [str(i) for i in ids])
-    return q.execute().data
+        query = query.in_('id', [str(i) for i in ids])
+    else:
+        if session:
+            jobs = db.table('jobs').select('reel_id').eq('session_id', str(session)).execute()
+            reel_ids = [j['reel_id'] for j in jobs.data]
+            if not reel_ids:
+                return []
+            query = query.in_('id', reel_ids)
+        if author:
+            query = query.eq('author_handle', author)
+        if min_views is not None:
+            query = query.gte('views', min_views)
+        if min_er is not None:
+            query = query.gte('er', min_er)
+        if filt == 'viral':
+            query = query.gte('er', 5)
+
+    rows = query.execute().data
+    # пост-фильтры по статусу транскрипта и поиску (как в /api/reels)
+    out: list[dict] = []
+    for r in rows:
+        t = (r.get('transcripts') or [{}])[0]
+        st = t.get('status')
+        if filt == 'done' and st != 'done':
+            continue
+        if filt == 'failed' and st != 'failed':
+            continue
+        if q:
+            needle = q.lower()
+            hay = ' '.join(str(x or '') for x in (r.get('caption'), t.get('text'), t.get('text_ru'))).lower()
+            if needle not in hay:
+                continue
+        out.append(r)
+    return out
 
 
 def _to_flat(r: dict, lang: str) -> dict:
@@ -62,6 +108,8 @@ def _to_flat(r: dict, lang: str) -> dict:
         'lpf': r.get('lpf', ''),
         'cpf': r.get('cpf', ''),
         'eng': r.get('eng', ''),
+        'language': t.get('language', ''),
+        'status': t.get('status', ''),
         'note': note,
     }
     if lang == 'orig':
@@ -80,8 +128,21 @@ async def export_reels(
     lang: Annotated[Literal["orig", "ru", "both"], Query()] = "ru",
     scope: Annotated[Literal["all", "selected"], Query()] = "all",
     ids: Optional[list[UUID]] = Query(None),
+    session: Optional[UUID] = Query(None),
+    q: Optional[str] = Query(None),
+    filter: Annotated[str, Query()] = "all",  # noqa: A002
+    author: Optional[str] = Query(None),
+    min_views: Optional[int] = Query(None),
+    min_er: Optional[float] = Query(None),
+    sort: Annotated[str, Query()] = "created_at",
+    direction: Annotated[str, Query(alias="dir")] = "desc",
 ) -> Response:
-    rows = _fetch(ids if scope == 'selected' else None)
+    rows = _fetch(
+        ids if scope == 'selected' else None,
+        session=session, author=author, min_views=min_views, min_er=min_er,
+        filt=filter, q=q,
+        sort=sort, desc=direction.lower() != 'asc',
+    )
 
     if format == 'csv':
         return _as_csv(rows, lang)

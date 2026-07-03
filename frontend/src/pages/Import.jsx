@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { parseLinks } from '../lib/utils'
-import { importLinks, getSessions } from '../api/client'
+import { importLinks, getSessions, previewImport } from '../api/client'
 
 function fmtDate(iso) {
   if (!iso) return ''
@@ -23,6 +24,15 @@ const MODELS = [
     tip: 'Обрабатывается на бесплатном T4 GPU в Kaggle. Требует настроенного KAGGLE_KEY и KAGGLE_NOTEBOOK_ID в .env. Запускается автоматически при нажатии «Запустить».',
   },
 ]
+
+function detectSourceType(filename) {
+  const name = filename.toLowerCase()
+  if (name.endsWith('.xlsx') || name.endsWith('.xls')) return 'csv'
+  if (name.endsWith('.csv')) return 'csv'
+  if (name.endsWith('.json')) return 'json'
+  if (name.endsWith('.txt')) return 'txt'
+  return 'paste'
+}
 
 async function readFileAsText(file) {
   const name = file.name.toLowerCase()
@@ -49,7 +59,8 @@ async function readFileAsText(file) {
   })
 }
 
-export default function Import({ onDone }) {
+export default function Import() {
+  const navigate = useNavigate()
   const [text, setText] = useState('')
   const [model, setModel] = useState('medium')
   const [translate, setTranslate] = useState(true)
@@ -60,7 +71,11 @@ export default function Import({ onDone }) {
   const [err, setErr] = useState('')
   const [dragging, setDragging] = useState(false)
   const [tooltip, setTooltip] = useState(null)
+  const [preview, setPreview] = useState(null)
+  const [sourceType, setSourceType] = useState('paste')
+  const [fileErr, setFileErr] = useState('')
   const fileRef = useRef()
+  const previewTimer = useRef(null)
 
   const parsed = parseLinks(text)
 
@@ -68,12 +83,26 @@ export default function Import({ onDone }) {
     getSessions().then(setSessions).catch(() => {})
   }, [])
 
+  // Дебаунс: сколько вставленных ссылок уже распознаны ранее (подтянутся из кэша).
+  useEffect(() => {
+    clearTimeout(previewTimer.current)
+    if (!parsed.out.length) { setPreview(null); return }
+    previewTimer.current = setTimeout(() => {
+      previewImport(text).then(setPreview).catch(() => setPreview(null))
+    }, 500)
+    return () => clearTimeout(previewTimer.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text])
+
   const handleFile = useCallback(async (file) => {
+    setFileErr('')
     try {
       const content = await readFileAsText(file)
+      setSourceType(detectSourceType(file.name))
       setText(p => p ? p + '\n' + content : content)
     } catch (e) {
       console.error('Ошибка чтения файла', e)
+      setFileErr('Не удалось прочитать файл. Проверь формат (.txt, .csv, .json, .xlsx) и попробуй снова.')
     }
   }, [])
 
@@ -91,14 +120,14 @@ export default function Import({ onDone }) {
     try {
       const res = await importLinks({
         links_text: text,
-        source_type: 'paste',
+        source_type: sourceType,
         engine: 'faster-whisper',
         model,
         translate,
         pull_stats: pullStats,
         comment: comment || null,
       })
-      onDone(res.session_id, res.total)
+      navigate(`/processing/${res.session_id}`)
     } catch (e) {
       setErr(e.message)
       setLoading(false)
@@ -128,7 +157,7 @@ export default function Import({ onDone }) {
               rows={6}
               placeholder={"https://www.instagram.com/reel/ABC123/\nhttps://www.instagram.com/p/DEF456/\n\nИли перетащи сюда файл (.txt, .csv, .json, .xlsx)"}
               value={text}
-              onChange={e => setText(e.target.value)}
+              onChange={e => { setText(e.target.value); setSourceType('paste') }}
             />
             <button
               className="clip-btn"
@@ -145,6 +174,7 @@ export default function Import({ onDone }) {
               onChange={e => e.target.files[0] && handleFile(e.target.files[0])}
             />
           </div>
+          {fileErr && <p style={{ color: 'var(--rose)', fontSize: 12, marginTop: 6 }}>{fileErr}</p>}
 
           <div className="block">
             <div className="bt">🤖 Модель распознавания</div>
@@ -213,6 +243,17 @@ export default function Import({ onDone }) {
                   <div className="minib"><div className="v">{posts}</div><div className="l">Posts</div></div>
                   <div className="minib"><div className="v">{parsed.dup}</div><div className="l">Дубли</div></div>
                 </div>
+                {preview && preview.already_done > 0 && (
+                  <div style={{ fontSize: 12, color: 'var(--teal)', marginTop: 10 }}>
+                    ✓ уже распознано ранее: {preview.already_done} из {preview.total} — подтянем из кэша,
+                    распознаём только новые ({preview.new})
+                  </div>
+                )}
+                {posts > 0 && (
+                  <div style={{ fontSize: 12, color: 'var(--faint)', marginTop: 6 }}>
+                    📷 постов (/p/): {posts} — у многих нет аудио, расшифровка будет только у видео
+                  </div>
+                )}
                 <div className="prev-list">
                   {parsed.out.slice(0, 30).map(x => (
                     <div key={x.sc}>
@@ -231,15 +272,30 @@ export default function Import({ onDone }) {
 
           {sessions.length > 0 && (
             <div style={{ marginTop: 16 }}>
+              <button
+                className="btn sm ghost"
+                style={{ width: '100%', marginBottom: 10 }}
+                onClick={() => navigate('/results')}
+              >
+                📊 Все распознавания →
+              </button>
               <div className="label">История импортов</div>
               <div className="histlist">
                 {sessions.slice(0, 5).map(s => (
-                  <div key={s.id} className="hist">
+                  <div
+                    key={s.id}
+                    className="hist"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => navigate(`/results/${s.id}`)}
+                  >
                     <div className="hi-main">
                       <div style={{ fontWeight: 600, fontSize: 13 }}>
                         {s.total} рилс · {fmtDate(s.created_at)}
                       </div>
-                      <div className="hi-sub">{s.loaded ?? 0} готово · {s.failed ?? 0} ошибок</div>
+                      <div className="hi-sub">
+                        {s.loaded ?? 0} готово · {s.failed ?? 0} ошибок
+                        {(s.queued ?? 0) > 0 ? ` · ${s.queued} в очереди` : ''}
+                      </div>
                       {s.comment && <div className="hi-note">{s.comment}</div>}
                     </div>
                   </div>

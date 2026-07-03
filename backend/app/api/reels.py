@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import re
 from typing import Annotated, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query
 
 from app.core.db import get_db
-from app.models.schemas import NoteUpdate, ReelDetail, ReelRow
+from app.models.schemas import NoteUpdate, ReelDetail, ReelListResponse, ReelRow
 
 router = APIRouter(tags=["reels"])
 
@@ -51,7 +52,26 @@ def _build_row(r: dict, note_ids: set[str]) -> ReelRow:
     )
 
 
-@router.get("/reels", response_model=list[ReelRow])
+def _search_reel_ids(db, q: str) -> set[str]:
+    """id рилсов, где q встречается в caption ИЛИ в тексте расшифровки (по всей базе).
+
+    PostgREST не умеет OR между родительской и вложенной таблицей, поэтому два
+    точечных запроса за id + объединение — вместо фильтрации страницы в Python.
+    """
+    safe = re.sub(r'[,()*%]', ' ', q).strip()
+    if not safe:
+        return set()
+    cap = db.table('reels').select('id').ilike('caption', f'%{safe}%').execute()
+    tr = (
+        db.table('transcripts')
+        .select('reel_id')
+        .or_(f'text.ilike.*{safe}*,text_ru.ilike.*{safe}*')
+        .execute()
+    )
+    return {r['id'] for r in cap.data} | {r['reel_id'] for r in tr.data}
+
+
+@router.get("/reels", response_model=ReelListResponse)
 async def list_reels(
     session: Optional[UUID] = Query(None),
     q: Optional[str] = Query(None),
@@ -65,17 +85,34 @@ async def list_reels(
     min_followers: Optional[int] = Query(None),
     min_er: Optional[float] = Query(None),
     page: int = Query(1, ge=1),
-) -> list[ReelRow]:
+    limit: int = Query(PAGE_SIZE, ge=1, le=500),
+) -> ReelListResponse:
     db = get_db()
 
-    query = db.table('reels').select('*, transcripts(status, text, text_ru)')
+    # done/failed фильтруем на стороне БД: !inner превращает вложенный select в JOIN,
+    # и .eq по transcripts.status отсекает родительские строки (а не только вложенные).
+    if filter in ('done', 'failed'):
+        select = '*, transcripts!inner(status, text, text_ru)'
+    else:
+        select = '*, transcripts(status, text, text_ru)'
+    query = db.table('reels').select(select, count='exact')
+    if filter == 'done':
+        query = query.eq('transcripts.status', 'done')
+    elif filter == 'failed':
+        query = query.eq('transcripts.status', 'failed')
 
     if session:
         job_rows = db.table('jobs').select('reel_id').eq('session_id', str(session)).execute()
         ids = [j['reel_id'] for j in job_rows.data]
         if not ids:
-            return []
+            return ReelListResponse(items=[], total=0)
         query = query.in_('id', ids)
+
+    if q:
+        match_ids = _search_reel_ids(db, q)
+        if not match_ids:
+            return ReelListResponse(items=[], total=0)
+        query = query.in_('id', list(match_ids))
 
     if author:
         query = query.eq('author_handle', author)
@@ -97,33 +134,21 @@ async def list_reels(
     query = (
         query
         .order(col, desc=desc, nullsfirst=False)
-        .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1)
+        .range((page - 1) * limit, page * limit - 1)
     )
 
     rows = query.execute()
 
-    note_ids = {
-        r['reel_id']
-        for r in db.table('reel_notes').select('reel_id').execute().data
-    }
+    page_ids = [r['id'] for r in rows.data]
+    note_ids: set[str] = set()
+    if page_ids:
+        note_ids = {
+            r['reel_id']
+            for r in db.table('reel_notes').select('reel_id').in_('reel_id', page_ids).execute().data
+        }
 
-    result: list[ReelRow] = []
-    for r in rows.data:
-        row = _build_row(r, note_ids)
-        if filter == 'done' and row.transcript_status != 'done':
-            continue
-        if filter == 'failed' and row.transcript_status != 'failed':
-            continue
-        if q:
-            needle = q.lower()
-            in_caption = row.caption and needle in row.caption.lower()
-            in_text = row.transcript_text and needle in row.transcript_text.lower()
-            in_ru = row.transcript_text_ru and needle in row.transcript_text_ru.lower()
-            if not (in_caption or in_text or in_ru):
-                continue
-        result.append(row)
-
-    return result
+    items = [_build_row(r, note_ids) for r in rows.data]
+    return ReelListResponse(items=items, total=rows.count or 0)
 
 
 @router.get("/reels/{reel_id}", response_model=ReelDetail)
@@ -167,6 +192,7 @@ async def get_reel(reel_id: UUID) -> ReelDetail:
         summary=t.get('summary'),
         tags=t.get('tags'),
         note=note,
+        fail_reason=t.get('fail_reason'),
     )
 
 

@@ -31,15 +31,16 @@ def trigger_kaggle_notebook() -> bool:
             tmp_path = Path(tmp)
 
             # копируем ноутбук
-            nb_src = _NOTEBOOK_SRC if _NOTEBOOK_SRC.exists() else None
-            if nb_src:
-                import shutil
-                shutil.copy(nb_src, tmp_path / 'transcribe_batch.ipynb')
-                nb_file = 'transcribe_batch.ipynb'
-            else:
-                # минимальный ноутбук-заглушка (реальный код уже на Kaggle)
-                nb_file = 'run.ipynb'
-                (tmp_path / nb_file).write_text('{"cells":[],"metadata":{},"nbformat":4,"nbformat_minor":5}')
+            if not _NOTEBOOK_SRC.exists():
+                logger.warning(
+                    'Ноутбук %s не найден — Kaggle-кернел не тронут, тригер пропущен',
+                    _NOTEBOOK_SRC,
+                )
+                return False
+
+            import shutil
+            shutil.copy(_NOTEBOOK_SRC, tmp_path / 'transcribe_batch.ipynb')
+            nb_file = 'transcribe_batch.ipynb'
 
             # метаданные для kernels/push
             meta = {

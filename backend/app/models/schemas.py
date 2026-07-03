@@ -12,7 +12,7 @@ from pydantic import BaseModel
 class ImportRequest(BaseModel):
     links_text: str
     source_type: Literal["paste", "txt", "csv", "json"] = "paste"
-    engine: Literal["faster-whisper", "yandex", "deepgram", "openai"] = "faster-whisper"
+    engine: Literal["faster-whisper", "mlx-whisper", "yandex", "deepgram", "openai"] = "faster-whisper"
     model: Optional[Literal["medium", "large-v3"]] = "medium"
     translate: bool = False
     pull_stats: bool = True
@@ -40,11 +40,12 @@ class SessionSummary(BaseModel):
     comment: Optional[str]
     total: int
     status: str
+    loaded: int = 0
+    failed: int = 0
+    queued: int = 0
 
 
 class SessionDetail(SessionSummary):
-    loaded: int
-    failed: int
     done_ids: list[UUID]
 
 
@@ -82,6 +83,12 @@ class ReelDetail(ReelRow):
     summary: Optional[str]
     tags: Optional[list[str]]
     note: Optional[str]
+    fail_reason: Optional[str] = None
+
+
+class ReelListResponse(BaseModel):
+    items: list[ReelRow]
+    total: int              # всего строк под текущие фильтры (для пагинации «N из M»)
 
 
 class NoteUpdate(BaseModel):

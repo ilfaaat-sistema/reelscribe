@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { getProgress } from '../api/client'
 
 function FeedItem({ item }) {
@@ -15,21 +16,30 @@ function FeedItem({ item }) {
   )
 }
 
-export default function Processing({ sessionId, total, onDone }) {
-  const [prog, setProg] = useState({ loaded: 0, total: total || 0, failed: 0, done_ids: [], failed_ids: [] })
+export default function Processing() {
+  const { sessionId } = useParams()
+  const navigate = useNavigate()
+  const [prog, setProg] = useState({ loaded: 0, total: 0, failed: 0, done_ids: [], failed_ids: [] })
   const [feed, setFeed] = useState([])
   const [done, setDone] = useState(false)
+  const [pollError, setPollError] = useState(null)
+  const [retryTick, setRetryTick] = useState(0)
   const seenDoneRef = useRef(new Set())
   const seenFailRef = useRef(new Set())
   const doneRef = useRef(false)
+  const failStreakRef = useRef(0)
 
   useEffect(() => {
     if (!sessionId) return
     let timer
+    let stopped = false
 
     async function poll() {
       try {
         const p = await getProgress(sessionId)
+        if (stopped) return
+        failStreakRef.current = 0
+        setPollError(null)
         setProg(p)
 
         const newDone = (p.done_ids || []).filter(id => !seenDoneRef.current.has(id))
@@ -49,15 +59,21 @@ export default function Processing({ sessionId, total, onDone }) {
           doneRef.current = true
           setDone(true)
         }
-      } catch (_) {}
-      if (!doneRef.current) {
+      } catch (e) {
+        if (stopped) return
+        failStreakRef.current += 1
+        if (failStreakRef.current >= 5) {
+          setPollError(e.message || 'неизвестная ошибка')
+        }
+      }
+      if (!doneRef.current && !stopped) {
         timer = setTimeout(poll, 2000)
       }
     }
 
     poll()
-    return () => clearTimeout(timer)
-  }, [sessionId])
+    return () => { stopped = true; clearTimeout(timer) }
+  }, [sessionId, retryTick])
 
   const pct = prog.total > 0 ? Math.round((prog.loaded + prog.failed) / prog.total * 100) : 0
   const inProgress = prog.total > 0 ? Math.max(0, prog.total - prog.loaded - prog.failed) : 0
@@ -74,6 +90,15 @@ export default function Processing({ sessionId, total, onDone }) {
             ? `Обработано ${prog.loaded} рилс, ошибок: ${prog.failed}`
             : `Расшифровываем речь и собираем метрики · ${pct}%`}
         </p>
+
+        {pollError && (
+          <div className="errbanner">
+            ⚠ Не удаётся получить статус обработки: {pollError}
+            <button className="btn sm ghost" onClick={() => { failStreakRef.current = 0; setRetryTick(t => t + 1) }}>
+              Повторить
+            </button>
+          </div>
+        )}
 
         <div className="pbar">
           <i style={{width: pct + '%'}} />
@@ -103,9 +128,13 @@ export default function Processing({ sessionId, total, onDone }) {
 
         <div className="throttle">⏱ Троттлинг: 1–2 параллельно, паузы между запросами</div>
 
-        {done && (
-          <button className="btn" style={{marginTop:20}} onClick={onDone}>
+        {done ? (
+          <button className="btn" style={{marginTop:20}} onClick={() => navigate(`/results/${sessionId}`)}>
             Перейти к результатам →
+          </button>
+        ) : prog.loaded > 0 && (
+          <button className="btn ghost" style={{marginTop:20}} onClick={() => navigate(`/results/${sessionId}`)}>
+            Посмотреть готовые ({prog.loaded}) → · остальное догрузится в фоне
           </button>
         )}
       </div>

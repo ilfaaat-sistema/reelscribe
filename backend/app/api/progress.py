@@ -14,15 +14,29 @@ router = APIRouter(tags=["progress"])
 async def get_progress(session: UUID = Query(...)) -> ProgressResponse:
     db = get_db()
     jobs = db.table('jobs').select('state, reel_id').eq('session_id', str(session)).execute()
-    sess = db.table('import_sessions').select('total').eq('id', str(session)).execute()
-    total = sess.data[0].get('total', 0) if sess.data else 0
+    sess = db.table('import_sessions').select('total, status').eq('id', str(session)).execute()
+    sess_row = sess.data[0] if sess.data else {}
+    total = sess_row.get('total', 0)
+    sess_status = sess_row.get('status', 'running')
+
     done_ids = [j['reel_id'] for j in jobs.data if j['state'] == 'done']
     failed_ids = [j['reel_id'] for j in jobs.data if j['state'] == 'failed']
+
+    # Сессия закрыта, но джобов нет — все ссылки были из кэша
+    if sess_status == 'done' and not jobs.data:
+        loaded = total
+        failed = 0
+        done_ids = []
+        failed_ids = []
+    else:
+        loaded = len(done_ids)
+        failed = len(failed_ids)
+
     return ProgressResponse(
         session_id=session,
-        loaded=len(done_ids),
+        loaded=loaded,
         total=total,
-        failed=len(failed_ids),
+        failed=failed,
         done_ids=done_ids,
         failed_ids=failed_ids,
     )

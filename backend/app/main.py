@@ -6,7 +6,11 @@ from app.core.config import settings
 
 app = FastAPI(title="ReelScribe", version="0.1.0")
 
-origins = ["*"] if settings.frontend_url == "*" else [settings.frontend_url]
+# FRONTEND_URL: "*" или список доменов через запятую (Vercel + Render-статик и т.п.)
+if settings.frontend_url == "*":
+    origins = ["*"]
+else:
+    origins = [o.strip() for o in settings.frontend_url.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,

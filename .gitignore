@@ -1,4 +1,6 @@
 .env
+secrets/
+*cookies*.txt
 .venv/
 __pycache__/
 *.pyc
@@ -10,3 +12,7 @@ dist/
 *.egg-info/
 .pytest_cache/
 .mcp.json
+
+# личные данные
+Копия reels_list.csv
+*.csv
