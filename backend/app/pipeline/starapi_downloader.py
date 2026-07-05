@@ -40,11 +40,17 @@ def _cool_down(key: str) -> None:
     _cooldown[key] = time.monotonic() + settings.starapi_key_cooldown_min * 60
 
 
+_lock_loop: asyncio.AbstractEventLoop | None = None
+
+
 def _get_lock() -> asyncio.Lock:
-    # Ленивая инициализация под текущий event loop (важно на Python 3.9).
-    global _followers_lock
-    if _followers_lock is None:
+    # Ленивая инициализация под ТЕКУЩИЙ event loop (Python 3.9): пересоздаём
+    # и при смене loop после рестарта, иначе «attached to a different loop».
+    global _followers_lock, _lock_loop
+    loop = asyncio.get_running_loop()
+    if _followers_lock is None or _lock_loop is not loop:
         _followers_lock = asyncio.Lock()
+        _lock_loop = loop
     return _followers_lock
 
 

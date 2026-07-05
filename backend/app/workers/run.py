@@ -223,30 +223,37 @@ async def run_worker() -> None:
     tick = 0
 
     while True:
-        db = get_db()
-        if time.monotonic() - last_stale_check >= STALE_CHECK_INTERVAL_SEC or last_stale_check == 0.0:
-            _requeue_stale(db)
-            last_stale_check = time.monotonic()
+        # Сетевой сбой в одной итерации не должен убивать воркер: рестарт процесса
+        # оставляет asyncio-примитивы привязанными к мёртвому loop (Python 3.9),
+        # и все последующие джобы падают с «attached to a different loop».
+        try:
+            db = get_db()
+            if time.monotonic() - last_stale_check >= STALE_CHECK_INTERVAL_SEC or last_stale_check == 0.0:
+                _requeue_stale(db)
+                last_stale_check = time.monotonic()
 
-        tick += 1
-        # desc = свежий импорт первым; каждый 5-й проход — asc, чтобы старые
-        # отложенные джобы не голодали вечно при постоянном потоке новых.
-        newest_first = tick % 5 != 0
-        now = _utc_now()
-        jobs_resp = (
-            db.table('jobs')
-            .select('*')
-            .eq('state', 'queued')
-            .lte('next_attempt_at', now)
-            .order('next_attempt_at', desc=newest_first)
-            .limit(10)
-            .execute()
-        )
-        jobs = jobs_resp.data
-        if jobs:
-            await asyncio.gather(*[_process_job(j) for j in jobs])
-        else:
-            await asyncio.sleep(2)
+            tick += 1
+            # desc = свежий импорт первым; каждый 5-й проход — asc, чтобы старые
+            # отложенные джобы не голодали вечно при постоянном потоке новых.
+            newest_first = tick % 5 != 0
+            now = _utc_now()
+            jobs_resp = (
+                db.table('jobs')
+                .select('*')
+                .eq('state', 'queued')
+                .lte('next_attempt_at', now)
+                .order('next_attempt_at', desc=newest_first)
+                .limit(10)
+                .execute()
+            )
+            jobs = jobs_resp.data
+            if jobs:
+                await asyncio.gather(*[_process_job(j) for j in jobs])
+            else:
+                await asyncio.sleep(2)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning('Итерация цикла упала (%s) — продолжаю через 5с…', exc)
+            await asyncio.sleep(5)
 
 
 if __name__ == '__main__':

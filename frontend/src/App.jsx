@@ -2,6 +2,7 @@ import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-
 import Import from './pages/Import'
 import Processing from './pages/Processing'
 import Results from './pages/Results'
+import History from './pages/History'
 
 function Header() {
   const navigate = useNavigate()
@@ -37,6 +38,9 @@ function Header() {
           ← Новый импорт
         </button>
       )}
+      <button className="btn ghost sm" onClick={() => navigate('/history')}>
+        История
+      </button>
     </header>
   )
 }
@@ -47,6 +51,7 @@ export default function App() {
       <Header />
       <Routes>
         <Route path="/" element={<Import />} />
+        <Route path="/history" element={<History />} />
         <Route path="/processing/:sessionId" element={<Processing />} />
         <Route path="/results" element={<Results />} />
         <Route path="/results/:sessionId" element={<Results />} />

@@ -15,14 +15,18 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 _semaphore: asyncio.Semaphore | None = None   # max 2 параллельных скачивания
+_sem_loop: asyncio.AbstractEventLoop | None = None
 
 
 def _get_semaphore() -> asyncio.Semaphore:
-    # Ленивая инициализация: на Python 3.9 примитивы asyncio привязываются к
-    # текущему event loop в момент создания, поэтому создаём их внутри loop.
-    global _semaphore
-    if _semaphore is None:
+    # На Python 3.9 примитивы asyncio привязываются к loop в момент создания.
+    # Пересоздаём не только при первом вызове, но и при смене loop (рестарт
+    # asyncio.run после краха) — иначе «Future attached to a different loop».
+    global _semaphore, _sem_loop
+    loop = asyncio.get_running_loop()
+    if _semaphore is None or _sem_loop is not loop:
         _semaphore = asyncio.Semaphore(2)
+        _sem_loop = loop
     return _semaphore
 
 

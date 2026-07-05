@@ -41,10 +41,18 @@ def _shortcode_from_url(url: str) -> str:
     return url.rstrip("/").split("/")[-1]
 
 
+_guard_loop: asyncio.AbstractEventLoop | None = None
+
+
 def _guard() -> asyncio.Lock:
-    global _locks_guard
-    if _locks_guard is None:
+    # Пересоздаём guard и пер-юзерные локи при смене event loop (рестарт после
+    # краха на Python 3.9) — старые локи привязаны к мёртвому loop.
+    global _locks_guard, _guard_loop
+    loop = asyncio.get_running_loop()
+    if _locks_guard is None or _guard_loop is not loop:
         _locks_guard = asyncio.Lock()
+        _profile_locks.clear()
+        _guard_loop = loop
     return _locks_guard
 
 
