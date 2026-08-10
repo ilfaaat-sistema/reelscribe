@@ -24,11 +24,16 @@ def requeue_jobs(session_id: str | None = None) -> int:
     if not rows:
         return 0
 
-    # Исключаем терминальные no_audio (фото/карусель) — ретраить бессмысленно.
+    # Исключаем терминальные "нет аудио" (фото/карусель) — ретраить бессмысленно: NoAudioError
+    # прилетит опять. Обычно пишется status='no_audio', но если в БД CHECK-ограничение на
+    # transcripts.status ещё не пускает 'no_audio', run.py фолбэком пишет status='failed' с ТЕМ ЖЕ
+    # fail_reason — тогда единственный признак терминальности это сам текст причины, а не статус.
     reel_ids_all = list({r['reel_id'] for r in rows})
     na = (
         db.table('transcripts').select('reel_id')
-        .in_('reel_id', reel_ids_all).eq('status', 'no_audio').execute().data
+        .in_('reel_id', reel_ids_all)
+        .or_("status.eq.no_audio,fail_reason.eq.фото/карусель — нет аудио")
+        .execute().data
     )
     na_set = {t['reel_id'] for t in na}
     rows = [r for r in rows if r['reel_id'] not in na_set]

@@ -1,6 +1,7 @@
 .env
 secrets/
 *cookies*.txt
+.instaloader-session*
 .venv/
 __pycache__/
 *.pyc

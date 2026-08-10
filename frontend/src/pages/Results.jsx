@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { getReels, getSession, retryJobs, getProgress } from '../api/client'
 import { fmtV, fmtPct, erClass } from '../lib/utils'
 import ReelDrawer from '../components/ReelDrawer'
@@ -216,6 +216,7 @@ function ReaderView({ reels, onOpen }) {
 
 export default function Results() {
   const { sessionId } = useParams()
+  const navigate = useNavigate()
   const [mode, setMode] = useState('analytics')
   const [chip, setChip] = useState('all')
   const [search, setSearch] = useState('')
@@ -312,6 +313,7 @@ export default function Results() {
 
   const doneCount = reels.filter(r => r.transcript_status === 'done').length
   const inProgress = progress ? Math.max(0, progress.total - progress.loaded - progress.failed) : 0
+  const failedCount = reels.filter(r => r.transcript_status === 'failed').length
   const stuckCount = reels.filter(
     r => r.transcript_status === 'failed' || r.transcript_status === 'queued'
   ).length
@@ -382,6 +384,11 @@ export default function Results() {
         {stuckCount > 0 && (
           <button className="btn sm ghost" onClick={handleRetry} title="Сбросить незавершённые рилсы обратно в очередь">
             ↻ Повторить незавершённые ({stuckCount})
+          </button>
+        )}
+        {failedCount > 0 && (
+          <button className="btn sm ghost" onClick={() => navigate(sessionId ? '/errors/' + sessionId : '/errors')}>
+            Разобрать ошибки →
           </button>
         )}
         <button className="btn sm ghost" onClick={() => setShowExport(true)}>⬇ Экспорт</button>

@@ -108,3 +108,9 @@ export const retryJobs = (sessionId) =>
 
 export const exportUrl = (params = {}) =>
   `${BASE}/export?${new URLSearchParams(params)}`
+
+export const getErrors = (session) =>
+  req(`/errors${session ? `?session=${session}` : ''}`)
+
+export const errorsExportUrl = (params = {}) =>
+  `${BASE}/errors/export?${new URLSearchParams(params)}`

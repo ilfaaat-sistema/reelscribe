@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import subprocess
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,6 +10,7 @@ from typing import Any
 import httpx
 
 from app.core.config import settings
+from app.pipeline.media import extract_wav_16k_mono
 
 logger = logging.getLogger(__name__)
 
@@ -155,18 +155,8 @@ async def fetch_via_starapi(url: str, dest_dir: Path) -> tuple[Path, dict[str, A
                 async for chunk in stream.aiter_bytes(8192):
                     f.write(chunk)
 
-    # извлекаем аудио через ffmpeg
-    import imageio_ffmpeg
-    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
-    result = await asyncio.to_thread(
-        subprocess.run,
-        [ffmpeg_exe, "-y", "-i", str(video_path),
-         "-ar", "16000", "-ac", "1", str(wav_path)],
-        capture_output=True, text=True,
-    )
-    video_path.unlink(missing_ok=True)
-    if result.returncode != 0 or not wav_path.exists():
-        raise RuntimeError(f"ffmpeg не извлёк аудио: {result.stderr[:300]}")
+    # извлекаем аудио через ffmpeg (общий хелпер)
+    await extract_wav_16k_mono(video_path, wav_path)
 
     info: dict[str, Any] = {
         "id": shortcode,

@@ -49,6 +49,21 @@ def _session_flags(db, session_id: str) -> tuple[bool, bool]:
     return row.get('pull_stats', True), row.get('translate', False)
 
 
+async def _resolve_followers_safe(handle: str) -> int | None:
+    """Обёртка над resolve_followers: обогащение метрик НЕ должно ронять джоб с уже скачанным
+    (платным) аудио. get_followers_via_apify сам глотает свои ошибки, но
+    get_followers_via_instaloader ловит только InstaloaderException — неожиданный JSON профиля
+    (KeyError/AttributeError) или ленивый ImportError пролетели бы наверх и увели джоб в except
+    Exception ниже, где finally удаляет WAV и джоб уходит на повторное платное скачивание.
+    """
+    from app.pipeline.followers import resolve_followers
+    try:
+        return await resolve_followers(handle)
+    except Exception as exc:  # noqa: BLE001 — любой сбой обогащения не должен ронять джоб
+        logger.warning('Подписчики @%s: не получены (%s) — продолжаю без них', handle, exc)
+        return None
+
+
 def _maybe_close_session(db, session_id: str) -> None:
     if not session_id:
         return
@@ -105,6 +120,13 @@ async def _process_job(job: dict) -> None:
 
         if pull_stats:
             meta = extract_metadata(info)
+            # Подписчиков дотягиваем ЗДЕСЬ, единой точкой для всех источников (Apify/StarAPI/yt-dlp):
+            # через resolve_followers (Apify profile-актор → instaloader-сессия), кэш по автору.
+            # Заполняем только если источник их не дал — StarAPI-путь может отдать followers сам.
+            if meta.get('author_followers') is None and meta.get('author_handle'):
+                followers = await _resolve_followers_safe(meta['author_handle'])
+                if followers is not None:
+                    meta['author_followers'] = followers
             update = {k: v for k, v in meta.items() if v is not None}
             if update:
                 db.table('reels').update(update).eq('id', reel_id).execute()
@@ -137,13 +159,29 @@ async def _process_job(job: dict) -> None:
 
     except NoAudioError as exc:
         # Фото/карусель — аудио нет, расшифровывать нечего. Терминально, без ретраев.
+        # НО метрики (если источник их дал в exc.info) сохраняем: статистика важнее аудио.
         logger.info('📷 нет аудио, джоб %s: %s', job_id, exc)
+        info = getattr(exc, 'info', None)
+        if pull_stats and info:
+            meta = extract_metadata(info)
+            if meta.get('author_followers') is None and meta.get('author_handle'):
+                followers = await _resolve_followers_safe(meta['author_handle'])
+                if followers is not None:
+                    meta['author_followers'] = followers
+            update = {k: v for k, v in meta.items() if v is not None}
+            if update:
+                db.table('reels').update(update).eq('id', reel_id).execute()
         db.table('jobs').update({
             'state': 'failed', 'attempts': attempts, 'error': str(exc),
         }).eq('id', job_id).execute()
-        db.table('transcripts').update({
-            'status': 'no_audio', 'fail_reason': 'фото/карусель — нет аудио',
-        }).eq('reel_id', reel_id).execute()
+        try:
+            db.table('transcripts').update({
+                'status': 'no_audio', 'fail_reason': 'фото/карусель — нет аудио',
+            }).eq('reel_id', reel_id).execute()
+        except Exception:  # noqa: BLE001 — БД пока без 'no_audio' в CHECK: не роняем джоб
+            db.table('transcripts').update({
+                'status': 'failed', 'fail_reason': 'фото/карусель — нет аудио',
+            }).eq('reel_id', reel_id).execute()
 
     except QuotaExceededError as exc:
         # Все ключи на cooldown — не тратим попытку, откладываем джоб на окно cooldown.

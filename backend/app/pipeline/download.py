@@ -41,7 +41,7 @@ async def download_audio(url: str, dest_dir: Path) -> tuple[Path, dict[str, Any]
         is_instagram = "instagram.com" in url
 
         # 1) Основной дешёвый источник IG: Apify-профиль (embed→username→актор).
-        if is_instagram and settings.apify_api_token:
+        if is_instagram and settings.apify_token_list:
             from app.pipeline.apify_profile_downloader import (
                 NoAudioError,
                 ProfileMissError,
@@ -54,11 +54,29 @@ async def download_audio(url: str, dest_dir: Path) -> tuple[Path, dict[str, Any]
             except NoAudioError:
                 raise   # фото/карусель — аудио нет, добивать другими источниками бессмысленно
             except ProfileMissError as exc:
-                logger.info("Apify-профиль мимо (%s) — добиваю StarAPI…", exc)
+                logger.info("Apify-профиль мимо (%s) — пробую instaloader…", exc)
             except Exception as exc:  # noqa: BLE001
-                logger.warning("Apify-профиль: %s — добиваю StarAPI…", exc)
+                logger.warning("Apify-профиль: %s — пробую instaloader…", exc)
 
-        # 2) StarAPI по shortcode — добивает промахи профиля + даёт подписчиков.
+        # 2) instaloader (бесплатно) — добивает промахи профиля без траты квоты StarAPI.
+        if is_instagram and settings.instaloader_enabled:
+            from app.pipeline.apify_profile_downloader import NoAudioError
+            from app.pipeline.instaloader_downloader import (
+                InstaloaderUnavailable,
+                fetch_via_instaloader,
+            )
+            try:
+                path, info = await fetch_via_instaloader(url, dest_dir)
+                await asyncio.sleep(random.uniform(1.5, 4.0))   # throttle jitter
+                return path, info
+            except NoAudioError:
+                raise   # фото/карусель — аудио нет, дальше бессмысленно
+            except InstaloaderUnavailable as exc:
+                logger.info("instaloader недоступен (%s) — добиваю StarAPI…", exc)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("instaloader: %s — добиваю StarAPI…", exc)
+
+        # 3) StarAPI по shortcode — платный резерв, добивает промахи + даёт подписчиков.
         if is_instagram and settings.rapidapi_key_list:
             from app.pipeline.starapi_downloader import QuotaExceededError, fetch_via_starapi
             try:
@@ -66,7 +84,11 @@ async def download_audio(url: str, dest_dir: Path) -> tuple[Path, dict[str, Any]
                 await asyncio.sleep(random.uniform(1.5, 4.0))   # throttle jitter
                 return path, info
             except QuotaExceededError:
-                raise   # квота — пробрасываем, фолбэки не помогут
+                # Квота StarAPI кончилась. Если есть рабочий платный Apify-фолбэк — не откладываем
+                # джоб, а идём на него (ниже). Иначе пробрасываем: воркер отложит до восстановления квоты.
+                if not (settings.apify_token_list and settings.apify_single_fallback):
+                    raise
+                logger.info("StarAPI квота исчерпана — иду на платный Apify-фолбэк…")
             except Exception as exc:
                 logger.warning("StarAPI: %s — пробую yt-dlp/Apify…", exc)
 
@@ -75,7 +97,7 @@ async def download_audio(url: str, dest_dir: Path) -> tuple[Path, dict[str, Any]
         try:
             path, info = await asyncio.to_thread(_download_sync, url, dest_dir)
         except Exception as exc:
-            if not (settings.apify_api_token and settings.apify_single_fallback):
+            if not (settings.apify_token_list and settings.apify_single_fallback):
                 raise
             logger.warning("yt-dlp: %s — пробую платный Apify-фолбэк…", exc)
             from app.pipeline.apify_downloader import fetch_via_apify

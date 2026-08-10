@@ -3,20 +3,20 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-import subprocess
 from pathlib import Path
 from typing import Any
 
 import httpx
 
 from app.core.config import settings
-from app.pipeline.starapi_downloader import _get_followers, _ts_to_yyyymmdd
+from app.pipeline.apify_client import run_actor_get_items
+from app.pipeline.media import extract_wav_16k_mono
+from app.pipeline.starapi_downloader import _ts_to_yyyymmdd
 
 logger = logging.getLogger(__name__)
 
 # Короткий UA: даёт лёгкую embed-страницу с автором. Длинный (Chrome/…) отдаёт тяжёлый app-shell без него.
 _UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
-_APIFY_BASE = "https://api.apify.com/v2"
 
 # username из embed-страницы: ссылка вида instagram.com/<username>/?utm_source=ig_embed
 _USERNAME_RE = re.compile(r'class="Username"[^>]*?instagram\.com/([A-Za-z0-9_.]{1,40})/\?utm_source=ig_embed')
@@ -34,7 +34,15 @@ class ProfileMissError(Exception):
 
 
 class NoAudioError(Exception):
-    """Медиа точно без видеодорожки (фото/карусель) — расшифровывать нечего, терминально."""
+    """Медиа точно без видеодорожки (фото/карусель) — расшифровывать нечего, терминально.
+
+    info — метрики поста (просмотры/лайки/автор), если источник их отдал: у фото аудио нет,
+    но статистику сохранить надо. Воркер запишет её в reels, несмотря на no_audio.
+    """
+
+    def __init__(self, message: str, info: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.info = info
 
 
 def _shortcode_from_url(url: str) -> str:
@@ -91,16 +99,16 @@ async def _fetch_profile(client: httpx.AsyncClient, username: str) -> dict[str, 
     async with lock:
         if username in _profile_cache:
             return _profile_cache[username]
-        actor = settings.apify_profile_actor
-        resp = await client.post(
-            f"{_APIFY_BASE}/acts/{actor}/run-sync-get-dataset-items",
-            params={"token": settings.apify_api_token},
-            json={"usernames": [username], "resultsLimit": settings.apify_profile_limit},
+        # resultsLimit — для совместимости со старой версией актора, postsPerProfile — текущий
+        # ключ схемы (иначе актор берёт дефолтные 24 поста и промахивается по старым рилсам).
+        items = await run_actor_get_items(
+            client, settings.apify_profile_actor,
+            {
+                "usernames": [username],
+                "resultsLimit": settings.apify_profile_limit,
+                "postsPerProfile": settings.apify_profile_limit,
+            },
         )
-        resp.raise_for_status()
-        items = resp.json()
-        if not isinstance(items, list):
-            raise RuntimeError(f"Apify-профиль {username}: неожиданный ответ {str(items)[:120]}")
         by_code = {it.get("code") or it.get("shortCode"): it for it in items if isinstance(it, dict)}
         by_code.pop(None, None)
         _profile_cache[username] = by_code
@@ -109,8 +117,8 @@ async def _fetch_profile(client: httpx.AsyncClient, username: str) -> dict[str, 
 
 
 async def fetch_via_apify_profile(url: str, dest_dir: Path) -> tuple[Path, dict[str, Any]]:
-    """Дешёвый путь: embed→username→профильный актор→матч shortcode. Подписчики — из StarAPI."""
-    if not settings.apify_api_token:
+    """Дешёвый путь: embed→username→профильный актор→матч shortcode. Подписчиков дотягивает воркер."""
+    if not settings.apify_token_list:
         raise ProfileMissError("APIFY_API_TOKEN не задан")
 
     shortcode = _shortcode_from_url(url)
@@ -130,16 +138,30 @@ async def fetch_via_apify_profile(url: str, dest_dir: Path) -> tuple[Path, dict[
         if item is None:
             raise ProfileMissError(f"{shortcode} нет в свежей выдаче @{username}")
 
-        # media_type: 2=видео, 1=фото, 8=карусель. Нашли пост и он НЕ видео — аудио точно нет.
+        # media_type: 2=видео, 1=фото, 8=карусель. Нашли пост и он НЕ видео — аудио точно нет,
+        # но метрики поста есть — прокидываем их в NoAudioError, чтобы воркер записал статистику.
         media_type = item.get("media_type")
         if media_type != 2:
-            raise NoAudioError(f"{shortcode}: фото/карусель — нет аудио (media_type={media_type})")
+            photo_info: dict[str, Any] = {
+                "id": shortcode,
+                "uploader_id": username,
+                "channel_follower_count": None,   # подписчиков дотянет воркер
+                "view_count": item.get("play_count"),
+                "like_count": item.get("like_count"),
+                "comment_count": item.get("comment_count"),
+                "description": (item.get("caption") or {}).get("text") if isinstance(item.get("caption"), dict) else item.get("caption"),
+                "upload_date": _ts_to_yyyymmdd(item.get("taken_at")),
+            }
+            raise NoAudioError(
+                f"{shortcode}: фото/карусель — нет аудио (media_type={media_type})",
+                info=photo_info,
+            )
         video_url = item.get("video_url")
         if not video_url:
             raise ProfileMissError(f"{shortcode}: видео без video_url — добиваю StarAPI")
 
-        followers = await _get_followers(client, username)
-
+        # Подписчиков здесь НЕ дёргаем из StarAPI (жгло квоту на каждом успешном рилсе).
+        # Их дотягивает воркер централизованно через instaloader (см. workers/run.py).
         video_path = dest_dir / f"{shortcode}_prof.mp4"
         wav_path = dest_dir / f"{shortcode}_prof.wav"
         async with client.stream("GET", video_url) as stream:
@@ -148,22 +170,12 @@ async def fetch_via_apify_profile(url: str, dest_dir: Path) -> tuple[Path, dict[
                 async for chunk in stream.aiter_bytes(8192):
                     f.write(chunk)
 
-    import imageio_ffmpeg
-    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
-    result = await asyncio.to_thread(
-        subprocess.run,
-        [ffmpeg_exe, "-y", "-i", str(video_path),
-         "-ar", "16000", "-ac", "1", str(wav_path)],
-        capture_output=True, text=True,
-    )
-    video_path.unlink(missing_ok=True)
-    if result.returncode != 0 or not wav_path.exists():
-        raise RuntimeError(f"ffmpeg не извлёк аудио: {result.stderr[:300]}")
+    await extract_wav_16k_mono(video_path, wav_path)
 
     info: dict[str, Any] = {
         "id": shortcode,
         "uploader_id": username,
-        "channel_follower_count": followers,
+        "channel_follower_count": None,   # подписчиков дотянет воркер через instaloader
         "view_count": item.get("play_count"),
         "like_count": item.get("like_count"),
         "comment_count": item.get("comment_count"),
@@ -171,7 +183,7 @@ async def fetch_via_apify_profile(url: str, dest_dir: Path) -> tuple[Path, dict[
         "upload_date": _ts_to_yyyymmdd(item.get("taken_at")),
     }
     logger.info(
-        "Apify-профиль ✓ %s (@%s views=%s likes=%s followers=%s)",
-        shortcode, username, info["view_count"], info["like_count"], followers,
+        "Apify-профиль ✓ %s (@%s views=%s likes=%s)",
+        shortcode, username, info["view_count"], info["like_count"],
     )
     return wav_path, info

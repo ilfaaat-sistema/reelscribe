@@ -2,18 +2,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import subprocess
 from pathlib import Path
 from typing import Any
 
 import httpx
 
 from app.core.config import settings
+from app.pipeline.apify_client import run_actor_get_items
+from app.pipeline.media import extract_wav_16k_mono
 
 logger = logging.getLogger(__name__)
 
 _ACTOR = "apify~instagram-scraper"
-_APIFY_BASE = "https://api.apify.com/v2"
 
 
 async def fetch_batch_via_apify(
@@ -23,7 +23,7 @@ async def fetch_batch_via_apify(
     One Apify call for N URLs. Returns dict[shortcode → (wav_path, info)].
     Missing entries = download/scraping failed for that URL.
     """
-    if not settings.apify_api_token:
+    if not settings.apify_token_list:
         raise RuntimeError("APIFY_API_TOKEN не задан")
     if not urls:
         return {}
@@ -32,13 +32,11 @@ async def fetch_batch_via_apify(
     input_scs = {_shortcode_from_url(u) for u in urls}
 
     async with httpx.AsyncClient(timeout=300) as client:
-        resp = await client.post(
-            f"{_APIFY_BASE}/acts/{_ACTOR}/run-sync-get-dataset-items",
-            params={"token": settings.apify_api_token, "memory": 512, "timeout": 240},
-            json={"directUrls": urls, "resultsType": "posts", "resultsLimit": len(urls)},
+        items: list[dict] = await run_actor_get_items(
+            client, _ACTOR,
+            {"directUrls": urls, "resultsType": "posts", "resultsLimit": len(urls)},
+            extra_params={"memory": 512, "timeout": 240},
         )
-        resp.raise_for_status()
-        items: list[dict] = resp.json()
 
     # Match Apify results to input shortcodes
     matched: dict[str, dict] = {}
@@ -79,18 +77,7 @@ async def _dl_one(
                     async for chunk in stream.aiter_bytes(8192):
                         f.write(chunk)
 
-        import imageio_ffmpeg
-        ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
-        result = await asyncio.to_thread(
-            subprocess.run,
-            [ffmpeg_exe, "-y", "-i", str(video_path),
-             "-ar", "16000", "-ac", "1", str(wav_path)],
-            capture_output=True, text=True,
-        )
-        video_path.unlink(missing_ok=True)
-
-        if result.returncode != 0 or not wav_path.exists():
-            raise RuntimeError(f"ffmpeg: {result.stderr[:200]}")
+        await extract_wav_16k_mono(video_path, wav_path)
 
         info: dict[str, Any] = {
             "id": sc,
@@ -112,29 +99,39 @@ async def _dl_one(
 
 async def fetch_via_apify(url: str, dest_dir: Path) -> tuple[Path, dict[str, Any]]:
     """Single-URL Apify fallback (used when batch prefetch missed this URL)."""
-    if not settings.apify_api_token:
+    if not settings.apify_token_list:
         raise RuntimeError("APIFY_API_TOKEN не задан — Apify-фолбэк недоступен")
 
     logger.info("Apify фолбэк: %s", url)
 
     async with httpx.AsyncClient(timeout=180) as client:
-        resp = await client.post(
-            f"{_APIFY_BASE}/acts/{_ACTOR}/run-sync-get-dataset-items",
-            params={"token": settings.apify_api_token, "memory": 256, "timeout": 120},
-            json={"directUrls": [url], "resultsType": "posts", "resultsLimit": 1},
+        items: list[dict[str, Any]] = await run_actor_get_items(
+            client, _ACTOR,
+            {"directUrls": [url], "resultsType": "posts", "resultsLimit": 1},
+            extra_params={"memory": 256, "timeout": 120},
         )
-        resp.raise_for_status()
-        items: list[dict[str, Any]] = resp.json()
 
     if not items:
         raise RuntimeError(f"Apify вернул пустой результат для {url}")
 
     item = items[0]
+    shortcode = _shortcode_from_url(url)
     video_url: str = item.get("videoUrl") or item.get("video_url") or ""
     if not video_url:
-        raise RuntimeError("Apify: поле videoUrl отсутствует в ответе")
-
-    shortcode = _shortcode_from_url(url)
+        # Пост-картинка/карусель: видео нет, но метрики есть — отдаём их через NoAudioError,
+        # чтобы воркер записал статистику, а рилс пометил как no_audio (а не «ошибка»).
+        from app.pipeline.apify_profile_downloader import NoAudioError
+        photo_info: dict[str, Any] = {
+            "id": shortcode,
+            "uploader_id": item.get("ownerUsername"),
+            "channel_follower_count": item.get("ownerFollowersCount"),
+            "view_count": item.get("videoViewCount"),
+            "like_count": item.get("likesCount"),
+            "comment_count": item.get("commentsCount"),
+            "description": item.get("caption"),
+            "upload_date": _parse_ts(item.get("timestamp")),
+        }
+        raise NoAudioError(f"{shortcode}: пост без видео (фото/карусель)", info=photo_info)
     sc, wav_path, info = await _dl_one(shortcode, item, dest_dir)
     if wav_path is None:
         raise RuntimeError(f"Apify: не удалось скачать аудио для {url}")

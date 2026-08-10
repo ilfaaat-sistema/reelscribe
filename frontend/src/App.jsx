@@ -3,6 +3,7 @@ import Import from './pages/Import'
 import Processing from './pages/Processing'
 import Results from './pages/Results'
 import History from './pages/History'
+import Errors from './pages/Errors'
 
 function Header() {
   const navigate = useNavigate()
@@ -41,6 +42,9 @@ function Header() {
       <button className="btn ghost sm" onClick={() => navigate('/history')}>
         История
       </button>
+      <button className="btn ghost sm" onClick={() => navigate('/errors')}>
+        Ошибки
+      </button>
     </header>
   )
 }
@@ -52,6 +56,8 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Import />} />
         <Route path="/history" element={<History />} />
+        <Route path="/errors" element={<Errors />} />
+        <Route path="/errors/:sessionId" element={<Errors />} />
         <Route path="/processing/:sessionId" element={<Processing />} />
         <Route path="/results" element={<Results />} />
         <Route path="/results/:sessionId" element={<Results />} />

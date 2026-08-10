@@ -113,3 +113,29 @@ class ProgressResponse(BaseModel):
     failed: int
     done_ids: list[UUID]
     failed_ids: list[UUID] = []
+
+
+# ── Errors ────────────────────────────────────────────────────────────────────
+
+class ErrorItem(BaseModel):
+    reel_id: UUID
+    shortcode: str
+    url: str
+    author_handle: Optional[str]
+    fail_reason: Optional[str]       # человекочитаемая причина из transcripts.fail_reason
+    job_error: Optional[str]         # сырой текст ошибки из jobs.error
+    attempts: int
+    state: str
+    next_attempt_at: Optional[datetime]
+
+
+class ErrorGroup(BaseModel):
+    reason: str
+    count: int
+    items: list[ErrorItem]
+
+
+class ErrorReport(BaseModel):
+    total: int
+    groups: list[ErrorGroup]
+    session: Optional[UUID] = None
