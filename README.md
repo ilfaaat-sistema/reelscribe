@@ -19,11 +19,11 @@ ReelScribe превращает сохранённые ссылки на Instagr
   yt-dlp → платный Apify-фолбэк) — см. §4/§6 ТЗ.
 - **ASR:** переключатель `asr_mode` (`auto | mlx | cloud | faster-whisper`).
 - **Frontend:** React 19 + Vite, без тяжёлых UI-китов.
-- **Деплой:** фронт — Vercel, API и воркер — Render.
+- **Деплой:** фронт и API — Vercel (один проект `reelscribe`, два сервиса), воркер — GitHub Actions.
 
 ## Требования
 
-- Python 3.11
+- Python 3.12 (версия задана в `backend/.python-version`, ей же пользуется Vercel и GitHub Actions)
 - Node.js (для сборки фронтенда, любая актуальная LTS-версия)
 - Отдельно ставить **ffmpeg не нужно** — бэкенд использует `imageio-ffmpeg`, который тянет
   статический бинарник ffmpeg сам как Python-зависимость (см. `backend/app/pipeline/media.py`,
@@ -47,8 +47,10 @@ ReelScribe превращает сохранённые ссылки на Instagr
 - `APIFY_API_TOKEN` / `APIFY_API_TOKENS` (через запятую — ротация) — основной дешёвый источник
   скачивания и подписчиков через Apify. Без токена каскад скачивания уходит сразу к yt-dlp.
 - `RAPIDAPI_KEY` / `RAPIDAPI_KEYS` (через запятую — ротация) — StarAPI, платный резервный источник.
-- `OPENAI_API_KEY` — облачная транскрипция (`asr_mode=cloud`/`auto` на Linux/Render); без ключа
-  `auto` на сервере уходит на faster-whisper CPU.
+- `OPENAI_API_KEY` — облачная транскрипция (`asr_mode=cloud`/`auto` вне Apple Silicon). В проде
+  (воркер на GitHub Actions) ключ намеренно не передаётся — там `ASR_MODE` жёстко выставлен в
+  `faster-whisper`, чтобы не платить за ASR; переменная нужна только для локального запуска
+  в `cloud`/`auto`-режиме.
 - `DEEPL_API_KEY` — перевод через DeepL; без ключа перевод идёт через бесплатный Google
   (`deep-translator`, без ключа не нужен).
 - `INSTAGRAM_COOKIES_FILE` — cookies для yt-dlp-фолбэка.
@@ -59,13 +61,27 @@ ReelScribe превращает сохранённые ссылки на Instagr
 
 ## Запуск локально
 
+Зависимости бэкенда разделены на два файла: `backend/requirements.txt` — то, что нужно API
+(и что реально ставится на Vercel), `backend/requirements-worker.txt` — зависимости воркера
+(наследует первый файл через `-r requirements.txt`, сверху — yt-dlp, faster-whisper, instaloader
+и т.д.). Если локально нужен только API — достаточно `requirements.txt`; чтобы запустить ещё и
+воркер — ставить `requirements-worker.txt`.
+
+```bash
+# зависимости API
+cd backend && pip install -r requirements.txt
+
+# зависимости воркера (если нужен локальный запуск воркера)
+cd backend && pip install -r requirements-worker.txt
+```
+
 Три процесса, порты закреплены за проектом (см. `CLAUDE.md`, «Порты дев-серверов» — блок 5240–5249):
 
 ```bash
 # бэкенд (API)
 cd backend && uvicorn app.main:app --reload --port 5245
 
-# фоновый воркер (скачивание + ASR)
+# фоновый воркер (скачивание + ASR) — опционально, см. «Деплой» про GitHub Actions
 cd backend && python -m app.workers.run
 
 # фронтенд
@@ -95,44 +111,109 @@ cd frontend && npm run build
 
 | Что | Где | Конфиг | URL |
 |---|---|---|---|
-| Фронтенд | Vercel, проект `reelscribe` | `frontend/vercel.json` (`VITE_API_URL` зашит в `build.env`) | https://reelscribe-app.vercel.app |
-| API | Render, сервис `reelscribe-api` | `render.yaml` | https://reelscribe-api.onrender.com |
-| Воркер | **на Render не поднят** (см. ниже) | `render.yaml` описывает, но сервис не создан | — |
+| Фронтенд + API | Vercel, проект `reelscribe` (один проект, два сервиса) | `vercel.json` (корень репозитория) | https://reelscribe-ai.vercel.app |
+| Воркер | GitHub Actions | `.github/workflows/worker.yml`, `.github/workflows/keepalive.yml` | — (раннер, публичного адреса нет) |
 
-Деплой автоматический при пуше в `main` репозитория https://github.com/ilfaaat-sistema/reelscribe.git.
-У Vercel-проекта Root Directory = `frontend` — сборка идёт из этой папки, а не из корня репозитория.
+Деплой фронтенда и API автоматический при пуше в `main` репозитория
+https://github.com/ilfaaat-sistema/reelscribe.git. Render из проекта убран полностью — старая
+конфигурация (`render.yaml`) осталась только в истории git.
 
-Секреты с `sync: false` в `render.yaml` (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `APIFY_API_TOKEN`,
-`RAPIDAPI_KEY`, `RAPIDAPI_KEYS`, `OPENAI_API_KEY`, `DEEPL_API_KEY`, `FRONTEND_URL`) задаются вручную
-в дашборде Render — из `render.yaml` они не приходят.
+### Vercel: один проект, два сервиса
 
-### Важно: воркера в проде нет
+Корневой `vercel.json` описывает два **Vercel Services** внутри одного проекта — `frontend`
+(root `frontend/`) и `backend` (root `backend/`, entrypoint `app.main:app`). Верхнеуровневые
+rewrites разводят трафик: `/api/(.*)` → сервис `backend`, `/(.*)` → сервис `frontend`
+(SPA-rewrite на `index.html` живёт внутри самого фронтенд-сервиса).
 
-`render.yaml` описывает сервис `reelscribe-worker`, но на аккаунте Render он не создан — там живут
-только `reelscribe-api` и (до 2026-08-10) удалённый дубль фронта `reelscribe-ui`. Практическое
-следствие: **импорт с боевого сайта поставит задания в очередь, но обрабатывать их будет некому** —
-скачивание, распознавание и перевод не запустятся сами.
+- Root Directory проекта Vercel = **корень репозитория** (не `frontend`, как было при Render) —
+  каждый сервис собирается из своей папки через `root` в `vercel.json`.
+- Один домен на фронт и API → **CORS в проде не нужен**, `VITE_API_URL` в проде пустой (фронт
+  ходит на относительный `/api`). Переменная нужна только для локальной разработки, когда
+  бэкенд поднят отдельно на порту 5245.
+- Vercel не засыпает (в отличие от бесплатного тарифа Render) — холодный старт занимает секунды.
+- Python на Vercel — **3.12** (версии 3.11 там больше нет), задан в `backend/.python-version`.
+- Переменные окружения API на Vercel (дашборд проекта): `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
+  `GITHUB_DISPATCH_TOKEN` (им API дёргает `repository_dispatch` у воркера при импорте и ретрае).
+- Есть `.vercelignore` в корне репозитория — без него CLI выгружал на хостинг лишнее (личные
+  выгрузки Instagram, `docs/`, `.github/`, `supabase/` — набегало до 60 МБ).
 
-Пока сервис не создан, очередь разбирает локальный воркер на Mac:
+**Тариф Hobby и его лимиты:**
+- Hobby разрешён только для **некоммерческого личного использования** — донаты, реклама, платная
+  подписка запрещены условиями тарифа; для коммерческого использования нужен Pro.
+- 300 секунд на выполнение функции, 2 ГБ памяти.
+- **Жёсткий лимит 4.5 МБ на тело ответа** — поэтому экспорт постраничный, с пределом на партию
+  (замер на боевых данных: 522 КБ на страницу, укладывается с запасом).
+
+### Воркер: GitHub Actions
+
+Репозиторий публичный → минуты GitHub Actions бесплатны без лимита.
+
+- Запуск: по расписанию `*/5 * * * *`, вручную (`workflow_dispatch` со страницы Actions) и
+  мгновенно через `repository_dispatch` — API дёргает воркер сам при импорте и при ретрае, не
+  дожидаясь ближайшего пятиминутного тика.
+- Раннер запускает `python -m app.workers.run --drain`: разбирает всё, что есть в очереди, и
+  выходит. Без флага (при локальном запуске на Mac) поведение прежнее — бесконечный цикл.
+- Распознавание — faster-whisper прямо на раннере (`ASR_MODE=faster-whisper` жёстко задан в
+  workflow), за ASR в проде не платим. `OPENAI_API_KEY` туда намеренно не передаётся.
+- `TRANSCRIBE_CONCURRENCY=2` на раннере; по умолчанию (локально, на Mac) — 1.
+- `.github/workflows/keepalive.yml` раз в месяц включает `worker.yml` через API — GitHub
+  автоматически отключает workflow с `schedule`-триггером после 60 дней без активности в
+  репозитории, keepalive не даёт расписанию заснуть.
+- Секреты воркера — в GitHub Secrets репозитория: `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
+  `APIFY_API_TOKEN`, `APIFY_API_TOKENS`, `RAPIDAPI_KEYS`. (`RAPIDAPI_KEY` и `DEEPL_API_KEY` не
+  заведены — значений нет, перевод идёт через бесплатный Google Translate.)
+
+**Три способа запустить воркер** (все ходят в одну и ту же базу Supabase, взаимозаменяемы):
+
+1. **GitHub Actions** — основной способ в проде, руками ничего запускать не нужно.
+2. **Вручную через `workflow_dispatch`** — со страницы Actions в GitHub, если нужно разобрать
+   очередь прямо сейчас, не дожидаясь cron или `repository_dispatch`.
+3. **Локально на Mac** — `cd backend && python -m app.workers.run` (без `--drain`, бесконечный
+   цикл). Полезно для отладки пайплайна вживую, но **больше не обязателен для работы прода** —
+   раньше, пока воркера в проде не было вообще, локальный Mac был единственным способом разобрать
+   очередь.
+
+⚠️ **Не держать локальный воркер в бесконечном режиме одновременно с воркером на Actions.**
+Двойной обработки одного и того же задания не будет — claim задания в очереди атомарный на
+уровне БД. Но cooldown API-ключей (Apify/RapidAPI после 429) живёт в памяти каждого процесса
+отдельно: два независимых воркера словят 429 по одному и тому же ключу порознь, не зная о
+cooldown друг друга, — это продлевает простой квоты вместо того, чтобы переждать его один раз.
+
+### Rate-limit по IP
+
+Защита кошелька (кап 5 импортов за 10 минут с одного IP) переехала из памяти процесса в таблицу
+`rate_limits` (миграция `supabase/migrations/0002_rate_limits.sql`, уже применена). На serverless
+Vercel память между вызовами функции не сохраняется — лимит в памяти процесса иначе не работал бы.
+
+### Стоимость
+
+**$0/мес**: Vercel Hobby бесплатен в рамках лимитов выше, GitHub Actions бесплатны на публичном
+репозитории, ASR в проде — faster-whisper без платного API.
+
+### Как проверить, что прод жив
 
 ```bash
-cd backend && python -m app.workers.run
-```
+# API отвечает
+curl -s https://reelscribe-ai.vercel.app/api/health
 
-Он ходит в ту же базу Supabase, поэтому задания, созданные на проде, обработаются, как только воркер
-запущен. Чтобы прод стал самостоятельным, нужно создать на Render worker-сервис по описанию из
-`render.yaml` (план `standard` — платный).
+# фронт отдаётся (ожидаем 200)
+curl -s -o /dev/null -w '%{http_code}\n' https://reelscribe-ai.vercel.app/
+
+# воркер: последние запуски workflow (нужен gh CLI и доступ к репозиторию)
+gh run list --workflow=worker.yml --limit 5
+```
 
 ## Структура репозитория
 
 ```
-backend/          FastAPI: app/ (api, core, models, pipeline, services, workers), tests/
-frontend/          React+Vite: src/ (pages, components, api, lib)
-docs/              ТЗ_ReelScribe.md — полная спецификация; claude-code-toolkit.md — инструменты разработки
+backend/           FastAPI: app/ (api, core, models, pipeline, services, workers), tests/
+frontend/           React+Vite: src/ (pages, components, api, lib)
+docs/               ТЗ_ReelScribe.md — полная спецификация; claude-code-toolkit.md — инструменты разработки
 reelscribe_v12.html  кликабельный прототип (визуальный эталон UI/UX)
-render.yaml        конфиг деплоя API + воркера на Render
-.env.example       имена переменных окружения (без значений)
-.claude/           settings.json (хуки/права), skills/ (конвенции проекта)
+vercel.json         конфиг деплоя фронтенда + API на Vercel (два сервиса в одном проекте)
+.github/workflows/  worker.yml (воркер на GitHub Actions), keepalive.yml (не даёт расписанию заснуть)
+.env.example        имена переменных окружения (без значений)
+.claude/            settings.json (хуки/права), skills/ (конвенции проекта)
 ```
 
 ## Куда смотреть дальше

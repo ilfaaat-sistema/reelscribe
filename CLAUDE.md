@@ -12,7 +12,10 @@ Supabase MCP) и как они работают — `docs/claude-code-toolkit.md
 из этих инструментов сначала объясни мне его** (см. «Режим обучения» ниже).
 
 ## Стек
-- Backend: **Python 3.11 + FastAPI**, фоновый воркер на очереди.
+- Backend: **Python + FastAPI**, фоновый воркер на очереди. В проде — **3.12** (задан в
+  `backend/.python-version`, им пользуются и Vercel, и GitHub Actions); локальный venv — 3.9.
+  Код держать совместимым с обеими: везде `from __future__ import annotations`, без синтаксиса,
+  появившегося после 3.9.
 - БД: **Supabase (Postgres)**.
 - Скачивание IG: каскад **Apify-профиль → instaloader (по флагу `INSTALOADER_ENABLED`, нужна сессия) →
   StarAPI (RapidAPI, ротация ключей) → yt-dlp+ffmpeg → платный одиночный Apify-актор (по флагу
@@ -20,8 +23,12 @@ Supabase MCP) и как они работают — `docs/claude-code-toolkit.md
 - ASR: переключатель **`asr_mode`** (`auto | mlx | cloud | faster-whisper`): mlx-whisper на Apple Silicon,
   облачный API (OpenAI Whisper) на сервере, faster-whisper CPU как фолбэк.
 - Frontend: **React + Vite**, без UI-кит-зависимостей сверх необходимого.
-- Деплой: фронт — **Vercel**, API+воркер — **Render**; параллельно по той же очереди работает
-  локальный воркер на Mac (когда включён). Секреты — только в env, никогда в коде и не в этом файле.
+- Деплой: фронт и API — **Vercel** (один проект `reelscribe`, два сервиса: `frontend` и `backend`,
+  один домен, конфиг `vercel.json`); воркер — **GitHub Actions** (`.github/workflows/worker.yml`,
+  запуск по расписанию/вручную/мгновенно через `repository_dispatch`). Локальный воркер на Mac
+  больше не обязателен для прода — нужен только для отладки; не держать его в бесконечном режиме
+  одновременно с Actions (cooldown API-ключей после 429 живёт в памяти процесса отдельно у каждого).
+  Секреты — только в env, никогда в коде и не в этом файле.
 
 ## Структура
 ```
@@ -31,6 +38,8 @@ frontend/  React+Vite: src/ (pages, components, api, lib)
 docs/      ТЗ_ReelScribe.md — полная спецификация; claude-code-toolkit.md — инструменты разработки
 supabase/  migrations/ — снимок схемы БД
 reelscribe_v12.html  — кликабельный прототип (визуальный эталон)
+vercel.json          — деплой фронтенда + API на Vercel (два сервиса в одном проекте)
+.github/workflows/   — воркер на GitHub Actions (worker.yml, keepalive.yml)
 .claude/   settings.json (хуки/права), skills/ (конвенции проекта)
 ```
 
@@ -86,7 +95,7 @@ cd frontend && npm run build                                   # прод-сбо
 - **БД — через Supabase MCP.** Схему, миграции и проверочные запросы делаю через подключённый Supabase
   MCP, а не руками вслепую. Перед DDL/миграцией — показать, что собираюсь выполнить, и дождаться «да».
 - **Качество в конвейере.** Линтер/тесты гоняются хуками автоматически (см. `.claude/settings.json`).
-  Перед коммитом и перед деплоем на Render — `/code-review` (на сложных местах `high`), фиксы применить.
+  Перед коммитом и перед деплоем (пуш в `main` = автодеплой на Vercel) — `/code-review` (на сложных местах `high`), фиксы применить.
 - **Автономная добивка.** Когда цель чётко измерима (например «все критерии приёмки MVP из §15 ТЗ
   выполнены и тесты зелёные») — использую `/goal`, чтобы доработать через несколько ходов без ручного
   пинка на каждом шаге.
