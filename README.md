@@ -97,12 +97,31 @@ cd frontend && npm run build
 |---|---|---|---|
 | Фронтенд | Vercel, проект `reelscribe` | `frontend/vercel.json` (`VITE_API_URL` зашит в `build.env`) | https://reelscribe-app.vercel.app |
 | API | Render, сервис `reelscribe-api` | `render.yaml` | https://reelscribe-api.onrender.com |
-| Воркер | Render, сервис `reelscribe-worker` | `render.yaml` | — (фоновый процесс, без публичного URL) |
+| Воркер | **на Render не поднят** (см. ниже) | `render.yaml` описывает, но сервис не создан | — |
 
-Оба Render-сервиса и Vercel-проект деплоятся автоматически при пуше в `main` репозитория
-https://github.com/ilfaaat-sistema/reelscribe.git. Секреты с `sync: false` в `render.yaml`
-(`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `APIFY_API_TOKEN`, `RAPIDAPI_KEY`, `RAPIDAPI_KEYS`,
-`OPENAI_API_KEY`, `DEEPL_API_KEY`) задаются вручную в дашборде Render — они не приходят из `render.yaml`.
+Деплой автоматический при пуше в `main` репозитория https://github.com/ilfaaat-sistema/reelscribe.git.
+У Vercel-проекта Root Directory = `frontend` — сборка идёт из этой папки, а не из корня репозитория.
+
+Секреты с `sync: false` в `render.yaml` (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `APIFY_API_TOKEN`,
+`RAPIDAPI_KEY`, `RAPIDAPI_KEYS`, `OPENAI_API_KEY`, `DEEPL_API_KEY`, `FRONTEND_URL`) задаются вручную
+в дашборде Render — из `render.yaml` они не приходят.
+
+### Важно: воркера в проде нет
+
+`render.yaml` описывает сервис `reelscribe-worker`, но на аккаунте Render он не создан — там живут
+только `reelscribe-api` и (до 2026-08-10) удалённый дубль фронта `reelscribe-ui`. Практическое
+следствие: **импорт с боевого сайта поставит задания в очередь, но обрабатывать их будет некому** —
+скачивание, распознавание и перевод не запустятся сами.
+
+Пока сервис не создан, очередь разбирает локальный воркер на Mac:
+
+```bash
+cd backend && python -m app.workers.run
+```
+
+Он ходит в ту же базу Supabase, поэтому задания, созданные на проде, обработаются, как только воркер
+запущен. Чтобы прод стал самостоятельным, нужно создать на Render worker-сервис по описанию из
+`render.yaml` (план `standard` — платный).
 
 ## Структура репозитория
 
