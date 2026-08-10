@@ -10,6 +10,7 @@ from typing import Any
 import httpx
 
 from app.core.config import settings
+from app.pipeline import shared_state
 from app.pipeline.media import extract_wav_16k_mono
 
 logger = logging.getLogger(__name__)
@@ -31,13 +32,32 @@ _followers_lock: asyncio.Lock | None = None
 _cooldown: dict[str, float] = {}
 
 
-def _available_keys() -> list[str]:
-    now = time.monotonic()
-    return [k for k in settings.rapidapi_key_list if _cooldown.get(k, 0.0) <= now]
+async def _available_keys() -> list[str]:
+    """Ключи, не остывающие после 429 — ни по памяти процесса, ни по общей базе.
+
+    Общая база нужна, чтобы соседний воркер не тратил свою попытку на ключ, который здесь уже
+    получил 429: у бесплатного тарифа StarAPI всего 100 запросов в месяц на ключ, и каждый
+    лишний удар по остывающему ключу — это выброшенный запрос из этой сотни.
+    """
+    shared = await shared_state.load_cooldowns('rapidapi')
+    now_m = time.monotonic()
+    now = datetime.now(timezone.utc)
+
+    out: list[str] = []
+    for k in settings.rapidapi_key_list:
+        if _cooldown.get(k, 0.0) > now_m:
+            continue
+        if shared:
+            until = shared.get((shared_state.key_ref(k), ''))
+            if until and until > now:
+                continue
+        out.append(k)
+    return out
 
 
-def _cool_down(key: str) -> None:
+async def _cool_down(key: str) -> None:
     _cooldown[key] = time.monotonic() + settings.starapi_key_cooldown_min * 60
+    await shared_state.save_cooldown('rapidapi', key, '', settings.starapi_key_cooldown_min)
 
 
 _lock_loop: asyncio.AbstractEventLoop | None = None
@@ -68,7 +88,7 @@ def _headers(key: str) -> dict[str, str]:
 
 async def _request(client: httpx.AsyncClient, endpoint: str, payload: dict) -> httpx.Response:
     """POST к StarAPI с ротацией ключей: при 429 ключ уходит в cooldown и берём следующий."""
-    available = _available_keys()
+    available = await _available_keys()
     if not available:
         raise QuotaExceededError("StarAPI: все ключи на cooldown после 429")
     for key in available:
@@ -78,7 +98,7 @@ async def _request(client: httpx.AsyncClient, endpoint: str, payload: dict) -> h
             json=payload,
         )
         if resp.status_code == 429:
-            _cool_down(key)
+            await _cool_down(key)
             logger.warning(
                 "StarAPI: ключ …%s — 429, cooldown %dмин",
                 key[-6:], settings.starapi_key_cooldown_min,
@@ -104,6 +124,15 @@ async def _get_followers(client: httpx.AsyncClient, username: str | None) -> int
     async with _get_lock():
         if username in _followers_cache:
             return _followers_cache[username]
+
+    # Общий кэш — тот же, что у Apify-пути: подписчики одного автора не зависят от того, каким
+    # источником их достали, поэтому платить за них дважды разными провайдерами незачем.
+    shared = await shared_state.get_followers(username)
+    if shared is not shared_state.MISS:
+        async with _get_lock():
+            _followers_cache[username] = shared
+        return shared
+
     try:
         resp = await _request(client, _PROFILE_ENDPOINT, {"username": username})
         resp.raise_for_status()
@@ -119,6 +148,7 @@ async def _get_followers(client: httpx.AsyncClient, username: str | None) -> int
         count = None
     async with _get_lock():
         _followers_cache[username] = count
+    await shared_state.set_followers(username, count, settings.starapi_key_cooldown_min)
     return count
 
 

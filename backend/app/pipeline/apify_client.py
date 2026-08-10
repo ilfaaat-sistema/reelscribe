@@ -10,11 +10,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
 
 from app.core.config import settings
+from app.pipeline import shared_state
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +27,10 @@ class ApifyExhaustedError(Exception):
     """Все Apify-токены исчерпали кредит/лимит (или на cooldown) для запрошенного actor'а."""
 
 
+# Локальные словари остаются как ФОЛБЭК: если база недоступна, воркер ведёт себя ровно так же,
+# как до появления общего состояния, а не встаёт. При работающей базе они дублируют её и служат
+# ещё и защитой от лишних чтений внутри одного процесса.
+#
 # Токены, забаненные целиком (кредит аккаунта исчерпан) — на ВСЕ actor'ы.
 # {token: monotonic-время, когда снова можно пробовать}.
 _cooldown: dict[str, float] = {}
@@ -34,20 +40,39 @@ _cooldown: dict[str, float] = {}
 _actor_cooldown: dict[tuple[str, str], float] = {}
 
 
-def _available_tokens(actor: str) -> list[str]:
-    now = time.monotonic()
-    return [
-        t for t in settings.apify_token_list
-        if _cooldown.get(t, 0.0) <= now and _actor_cooldown.get((t, actor), 0.0) <= now
-    ]
+async def _available_tokens(actor: str) -> list[str]:
+    """Токены, не находящиеся на паузе — ни по памяти процесса, ни по общей базе.
+
+    Проверяются оба бана: аккаунтный (actor='') и точечный на конкретный actor. Общая база
+    нужна затем, чтобы соседний воркер не долбился в ключ, который здесь уже признан
+    исчерпанным, — иначе каждый узнаёт об исчерпании на своих ошибках и жжёт квоту впустую.
+    """
+    shared = await shared_state.load_cooldowns('apify')
+    now_m = time.monotonic()
+    now = datetime.now(timezone.utc)
+
+    out: list[str] = []
+    for t in settings.apify_token_list:
+        if _cooldown.get(t, 0.0) > now_m or _actor_cooldown.get((t, actor), 0.0) > now_m:
+            continue
+        if shared:
+            ref = shared_state.key_ref(t)
+            account_until = shared.get((ref, ''))
+            actor_until = shared.get((ref, actor))
+            if (account_until and account_until > now) or (actor_until and actor_until > now):
+                continue
+        out.append(t)
+    return out
 
 
-def _cool_down_account(token: str) -> None:
+async def _cool_down_account(token: str) -> None:
     _cooldown[token] = time.monotonic() + settings.apify_token_cooldown_min * 60
+    await shared_state.save_cooldown('apify', token, '', settings.apify_token_cooldown_min)
 
 
-def _cool_down_actor(token: str, actor: str) -> None:
+async def _cool_down_actor(token: str, actor: str) -> None:
     _actor_cooldown[(token, actor)] = time.monotonic() + settings.apify_token_cooldown_min * 60
+    await shared_state.save_cooldown('apify', token, actor, settings.apify_token_cooldown_min)
 
 
 _RETRIES_PER_TOKEN = 3   # ретраи транзиентных ошибок (429/5xx/временный 403) на одном токене
@@ -82,7 +107,7 @@ async def run_actor_get_items(
     extra_params: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """POST run-sync-get-dataset-items с ротацией токенов + ретраями транзиентных ошибок."""
-    tokens = _available_tokens(actor)
+    tokens = await _available_tokens(actor)
     if not tokens:
         raise ApifyExhaustedError(f"Apify: все токены на cooldown для actor {actor}")
 
@@ -111,7 +136,7 @@ async def run_actor_get_items(
                 # ключевых слов там — ложное срабатывание, а не сигнал об исчерпании квоты.
                 kind = _classify_exhaustion(resp.status_code, resp.text)
                 if kind == "account":
-                    _cool_down_account(token)
+                    await _cool_down_account(token)
                     logger.warning(
                         "Apify: токен …%s — кредит аккаунта исчерпан (HTTP %s), переключаюсь на следующий",
                         token[-6:], resp.status_code,
@@ -119,7 +144,7 @@ async def run_actor_get_items(
                     benched = True
                     break
                 if kind == "actor":
-                    _cool_down_actor(token, actor)
+                    await _cool_down_actor(token, actor)
                     logger.warning(
                         "Apify: токен …%s — нет прав на actor %s (HTTP %s), переключаюсь на следующий",
                         token[-6:], actor, resp.status_code,
@@ -222,6 +247,17 @@ async def get_followers_via_apify(username: str | None) -> int | None:
         if cached is not _MISS:
             return cached
 
+        # Общий кэш проверяем ПОСЛЕ локального: локальный дешевле (без сетевого запроса), а
+        # промах по нему в пределах одного процесса означает, что этого автора здесь ещё не
+        # видели. Зато его мог видеть соседний воркер — и тогда платить второй раз незачем.
+        # Именно на этом шаге четыре воркера раньше утраивали расход: профильный скрейп самый
+        # дорогой вызов каскада, а авторы в выборке почти не повторяются.
+        shared = await shared_state.get_followers(username)
+        if shared is not shared_state.MISS:
+            _set_cached_followers(username, shared)   # подтягиваем в локальный, чтобы не ходить снова
+            logger.info('Подписчики @%s взяты из общего кэша (%s)', username, shared)
+            return shared
+
         count: int | None = None
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(90.0, connect=15.0)) as client:
@@ -237,4 +273,5 @@ async def get_followers_via_apify(username: str | None) -> int | None:
             logger.warning("Apify: профиль @%s ошибка (%s)", username, exc)
 
         _set_cached_followers(username, count)
+        await shared_state.set_followers(username, count, settings.apify_token_cooldown_min)
         return count
