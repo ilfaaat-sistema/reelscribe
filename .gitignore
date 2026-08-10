@@ -17,3 +17,6 @@ dist/
 # личные данные
 Копия reels_list.csv
 *.csv
+# выгрузки Instagram (переписки, сохранённое) — десятки МБ личного, в git не кладём
+your_instagram_activity*/
+message_*.json
