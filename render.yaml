@@ -20,8 +20,9 @@ services:
       - key: PYTHON_VERSION
         value: "3.11.9"
       - key: FRONTEND_URL
-        # домены через запятую; Vercel-домен подставить после первого деплоя фронта
-        value: https://reelscribe-ui.onrender.com
+        # значение задаётся в дашборде Render (sync: false — Blueprint его не перетирает).
+        # поддерживается список доменов через запятую; боевой домен фронта — https://reelscribe-app.vercel.app
+        sync: false
       - key: DEEPL_API_KEY
         sync: false                # опционально: free tier deepl.com/pro#developer
 
@@ -58,19 +59,3 @@ services:
         value: "2"
       - key: PYTHON_VERSION
         value: "3.11.9"
-
-  # ── Frontend (React + Vite → Static Site) ────────────────────────────────
-  - type: web
-    name: reelscribe-ui
-    runtime: static
-    rootDir: frontend
-    buildCommand: npm install && npm run build
-    staticPublishPath: dist
-    plan: free
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    envVars:
-      - key: VITE_API_URL
-        value: https://reelscribe-api.onrender.com
