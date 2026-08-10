@@ -20,8 +20,9 @@ MAX_QUOTA_DEFERRALS = 16      # ~8ч ожидания квоты при cooldown
 STALE_JOB_MINUTES = 45        # in_progress старше этого — считается брошенным (воркер умер)
 STALE_CHECK_INTERVAL_SEC = 300
 
-# Limit concurrent transcriptions to avoid OOM on M1 8GB
-_transcription_sem = asyncio.Semaphore(1)  # 1 транскрипция за раз — экономия RAM на M1 8GB
+# Сколько транскрипций идёт одновременно — экономия RAM. Реальное значение выставляется в
+# run_worker() из TRANSCRIBE_CONCURRENCY: 1 на Mac 8 ГБ, 2 на раннере GitHub Actions.
+_transcription_sem = asyncio.Semaphore(max(1, settings.transcribe_concurrency))
 
 
 def _utc_now_dt() -> datetime:
@@ -249,18 +250,42 @@ def _requeue_stale(db) -> None:
             db.table('transcripts').update({'status': 'queued'}).eq('reel_id', j['reel_id']).execute()
 
 
-async def run_worker() -> None:
+async def run_worker(
+    *,
+    drain: bool = False,
+    max_runtime_sec: float | None = None,
+    empty_polls_to_exit: int = 3,
+) -> None:
+    """Разбирает очередь заданий.
+
+    По умолчанию (drain=False) — бесконечный цикл, как и раньше: режим локального воркера на Mac.
+    При drain=True работает до опустошения очереди и выходит — режим разового прогона на GitHub
+    Actions, где процесс обязан завершиться сам. Дефолты подобраны так, что без drain ни одна
+    новая ветка недостижима и поведение старого режима не меняется.
+    """
     global _transcription_sem
-    _transcription_sem = asyncio.Semaphore(1)
+    _transcription_sem = asyncio.Semaphore(max(1, settings.transcribe_concurrency))
     from app.pipeline.transcribe import active_asr_mode
-    logger.info('Воркер запущен (AUDIO_DIR=%s, ASR=%s)', AUDIO_DIR, active_asr_mode())
+    logger.info(
+        'Воркер запущен (AUDIO_DIR=%s, ASR=%s, drain=%s, транскрипций одновременно=%d)',
+        AUDIO_DIR, active_asr_mode(), drain, max(1, settings.transcribe_concurrency),
+    )
     AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 
     import time
+    started_at = time.monotonic()
     last_stale_check = 0.0
     tick = 0
+    empty_polls = 0
 
     while True:
+        # Мягкий дедлайн проверяется ТОЛЬКО здесь, между итерациями — то есть после того, как
+        # предыдущий gather полностью завершился. Взятая пачка всегда дорабатывается целиком,
+        # ни одно задание не рвётся на полпути.
+        if drain and max_runtime_sec is not None and time.monotonic() - started_at >= max_runtime_sec:
+            logger.info('Drain: лимит времени %.0fс исчерпан — новых заданий не беру, выхожу.',
+                        max_runtime_sec)
+            return
         # Сетевой сбой в одной итерации не должен убивать воркер: рестарт процесса
         # оставляет asyncio-примитивы привязанными к мёртвому loop (Python 3.9),
         # и все последующие джобы падают с «attached to a different loop».
@@ -286,8 +311,15 @@ async def run_worker() -> None:
             )
             jobs = jobs_resp.data
             if jobs:
+                empty_polls = 0
                 await asyncio.gather(*[_process_job(j) for j in jobs])
             else:
+                if drain:
+                    empty_polls += 1
+                    logger.info('Drain: очередь пуста (%d/%d)…', empty_polls, empty_polls_to_exit)
+                    if empty_polls >= empty_polls_to_exit:
+                        logger.info('Drain: очередь разобрана — выхожу.')
+                        return
                 await asyncio.sleep(2)
         except Exception as exc:  # noqa: BLE001
             logger.warning('Итерация цикла упала (%s) — продолжаю через 5с…', exc)
@@ -295,11 +327,34 @@ async def run_worker() -> None:
 
 
 if __name__ == '__main__':
+    import argparse
+    import os
     import time
+
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
-    while True:
-        try:
-            asyncio.run(run_worker())
-        except Exception as exc:
-            logger.error('Воркер упал: %s — рестарт через 10с…', exc)
-            time.sleep(10)
+
+    parser = argparse.ArgumentParser(description='Воркер очереди ReelScribe')
+    parser.add_argument(
+        '--drain', action='store_true',
+        help='разобрать очередь и выйти (режим разового прогона на GitHub Actions)',
+    )
+    _args, _ = parser.parse_known_args()
+    _drain = _args.drain or os.environ.get('WORKER_DRAIN', '').lower() in ('1', 'true', 'yes')
+
+    if _drain:
+        # Одиночный прогон. Внешнего while True здесь НЕТ намеренно: падение должно стать красным
+        # шагом workflow, а не тихим бесконечным ретраем. Следующий запуск подхватит очередь,
+        # а брошенные in_progress вернёт _requeue_stale.
+        asyncio.run(run_worker(
+            drain=True,
+            max_runtime_sec=float(os.environ.get('WORKER_MAX_RUNTIME_SEC', 5.5 * 3600)),
+            empty_polls_to_exit=int(os.environ.get('WORKER_EMPTY_POLLS_TO_EXIT', 3)),
+        ))
+    else:
+        # Локальный воркер на Mac — поведение не менялось.
+        while True:
+            try:
+                asyncio.run(run_worker())
+            except Exception as exc:
+                logger.error('Воркер упал: %s — рестарт через 10с…', exc)
+                time.sleep(10)

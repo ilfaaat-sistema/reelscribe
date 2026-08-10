@@ -65,6 +65,9 @@ async def get_session(session_id: UUID) -> SessionDetail:
 async def retry_jobs(session: Optional[UUID] = Query(None)) -> dict:
     """Повторить незавершённые рилсы: всех (session=None) или одной сессии."""
     n = requeue_jobs(str(session) if session else None)
+    if n > 0:
+        from app.pipeline.actions_trigger import trigger_worker_run
+        trigger_worker_run()
     return {"requeued": n}
 
 

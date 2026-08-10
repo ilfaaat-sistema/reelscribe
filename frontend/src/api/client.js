@@ -1,3 +1,7 @@
+// В проде фронт и API живут на одном origin (Vercel Services, см. корневой vercel.json) —
+// VITE_API_URL не задаётся, и запросы идут на относительный /api через тот же домен.
+// Локально бэкенд поднят отдельно на порту 5245 (см. CLAUDE.md), поэтому в dev
+// VITE_API_URL=http://localhost:5245 указывается явно (например, в frontend/.env.local).
 const BASE = (import.meta.env.VITE_API_URL || '') + '/api'
 
 const STATUS_MESSAGES = {

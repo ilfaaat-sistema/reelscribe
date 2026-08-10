@@ -1,0 +1,70 @@
+name: worker
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch: {}
+  repository_dispatch:
+    types: [worker-run]
+
+concurrency:
+  group: reelscribe-worker
+  # cancel-in-progress: false — принципиально. Если поставить true, новый запуск
+  # (например мгновенный тригер из импорта) оборвёт раннер посреди распознавания,
+  # и задание останется висеть в статусе in_progress до срабатывания _requeue_stale
+  # (45 минут). Вместо отмены новые запуски просто встают в очередь за текущим.
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    # Жёсткий лимит GitHub Actions — 360 минут на джоб. Оставляем запас.
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements-worker.txt
+
+      - name: Установка зависимостей
+        working-directory: backend
+        run: pip install -r requirements-worker.txt
+
+      # Кэш моделей faster-whisper. Модели скачиваются через huggingface_hub
+      # в ~/.cache/huggingface (обычный дефолт HF_HOME на Linux-раннере).
+      # Ключ включает run_id, поэтому каждый запуск сохраняет свежий кэш заново,
+      # а restore-keys без run_id подхватывает последний сохранённый по префиксу —
+      # так кэш самообновляется, а не застревает навсегда на первом же сохранении.
+      - name: Кэш моделей faster-whisper
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: fw-models-${{ github.run_id }}
+          restore-keys: |
+            fw-models-
+
+      - name: Запуск воркера (drain-режим)
+        working-directory: backend
+        run: python -m app.workers.run --drain
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
+          APIFY_API_TOKENS: ${{ secrets.APIFY_API_TOKENS }}
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+          RAPIDAPI_KEYS: ${{ secrets.RAPIDAPI_KEYS }}
+          DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
+          # OPENAI_API_KEY намеренно НЕ передаётся: без него asr_mode=faster-whisper физически
+          # не может уйти в платное облачное распознавание, даже если код где-то попробует.
+          ASR_MODE: faster-whisper
+          AUDIO_TMP_DIR: /tmp/reelscribe_audio
+          TRANSCRIBE_CONCURRENCY: '2'
+          WORKER_DRAIN: '1'
+          WORKER_MAX_RUNTIME_SEC: '20400'
+
+# Системный ffmpeg через apt намеренно не ставится: пакет imageio-ffmpeg (тянется зависимостями
+# воркера) несёт собственный статический бинарник ffmpeg — проверено, работает без apt-пакета.
+# Если ffmpeg вдруг не находится — ищи проблему не здесь, apt install тут не нужен.

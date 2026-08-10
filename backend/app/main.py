@@ -27,6 +27,9 @@ app.include_router(progress.router, prefix="/api")
 app.include_router(errors.router, prefix="/api")
 
 
+# /api/health — публичный адрес: на Vercel в бэкенд-сервис уходит только префикс /api,
+# всё остальное отдаётся фронтом. /health оставлен для локального запуска и совместимости.
 @app.get("/health")
+@app.get("/api/health")
 def health() -> dict:
     return {"status": "ok"}

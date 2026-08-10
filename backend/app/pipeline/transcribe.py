@@ -127,9 +127,18 @@ def _transcribe_cloud(wav_path: Path) -> tuple[str, str, float]:
 
 def _transcribe_fw(wav_path: Path, model_name: str) -> tuple[str, str, float]:
     if model_name not in _fw_cache:
+        import os
+
         from faster_whisper import WhisperModel
-        logger.info('Загружаю faster-whisper %s…', model_name)
-        _fw_cache[model_name] = WhisperModel(model_name, device='cpu', compute_type='int8')
+        # Без явного cpu_threads CTranslate2 берёт ВСЕ ядра на каждый экземпляр модели. При
+        # TRANSCRIBE_CONCURRENCY>1 это даёт переподписку по CPU и замедляет обе транскрипции,
+        # поэтому делим ядра между параллельными экземплярами. При значении 1 (Mac) результат
+        # совпадает с прежним неявным поведением.
+        cpu_threads = max(1, (os.cpu_count() or 4) // max(1, settings.transcribe_concurrency))
+        logger.info('Загружаю faster-whisper %s (cpu_threads=%d)…', model_name, cpu_threads)
+        _fw_cache[model_name] = WhisperModel(
+            model_name, device='cpu', compute_type='int8', cpu_threads=cpu_threads,
+        )
     model = _fw_cache[model_name]
     segments, info = model.transcribe(str(wav_path), beam_size=5)
     text = ' '.join(seg.text.strip() for seg in segments).strip()

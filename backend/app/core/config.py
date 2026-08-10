@@ -85,8 +85,20 @@ class Settings(BaseSettings):
     asr_mode: str = "auto"
 
     audio_tmp_dir: str = "/tmp/reelscribe_audio"
-    worker_concurrency: int = 2
+    worker_concurrency: int = 2    # историческая настройка, кодом не используется
     frontend_url: str = "*"
+
+    # Сколько рилсов распознавать одновременно. 1 — под Mac 8 ГБ (текущее поведение).
+    # На раннере GitHub Actions (4 vCPU / 16 ГБ) выставляется 2 через env воркера.
+    # Намеренно НЕ переиспользуем worker_concurrency: у неё в backend/.env стоит 2, и подключение
+    # старого имени молча удвоило бы нагрузку на локальный воркер.
+    transcribe_concurrency: int = 1
+
+    # Мгновенный запуск воркера на GitHub Actions при импорте/ретрае (repository_dispatch).
+    # Токен нужен ТОЛЬКО процессу API; воркеру он не передаётся.
+    github_dispatch_token: str = ""
+    github_dispatch_repo: str = "ilfaaat-sistema/reelscribe"
+    github_dispatch_event_type: str = "worker-run"
 
 
 settings = Settings()

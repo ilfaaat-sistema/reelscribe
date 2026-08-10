@@ -102,6 +102,12 @@ def _setup_jobs(
             for rid in all_reel_ids
         ]).execute()
 
+        # Мгновенный запуск воркера на GitHub Actions — не ждать ближайшего cron (*/5 мин).
+        # all_reel_ids здесь всегда непусто (иначе return выше по to_process).
+        from app.pipeline.actions_trigger import trigger_worker_run
+        if trigger_worker_run():
+            logger.info('GitHub Actions worker triggered for session %s', session_id)
+
         if req.model == 'large-v3':
             from app.pipeline.kaggle_trigger import trigger_kaggle_notebook
             if trigger_kaggle_notebook():

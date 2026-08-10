@@ -1,0 +1,22 @@
+# Зависимости фонового воркера очереди (app/workers/run.py) — GitHub Actions раннер
+# и локальный Mac-воркер. Наследует requirements.txt (app/core/config.py, app/core/db.py
+# и httpx нужны и воркеру — httpx уже в requirements.txt, отдельно не дублируем), сверху —
+# тяжёлые пакеты пайплайна: скачивание аудио, ASR, перевод.
+# Vercel этот файл не читает и не ставит — API-сервис им не пользуется.
+-r requirements.txt
+
+yt-dlp>=2024.4.9
+faster-whisper>=1.0.1
+instaloader>=4.12       # бесплатный источник подписчиков + аудио по shortcode (снимает зависимость от квоты StarAPI)
+# Ниже — из исходного requirements.txt, но по коду сейчас нигде не импортируются
+# (SSE-эндпоинта и file-upload через UploadFile/Form в проекте нет). Оставлены здесь,
+# а не в API-требованиях, чтобы не раздувать серверлес-бандл на Vercel; если так и
+# останутся неиспользуемыми — можно будет убрать вовсе.
+python-multipart>=0.0.9
+sse-starlette>=1.8.2
+imageio-ffmpeg>=0.5.1
+deep-translator>=1.11.4
+
+# mlx только на Apple Silicon — на Linux (GitHub Actions раннер) пропускается, там cloud/faster-whisper
+mlx-whisper>=0.4; sys_platform == "darwin" and platform_machine == "arm64"
+soundfile>=0.12

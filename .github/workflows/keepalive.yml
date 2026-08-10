@@ -1,0 +1,34 @@
+name: keepalive
+
+# GitHub автоматически отключает workflow с триггером schedule после 60 дней без
+# активности в репозитории. Этот workflow раз в месяц принудительно "включает" worker.yml
+# через API, чтобы cron-расписание никогда не засыпало.
+#
+# Приём с пустым коммитом намеренно не используется: он засчитывается как push в main
+# и дёргал бы автодеплой Vercel каждый месяц безо всякой причины.
+#
+# repository_dispatch и workflow_dispatch правилу 60 дней НЕ подвержены — они всегда
+# доступны по прямому вызову API, поэтому мгновенный тригер из бэкенда (actions_trigger.py)
+# продолжит работать даже если cron-расписание уже уснуло.
+
+on:
+  schedule:
+    - cron: '0 3 1 * *'
+  workflow_dispatch: {}
+
+permissions:
+  actions: write
+
+jobs:
+  keep-worker-enabled:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Включить worker.yml
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.enableWorkflow({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'worker.yml',
+            });

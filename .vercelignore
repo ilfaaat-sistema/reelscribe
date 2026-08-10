@@ -1,0 +1,25 @@
+# Что НЕ уезжает на Vercel при деплое.
+# Без этого файла CLI грузит папку целиком — в первый раз получилось 60 МБ,
+# в основном за счёт личной выгрузки Instagram. Такие данные на хостинге не нужны.
+
+# личные выгрузки и данные
+your_instagram_activity*/
+message_*.json
+*.csv
+
+# окружения и сборки
+.venv/
+__pycache__/
+*.pyc
+node_modules/
+dist/
+.pytest_cache/
+.ruff_cache/
+
+# инфраструктура, не нужная приложению
+.github/
+supabase/
+docs/
+kaggle/
+reelscribe_v12.html
+.claude/

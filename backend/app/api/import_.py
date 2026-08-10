@@ -1,20 +1,24 @@
 from __future__ import annotations
 
-import time
+import logging
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status
 
+from app.core.db import get_db
 from app.models.schemas import ImportRequest, ImportResponse
 from app.pipeline.normalize import parse_links
 from app.services.import_service import _done_shortcodes, handle_import
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["import"])
 
 # Rate-limit по IP: защита кошелька — публичный сервис работает на ключах владельца.
-# In-memory: при нескольких инстансах API лимит действует на каждый инстанс отдельно — ок для нас.
+# Состояние живёт в таблице rate_limits, а НЕ в памяти процесса: API работает на serverless
+# (Vercel), где каждый вызов может попасть в свежий инстанс, и словарь в памяти защищал бы
+# ровно ничего.
 RATE_MAX_IMPORTS = 5
 RATE_WINDOW_SEC = 600
-_rate_hits: dict[str, list[float]] = {}
 
 
 def _client_ip(request: Request) -> str:
@@ -25,18 +29,31 @@ def _client_ip(request: Request) -> str:
 
 
 def _check_rate_limit(ip: str) -> None:
-    now = time.monotonic()
-    hits = [t for t in _rate_hits.get(ip, []) if now - t < RATE_WINDOW_SEC]
-    if len(hits) >= RATE_MAX_IMPORTS:
+    cutoff = (
+        datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=RATE_WINDOW_SEC)
+    ).isoformat()
+    db = get_db()
+    try:
+        # Уборка старых отметок — таблица крошечная, чистим на каждом импорте.
+        db.table('rate_limits').delete().lt('created_at', cutoff).execute()
+        recent = (
+            db.table('rate_limits').select('id')
+            .eq('ip', ip).gte('created_at', cutoff)
+            .execute().data
+        )
+    except Exception as exc:  # noqa: BLE001
+        # Пропускаем: сам импорт всё равно упирается в ту же базу и упадёт следом, если она
+        # недоступна. Это же даёт безопасную раскатку — код можно задеплоить до миграции.
+        logger.warning('Rate-limit не проверен (%s) — пропускаю импорт', exc)
+        return
+
+    if len(recent) >= RATE_MAX_IMPORTS:
         raise HTTPException(
             status_code=429,
             detail=f'Слишком много импортов подряд (лимит {RATE_MAX_IMPORTS} за '
                    f'{RATE_WINDOW_SEC // 60} минут). Подожди немного и попробуй снова.',
         )
-    hits.append(now)
-    _rate_hits[ip] = hits
-    if len(_rate_hits) > 10_000:   # не даём словарю расти бесконечно
-        _rate_hits.clear()
+    db.table('rate_limits').insert({'ip': ip}).execute()
 
 
 @router.post("/import", response_model=ImportResponse, status_code=status.HTTP_202_ACCEPTED)

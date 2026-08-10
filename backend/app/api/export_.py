@@ -14,6 +14,9 @@ from app.core.db import get_db
 
 router = APIRouter(tags=["export"])
 
+_PAGE = 1000              # размер страницы PostgREST — его же дефолтный максимум
+_MAX_EXPORT_ROWS = 5000   # предел на один файл: у Vercel жёсткий лимит 4.5 МБ на тело ответа
+
 _RU = {
     'shortcode': 'Код',
     'url': 'Ссылка',
@@ -70,7 +73,26 @@ def _fetch(
         if filt == 'viral':
             query = query.gte('er', 5)
 
-    rows = query.execute().data
+    # Постранично: без range() PostgREST молча отдаёт только первую страницу (~1000 строк),
+    # и пользователь получал бы обрезанный файл, считая, что выгрузил всё.
+    rows: list[dict] = []
+    page = 0
+    while True:
+        chunk = query.range(page * _PAGE, (page + 1) * _PAGE - 1).execute().data
+        rows.extend(chunk)
+        if len(chunk) < _PAGE:
+            break
+        page += 1
+        if len(rows) > _MAX_EXPORT_ROWS:
+            # Молча не режем: у Vercel жёсткий лимит 4.5 МБ на тело ответа, и обрезанная
+            # выгрузка хуже честной ошибки — пользователь бы о потере не узнал.
+            raise HTTPException(
+                status_code=413,
+                detail=f'Слишком большая выгрузка: больше {_MAX_EXPORT_ROWS} рилсов. '
+                       f'Сузь выборку — выгрузи одну сессию, конкретного автора или '
+                       f'отметь нужные рилсы галочками.',
+            )
+
     # пост-фильтры по статусу транскрипта и поиску (как в /api/reels)
     out: list[dict] = []
     for r in rows:
