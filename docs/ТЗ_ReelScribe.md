@@ -15,7 +15,11 @@ ReelScribe превращает сохранённые Instagram Reels (и по�
 каждого рилса и экспортом. Цель — быстро находить «залетевшие» идеи и пересматривать/переснимать их.
 
 **Пользователь:** контент-мейкер/аналитик, работает на русском, на MacBook M1 (8 ГБ), из РФ.
-Поэтому критичны: работа ASR без иностранной оплаты/VPN, экономный по памяти прогон, русский интерфейс.
+Поэтому критичны: экономный по памяти прогон, русский интерфейс.
+
+> Требование «работа ASR без иностранной оплаты/VPN» снято решением от 2026-07-03: зарубежные
+> платные API разрешены (StarAPI/RapidAPI, Apify, DeepL, OpenAI ASR — см. `CLAUDE.md`, раздел
+> «Железные правила»). *Синхронизировано с кодом 2026-08-10.*
 
 ---
 
@@ -56,13 +60,40 @@ ReelScribe превращает сохранённые Instagram Reels (и по�
 ## 4. Стек и инфраструктура
 
 - **Backend:** Python 3.11, FastAPI, Uvicorn. Фоновый воркер — отдельный процесс, читает очередь.
-- **БД:** Supabase (Postgres). Доступ через supabase-py или SQLAlchemy.
-- **Скачивание/аудио:** yt-dlp + ffmpeg (извлекать только аудио, формат `.m4a`/`.wav` mono 16 kHz).
-- **ASR:** faster-whisper (CTranslate2). Модели `medium` (дефолт, идёт на M1) и `large-v3` (батч на GPU).
-- **Метаданные:** парсинг из ответа yt-dlp где возможно; фолбэк — Apify Instagram scraper (грей-зона ToS, опционально).
-- **Перевод/саммари:** дешёвый LLM (через API). Перевод EN→RU и краткое саммари.
-- **Frontend:** React + Vite. Без тяжёлых UI-китов; стили — как в прототипе (тёмная тема, токены из `:root`).
-- **Деплой:** Render (web-сервис + worker). Секреты в env Render. Локально — `.env` (в `.gitignore`).
+- **БД:** Supabase (Postgres). Доступ через supabase-py.
+- **Скачивание/аудио — реальный каскад источников** (`backend/app/pipeline/download.py`), пробуются
+  по очереди, пока один не отдаст аудио или терминальную ошибку «нет аудио» (фото/карусель):
+  1. **Apify-профиль** (`apify_profile_downloader.py`) — если задан `APIFY_API_TOKEN`(`S`): embed-страница
+     рилса → username автора → дешёвый профильный актор Apify (посты автора) → матч по shortcode.
+  2. **instaloader** (`instaloader_downloader.py`) — только если включён флагом `INSTALOADER_ENABLED`
+     (по умолчанию выключен) и подложен `INSTALOADER_SESSION_FILE` залогиненного IG-аккаунта (анонимные
+     запросы IG режет 401/429). Анти-бан: строго один запрос за раз, случайная пауза 12–30 с между
+     профилями, длинный cooldown после rate-limit.
+  3. **StarAPI** (RapidAPI, `starapi_downloader.py`) — платный резерв по shortcode, если задан
+     `RAPIDAPI_KEY`(`S`); при HTTP 429 ключ уходит на cooldown и берётся следующий (ротация).
+  4. **yt-dlp** (+ опциональные `INSTAGRAM_COOKIES_FILE`) — общий фолбэк без стороннего API.
+  5. **Платный одиночный Apify-актор** (`apify_downloader.py`) — только если явно включён флагом
+     `APIFY_SINGLE_FALLBACK` (по умолчанию выключен, чтобы не жечь деньги) и yt-dlp не справился.
+  Все источники извлекают аудио одним общим хелпером `media.py` → ffmpeg → WAV mono 16 kHz, видео
+  сразу удаляется. Троттлинг: не больше 2 параллельных скачиваний (семафор) + случайная пауза
+  1.5–4 с после каждого успешного скачивания.
+- **Подписчики автора** (`followers.py`) — единая точка: Apify profile-актор, при неудаче —
+  instaloader (только если есть сессия). И Apify-, и RapidAPI-токены/ключи поддерживают ротацию
+  через несколько значений с запятой (`apify_client.py`, `starapi_downloader.py`) — при исчерпании
+  месячного кредита/лимита токен уходит в cooldown, каскад переключается на следующий.
+- **ASR:** переключатель `asr_mode` (`auto | mlx | cloud | faster-whisper`, `backend/app/core/config.py`,
+  `backend/app/pipeline/transcribe.py`) — подробности в §8.
+- **Метаданные:** приходят вместе с ответом того же источника, что отдал аудио (Apify-профиль/StarAPI/
+  instaloader/Apify-фолбэк) — отдельного «фолбэка на метаданные» больше нет, метаданные и медиа берутся
+  из одного вызова.
+- **Перевод:** DeepL (если задан `DEEPL_API_KEY`) с фолбэком на бесплатный Google Translate через
+  `deep-translator` (без ключа) при ошибке DeepL или его отсутствии (`translate.py`). Саммари через LLM
+  пока не реализовано (`POST /api/reels/{id}/summary` отдаёт 501).
+- **Frontend:** React 19 + Vite. Без тяжёлых UI-китов; стили — как в прототипе (тёмная тема, токены из `:root`).
+- **Деплой:** фронт — Vercel (статика); API и воркер — Render (`render.yaml`). Секреты в env
+  Render/Vercel. Локально — `backend/.env` (в `.gitignore`).
+
+*Синхронизировано с кодом 2026-08-10.*
 
 ---
 
@@ -140,6 +171,11 @@ ReelScribe превращает сохранённые Instagram Reels (и по�
 
 RLS включить (данные пользователя приватны). Секреты движков — в env, не в БД.
 
+> Машиночитаемый снимок схемы лежит в `supabase/migrations/0001_schema.sql` (создаётся отдельно,
+> см. историю миграций в Supabase-проекте) — при расхождении с этим разделом ориентироваться на него.
+
+*Синхронизировано с кодом 2026-08-10.*
+
 ---
 
 ## 6. Пайплайн обработки (стадии)
@@ -150,52 +186,83 @@ RLS включить (данные пользователя приватны). �
 2. **dedup + cache** — отбросить дубли внутри партии по shortcode; для уже существующих shortcode с
    `transcripts.status='done'` — НЕ обрабатывать, переиспользовать.
 3. **enqueue** — создать `reels` (если новые) и `jobs` со `state='queued'`; вернуть `session_id`.
-4. **download** (воркер) — yt-dlp, **троттлинг 1–2 параллельно + паузы с джиттером**. Ошибки → backoff-ретрай;
-   после N попыток → Apify-фолбэк или `failed` с причиной.
-5. **extract_audio** — ffmpeg → mono 16 kHz; видео НЕ сохранять.
-6. **transcribe** — faster-whisper выбранной моделью; авто-определение языка.
-7. **metadata** — просмотры/лайки/комменты/автор/подписчики (из yt-dlp/Apify), если `pull_stats`.
-8. **translate** — если язык ≠ ru и `translate=true` → `text_ru`.
-9. **summarize** (опц.) — LLM делает `summary` + `tags`.
+4. **download** (воркер) — реальный каскад источников (Apify-профиль → instaloader → StarAPI →
+   yt-dlp → платный Apify-фолбэк), см. §4. **Троттлинг 2 параллельно + случайная пауза 1.5–4 с**
+   после каждого скачивания. Ошибки одного источника → мягкий переход на следующий; исчерпание
+   всех → `failed` с причиной; фото/карусель (нет видеодорожки) → терминальный статус `no_audio`,
+   но метрики поста всё равно сохраняются.
+5. **extract_audio** — ffmpeg (через `imageio-ffmpeg`, системный ffmpeg не нужен) → mono 16 kHz;
+   видео удаляется сразу после извлечения, не сохраняется.
+6. **transcribe** — по режиму `asr_mode` (mlx-whisper / облачный OpenAI Whisper / faster-whisper CPU),
+   см. §8; авто-определение языка.
+7. **metadata** — просмотры/лайки/комменты/автор приходят вместе с ответом источника скачивания
+   (см. §4, «Метаданные»); подписчики автора добираются отдельно через `followers.py`
+   (Apify-профиль → instaloader), если `pull_stats`.
+8. **translate** — если язык ≠ ru и `translate=true` → `text_ru` (DeepL или бесплатный Google-фолбэк).
+9. **summarize** (опц., не реализовано) — эндпоинт `/api/reels/{id}/summary` пока отдаёт 501.
 10. **ocr** (опц., фаза 3) — текст, вшитый в кадры.
 11. **persist** — записать `transcripts`, обновить `reels`.
 12. **cleanup** — удалить временные аудиофайлы.
 
 Каждая стадия идемпотентна и логирует прогресс; статусы видны фронту.
 
+*Синхронизировано с кодом 2026-08-10.*
+
 ---
 
 ## 7. API (FastAPI)
 
+Полный список маршрутов из кода (`backend/app/main.py` + `backend/app/api/*.py`):
+
 | метод | путь | назначение |
 |---|---|---|
-| POST | `/api/import` | принять ссылки/текст/содержимое файла + настройки (engine, model, translate, pull_stats, comment); распарсить, дедуп, создать сессию и задания; вернуть `session_id`, counts (reels/posts/dup) |
-| GET | `/api/sessions` | список сессий импорта (история загрузок) |
-| GET | `/api/sessions/{id}` | сессия + прогресс (`loaded/total`, `failed`) |
+| GET | `/health` | health-check (без префикса `/api`) |
+| POST | `/api/import` | принять ссылки/текст + настройки (engine, model, translate, pull_stats, comment); распарсить, дедуп, создать сессию и задания; вернуть `session_id`, counts. Защищён rate-limit по IP (5 импортов / 10 мин) |
+| POST | `/api/import/preview` | без создания сессии: сколько из вставленных ссылок уже есть в кэше по shortcode (total/reels/posts/already_done/new) |
+| GET | `/api/sessions` | список сессий импорта (история загрузок) с агрегатами loaded/failed/queued по каждой |
+| GET | `/api/sessions/{id}` | одна сессия + прогресс (`loaded/failed/queued`, `done_ids`) |
 | PATCH | `/api/sessions/{id}` | изменить `comment` сессии |
-| GET | `/api/reels` | список с метриками; query: `session`, `q`, `filter`(all/viral/done/failed), `author`, `sort`, `dir`, пороги `min_views/min_likes/min_comments/min_followers/min_er`, `page` |
-| GET | `/api/reels/{id}` | детали: caption, transcript, text_ru, метрики, summary, note |
-| PATCH | `/api/reels/{id}/note` | сохранить личную заметку |
-| POST | `/api/reels/{id}/summary` | сгенерировать саммари (LLM) |
-| GET | `/api/export` | query: `format`(csv/xlsx/json/md), `lang`(orig/ru/both), `scope`(all/selected), `ids`; отдаёт файл |
-| GET | `/api/progress?session=` | SSE/poll: `loaded`, `total`, `failed`, новые готовые id |
+| POST | `/api/retry` | повторить незавершённые задания: всех сессий (`session` не передан) или одной сессии (`?session=`) — переставляет `jobs.state` обратно в `queued` |
+| GET | `/api/reels` | список с метриками; query: `session`, `q`, `filter`(all/viral/done/failed), `author`, `sort`, `dir`, пороги `min_views/min_likes/min_comments/min_followers/min_er`, `page`, `limit` |
+| GET | `/api/reels/{id}` | детали: caption, transcript, text_ru, метрики, summary, note, fail_reason |
+| PATCH | `/api/reels/{id}/note` | сохранить личную заметку (`reel_notes`, upsert) |
+| POST | `/api/reels/{id}/summary` | **не реализовано** — отдаёт HTTP 501 |
+| GET | `/api/export` | query: `format`(csv/xlsx/json/md — `md` пока не реализован, 501), `lang`(orig/ru/both), `scope`(all/selected), `ids`, плюс те же фильтры, что у `/api/reels`; отдаёт файл с русскими заголовками |
+| GET | `/api/progress?session=` | poll: `loaded`, `total`, `failed`, `done_ids`, `failed_ids` |
+| GET | `/api/errors` | сгруппированный отчёт по упавшим рилсам сессии/всех (`?session=`, `?include_no_audio=`) — причина, счётчик, список |
+| GET | `/api/errors/export` | тот же отчёт файлом: `format`(csv/json) |
 
-`/api/import` идемпотентен по shortcode. Прогресс должен поддерживать «ранний показ»: как только
-готова первая партия (~50), фронт уже может запрашивать `/api/reels`, а `/api/progress` досчитывает остальное.
+`/api/import` идемпотентен по shortcode. Прогресс поддерживает «ранний показ»: как только готова
+первая партия, фронт уже может запрашивать `/api/reels`, а `/api/progress` досчитывает остальное.
+Прогресс сейчас реализован через **poll** (не SSE, несмотря на `sse-starlette` в зависимостях).
+
+*Синхронизировано с кодом 2026-08-10.*
 
 ---
 
 ## 8. Движки распознавания
 
-- **faster-whisper (дефолт).** Модели:
-  - `medium` — быстро, идёт на MacBook M1, качество хорошее. Дефолт для повседневного добивания новых рилсов.
-  - `large-v3` — максимальная точность на русском/сложном звуке; тяжелее. Рекомендуемый сценарий —
-    разовый батч на **бесплатном GPU (Kaggle ~30 ч/нед, влезает в 16 ГБ; либо Colab)**, результат импортируется обратно.
-- **Yandex SpeechKit** — облачный фолбэк, доступен из РФ.
-- **Deepgram / OpenAI Whisper** — опциональные облачные движки (выбор в UI).
+Реальный переключатель — настройка **`asr_mode`** (`backend/app/core/config.py`,
+`backend/app/pipeline/transcribe.py`): `auto | mlx | cloud | faster-whisper`.
 
-Выбор движка и модели — на экране импорта (см. прототип: крупные карточки medium/large-v3, у large-v3
-пометка про бесплатный Kaggle GPU). Облачные движки сами задают размер модели — карточки medium/large скрывать.
+- **`auto` (дефолт).** Порядок выбора при каждом запуске воркера (кэшируется на процесс):
+  1. **mlx-whisper** — если запущено на Apple Silicon (`Darwin` + `arm64`) и пакет `mlx_whisper`
+     установлен (только в зависимостях под macOS, на Render/Linux не ставится).
+  2. иначе **облачный OpenAI Whisper** (`whisper-1`) — если задан `OPENAI_API_KEY`.
+  3. иначе **faster-whisper CPU** — универсальный фолбэк без внешних ключей.
+  При сбое движка на лету (например mlx упал) — тот же порядок фолбэка внутри одного запроса.
+- **`mlx`** — принудительно mlx-whisper (модели `medium`/`large-v3`/`small`, HuggingFace-репо
+  `mlx-community/whisper-*-mlx`); при ошибке тоже падает на cloud/faster-whisper.
+- **`cloud`** — принудительно OpenAI Whisper API (`whisper-1`, лимит файла 25 МБ, WAV 16 кГц моно рилса
+  укладывается).
+- **`faster-whisper`** — принудительно локальный CPU-движок (CTranslate2, `compute_type=int8`).
+  Модель по умолчанию `medium`, поддерживается и `large-v3` (тяжелее, для точных прогонов).
+
+**Yandex SpeechKit и Deepgram** объявлены как поля настроек (`yandex_speechkit_key`,
+`deepgram_api_key`) и как значения `engine` в схеме импорта, но **нигде не используются в
+пайплайне** — запланировано, не реализовано.
+
+*Синхронизировано с кодом 2026-08-10.*
 
 ---
 
