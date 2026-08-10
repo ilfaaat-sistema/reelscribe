@@ -56,7 +56,10 @@ textarea:focus{border-color:var(--iris)}
 .block{margin-top:18px;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:16px 18px}
 .block .bt{font-size:12px;color:var(--mut);margin-bottom:11px}
 .cards2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.mcard{border:1.5px solid var(--line);background:var(--panel2);border-radius:12px;padding:13px 15px;text-align:left;position:relative}
+/* color задан явно: глобальное правило button (выше) цвет не ставит, а кнопки его не наследуют —
+   браузер подставляет свой чёрный buttontext, и .mh выходил почти невидимым на тёмной панели.
+   Чинить глобально через button{color:inherit} нельзя: .play-btn стоит на белом круге. */
+.mcard{border:1.5px solid var(--line);background:var(--panel2);border-radius:12px;padding:13px 15px;text-align:left;position:relative;color:var(--tx)}
 .mcard.on{border-color:var(--iris);background:color-mix(in srgb,var(--iris) 10%,var(--panel2))}
 .mcard .mh{font-weight:700;font-family:var(--mono);font-size:14px}
 .mcard .mb{font-size:12px;color:var(--mut);margin-top:6px;line-height:1.45}
