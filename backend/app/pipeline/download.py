@@ -40,8 +40,27 @@ async def download_audio(url: str, dest_dir: Path) -> tuple[Path, dict[str, Any]
     async with _get_semaphore():
         is_instagram = "instagram.com" in url
 
-        # 1) Основной дешёвый источник IG: Apify-профиль (embed→username→актор).
-        if is_instagram and settings.apify_token_list:
+        # 0) Одиночный Apify-актор по прямой ссылке — если включён apify_single_primary.
+        # Зачем впереди профильного: профильный ищет рилс в свежих 120 постах автора и на
+        # старых сохранённых промахивается, списывая $0.041 за каждый промах (замер
+        # 19.08.2026: 0 попаданий из 31). Одиночный берёт рилс по URL за $0.0018.
+        # Подписчиков он не отдаёт — их добирает backfill_followers вторым проходом.
+        if is_instagram and settings.apify_single_primary and settings.apify_token_list:
+            from app.pipeline.apify_downloader import fetch_via_apify
+            from app.pipeline.apify_profile_downloader import NoAudioError
+            try:
+                path, info = await fetch_via_apify(url, dest_dir)
+                await asyncio.sleep(random.uniform(1.5, 4.0))   # throttle jitter
+                return path, info
+            except NoAudioError:
+                raise   # фото/карусель — аудио нет, остальные источники тоже не помогут
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Apify-одиночный: %s — пробую профильный…", exc)
+
+        # 1) Apify-профиль (embed→username→актор). При apify_single_primary пропускается:
+        # на очереди старых рилсов он промахивается почти всегда, а промах стоит $0.041 —
+        # столько же, сколько 15 рилсов через одиночный актор (замер 19.08.2026).
+        if is_instagram and not settings.apify_single_primary and settings.apify_token_list:
             from app.pipeline.apify_profile_downloader import (
                 NoAudioError,
                 ProfileMissError,
