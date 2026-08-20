@@ -61,23 +61,23 @@ async def _dl_one(
     sc: str, item: dict, dest_dir: Path
 ) -> tuple[str, Path | None, dict | None]:
     """Download one video from Apify result and extract WAV audio."""
-    video_url = item.get("videoUrl") or item.get("video_url") or ""
-    if not video_url:
-        logger.warning("Apify batch: no videoUrl for %s", sc)
+    media_url = _media_url(item)
+    if not media_url:
+        logger.warning("Apify batch: нет ни audioUrl, ни videoUrl для %s", sc)
         return sc, None, None
     try:
         dest_dir.mkdir(parents=True, exist_ok=True)
-        video_path = dest_dir / f"{sc}_apify.mp4"
+        media_path = dest_dir / f"{sc}_apify.mp4"   # mp4-контейнер: и чистое аудио, и видео
         wav_path = dest_dir / f"{sc}_apify.wav"
 
         async with httpx.AsyncClient(timeout=120, follow_redirects=True) as cl:
-            async with cl.stream("GET", video_url) as stream:
+            async with cl.stream("GET", media_url) as stream:
                 stream.raise_for_status()
-                with video_path.open("wb") as f:
+                with media_path.open("wb") as f:
                     async for chunk in stream.aiter_bytes(8192):
                         f.write(chunk)
 
-        await extract_wav_16k_mono(video_path, wav_path)
+        await extract_wav_16k_mono(media_path, wav_path)
 
         info: dict[str, Any] = {
             "id": sc,
@@ -116,9 +116,9 @@ async def fetch_via_apify(url: str, dest_dir: Path) -> tuple[Path, dict[str, Any
 
     item = items[0]
     shortcode = _shortcode_from_url(url)
-    video_url: str = item.get("videoUrl") or item.get("video_url") or ""
-    if not video_url:
-        # Пост-картинка/карусель: видео нет, но метрики есть — отдаём их через NoAudioError,
+    media_url: str = _media_url(item)
+    if not media_url:
+        # Пост-картинка/карусель: ни звука, ни видео, но метрики есть — отдаём их через NoAudioError,
         # чтобы воркер записал статистику, а рилс пометил как no_audio (а не «ошибка»).
         from app.pipeline.apify_profile_downloader import NoAudioError
         photo_info: dict[str, Any] = {
@@ -136,6 +136,18 @@ async def fetch_via_apify(url: str, dest_dir: Path) -> tuple[Path, dict[str, Any
     if wav_path is None:
         raise RuntimeError(f"Apify: не удалось скачать аудио для {url}")
     return wav_path, info  # type: ignore[return-value]
+
+
+def _media_url(item: dict[str, Any]) -> str:
+    """Ссылка, из которой берём звук: сначала отдельная аудиодорожка, потом видео.
+
+    Instagram отдаёт медиа в DASH-представлениях, и videoUrl часто указывает на дорожку
+    БЕЗ звука (замер 19.08.2026: vp9 1080x1920, ни одного аудиопотока) — ffmpeg на таком
+    файле падает, и рилс уходит в бесконечные ретраи. Рядом в ответе лежит audioUrl с
+    чистым звуком: те же 17 секунд весят 179 КБ против 4.4 МБ видео. Качаем его — это и
+    надёжнее, и ближе к правилу «видео не хранить».
+    """
+    return item.get("audioUrl") or item.get("videoUrl") or item.get("video_url") or ""
 
 
 def _shortcode_from_url(url: str) -> str:
