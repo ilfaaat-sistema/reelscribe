@@ -90,10 +90,17 @@ jobs:
       # тратит ли их», потому что ответить на него можно было только счётом вызовов в сыром
       # логе завершённого прогона. Датчик печатает порядковые номера и суммы; значения токенов
       # не печатаются никогда.
+      # continue-on-error обязателен: это ДАТЧИК, он не имеет права останавливать разбор.
+      # 04.09.2026 первый же прогон с этим шагом упал целиком — Settings требует
+      # SUPABASE_URL/SUPABASE_ANON_KEY, а сюда они переданы не были, — и воркер даже не
+      # стартовал. Диагностика, которая ломает то, что диагностирует, хуже её отсутствия.
       - name: Остаток квоты Apify (до разбора)
+        continue-on-error: true
         working-directory: backend
         run: python -m app.workers.apify_quota
         env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
           APIFY_API_TOKENS: ${{ secrets.APIFY_API_TOKENS }}
 
@@ -156,9 +163,12 @@ jobs:
       # расход тут может быть занижен — точные цифры смотреть в кабинете Apify.
       - name: Остаток квоты Apify (после разбора)
         if: always()
+        continue-on-error: true
         working-directory: backend
         run: python -m app.workers.apify_quota
         env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
           APIFY_API_TOKENS: ${{ secrets.APIFY_API_TOKENS }}
 
