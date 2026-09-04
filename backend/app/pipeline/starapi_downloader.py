@@ -87,25 +87,33 @@ def _headers(key: str) -> dict[str, str]:
 
 
 async def _request(client: httpx.AsyncClient, endpoint: str, payload: dict) -> httpx.Response:
-    """POST к StarAPI с ротацией ключей: при 429 ключ уходит в cooldown и берём следующий."""
+    """POST к StarAPI с ротацией ключей: негодный ключ уходит в cooldown, берём следующий.
+
+    Негодный — это 429 (месячная сотня запросов выбрана) или 403 «You are not subscribed to
+    this API»: ключ RapidAPI сам по себе живой, но его аккаунт не подписан на StarAPI. Второе
+    добавлено 04.09.2026, когда такой ключ попал в ротацию: раньше 403 возвращался наверх как
+    обычный ответ и ронял весь источник вместо перехода к следующему ключу.
+    """
     available = await _available_keys()
     if not available:
-        raise QuotaExceededError("StarAPI: все ключи на cooldown после 429")
+        raise QuotaExceededError("StarAPI: все ключи на cooldown")
     for key in available:
         resp = await client.post(
             f"https://{settings.starapi_host}{endpoint}",
             headers=_headers(key),
             json=payload,
         )
-        if resp.status_code == 429:
+        if resp.status_code in (429, 403):
             await _cool_down(key)
             logger.warning(
-                "StarAPI: ключ …%s — 429, cooldown %dмин",
-                key[-6:], settings.starapi_key_cooldown_min,
+                "StarAPI: ключ …%s — %d (%s), cooldown %dмин",
+                key[-6:], resp.status_code,
+                "лимит запросов" if resp.status_code == 429 else "нет подписки на StarAPI",
+                settings.starapi_key_cooldown_min,
             )
             continue
         return resp
-    raise QuotaExceededError("StarAPI: все ключи на cooldown после 429")
+    raise QuotaExceededError("StarAPI: все ключи на cooldown")
 
 
 def _ts_to_yyyymmdd(taken_at: int | None) -> str | None:
