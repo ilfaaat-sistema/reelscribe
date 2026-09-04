@@ -85,6 +85,17 @@ jobs:
           restore-keys: |
             fw-models-
 
+      # Сколько токенов раннер реально видит и что у них с квотой — до разбора. Заведено
+      # 04.09.2026: прогон 33901325430 молча качал через StarAPI, потому что список Apify-токенов
+      # у него оказался пуст, а понять это по логу было нельзя — каскад пропускает шаг без
+      # единой строки. Датчик печатает только порядковые номера и суммы, значения токенов — нет.
+      - name: Остаток квоты Apify (до разбора)
+        working-directory: backend
+        run: python -m app.workers.apify_quota
+        env:
+          APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
+          APIFY_API_TOKENS: ${{ secrets.APIFY_API_TOKENS }}
+
       - name: Запуск воркера (drain-режим)
         working-directory: backend
         run: python -m app.workers.run --drain
@@ -124,6 +135,17 @@ jobs:
           APIFY_API_TOKENS: ${{ secrets.APIFY_API_TOKENS }}
           RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
           RAPIDAPI_KEYS: ${{ secrets.RAPIDAPI_KEYS }}
+
+      # Та же строка после работы: разница с замером «до» и есть цена прогона в долларах.
+      # Важно: /users/me/limits агрегируется с задержкой в несколько минут, поэтому свежий
+      # расход тут может быть занижен — точные цифры смотреть в кабинете Apify.
+      - name: Остаток квоты Apify (после разбора)
+        if: always()
+        working-directory: backend
+        run: python -m app.workers.apify_quota
+        env:
+          APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
+          APIFY_API_TOKENS: ${{ secrets.APIFY_API_TOKENS }}
 
 # Системный ffmpeg через apt намеренно не ставится: пакет imageio-ffmpeg (тянется зависимостями
 # воркера) несёт собственный статический бинарник ffmpeg — проверено, работает без apt-пакета.
