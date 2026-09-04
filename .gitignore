@@ -28,3 +28,6 @@ worktrees/
 
 # снимки scripts/health.py (датчик состояния сервиса) — локальные, не для git
 .health/
+
+# служебные файлы supabase CLI (линковка проекта)
+supabase/.temp/
