@@ -17,6 +17,25 @@ logger = logging.getLogger(__name__)
 _semaphore: asyncio.Semaphore | None = None   # max 2 параллельных скачивания
 _sem_loop: asyncio.AbstractEventLoop | None = None
 
+# Причины пропуска шага каскада — печатаем один раз за процесс, а не на каждый рилс
+# (иначе на очереди из сотен рилсов лог тонет в повторах одной и той же строки).
+_logged_skip_reasons: set[str] = set()
+
+
+def _log_skip_once(key: str, message: str, *, level: int = logging.INFO) -> None:
+    if key in _logged_skip_reasons:
+        return
+    _logged_skip_reasons.add(key)
+    logger.log(level, message)
+
+
+def _shortcode(url: str) -> str:
+    return url.rstrip("/").split("/")[-1]
+
+
+def _log_source_success(url: str, info: dict[str, Any]) -> None:
+    logger.info("Каскад ✓ %s — источник: %s", _shortcode(url), info.get("source") or "неизвестен")
+
 
 def _get_semaphore() -> asyncio.Semaphore:
     # На Python 3.9 примитивы asyncio привязываются к loop в момент создания.
@@ -45,82 +64,121 @@ async def download_audio(url: str, dest_dir: Path) -> tuple[Path, dict[str, Any]
         # старых сохранённых промахивается, списывая $0.041 за каждый промах (замер
         # 19.08.2026: 0 попаданий из 31). Одиночный берёт рилс по URL за $0.0018.
         # Подписчиков он не отдаёт — их добирает backfill_followers вторым проходом.
-        if is_instagram and settings.apify_single_primary and settings.apify_token_list:
-            from app.pipeline.apify_downloader import fetch_via_apify
-            from app.pipeline.apify_profile_downloader import NoAudioError
-            try:
-                path, info = await fetch_via_apify(url, dest_dir)
-                await asyncio.sleep(random.uniform(1.5, 4.0))   # throttle jitter
-                return path, info
-            except NoAudioError:
-                raise   # фото/карусель — аудио нет, остальные источники тоже не помогут
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("Apify-одиночный: %s — пробую профильный…", exc)
+        if is_instagram and settings.apify_single_primary:
+            if settings.apify_token_list:
+                from app.pipeline.apify_downloader import fetch_via_apify
+                from app.pipeline.apify_profile_downloader import NoAudioError
+                try:
+                    path, info = await fetch_via_apify(url, dest_dir)
+                    _log_source_success(url, info)
+                    await asyncio.sleep(random.uniform(1.5, 4.0))   # throttle jitter
+                    return path, info
+                except NoAudioError:
+                    raise   # фото/карусель — аудио нет, остальные источники тоже не помогут
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("Apify-одиночный: %s — пробую профильный…", exc)
+            else:
+                # Приоритетный источник включён флагом, но токена нет — это не штатный
+                # пропуск, а дыра в конфигурации: каскад уходит на резервные источники и жжёт
+                # их лимиты вместо дешёвого Apify, снаружи выглядя здоровым. Раньше такой
+                # случай не давал в лог ни строки — 04.09.2026 на его проверку ушли часы,
+                # хотя подозрение в итоге не подтвердилось. Кричим ошибкой, а не info.
+                _log_skip_once(
+                    "apify-single-no-token",
+                    "Каскад: приоритетный источник Apify-одиночный (APIFY_SINGLE_PRIMARY=1) "
+                    "недоступен — не задан ни APIFY_API_TOKEN, ни APIFY_API_TOKENS. "
+                    "Каскад уходит на резервные источники (StarAPI/instaloader) незапланированно.",
+                    level=logging.ERROR,
+                )
 
         # 1) Apify-профиль (embed→username→актор). При apify_single_primary пропускается:
         # на очереди старых рилсов он промахивается почти всегда, а промах стоит $0.041 —
         # столько же, сколько 15 рилсов через одиночный актор (замер 19.08.2026).
-        if is_instagram and not settings.apify_single_primary and settings.apify_token_list:
-            from app.pipeline.apify_profile_downloader import (
-                NoAudioError,
-                ProfileMissError,
-                fetch_via_apify_profile,
-            )
-            try:
-                path, info = await fetch_via_apify_profile(url, dest_dir)
-                await asyncio.sleep(random.uniform(1.5, 4.0))   # throttle jitter
-                return path, info
-            except NoAudioError:
-                raise   # фото/карусель — аудио нет, добивать другими источниками бессмысленно
-            except ProfileMissError as exc:
-                logger.info("Apify-профиль мимо (%s) — пробую instaloader…", exc)
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("Apify-профиль: %s — пробую instaloader…", exc)
+        if is_instagram and not settings.apify_single_primary:
+            if settings.apify_token_list:
+                from app.pipeline.apify_profile_downloader import (
+                    NoAudioError,
+                    ProfileMissError,
+                    fetch_via_apify_profile,
+                )
+                try:
+                    path, info = await fetch_via_apify_profile(url, dest_dir)
+                    _log_source_success(url, info)
+                    await asyncio.sleep(random.uniform(1.5, 4.0))   # throttle jitter
+                    return path, info
+                except NoAudioError:
+                    raise   # фото/карусель — аудио нет, добивать другими источниками бессмысленно
+                except ProfileMissError as exc:
+                    logger.info("Apify-профиль мимо (%s) — пробую instaloader…", exc)
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("Apify-профиль: %s — пробую instaloader…", exc)
+            else:
+                _log_skip_once(
+                    "apify-profile-no-token",
+                    "Каскад: Apify-профиль пропущен — не задан ни APIFY_API_TOKEN, "
+                    "ни APIFY_API_TOKENS.",
+                )
 
         # 2) instaloader (бесплатно) — добивает промахи профиля без траты квоты StarAPI.
-        if is_instagram and settings.instaloader_enabled:
-            from app.pipeline.apify_profile_downloader import NoAudioError
-            from app.pipeline.instaloader_downloader import (
-                InstaloaderUnavailable,
-                fetch_via_instaloader,
-            )
-            try:
-                path, info = await fetch_via_instaloader(url, dest_dir)
-                await asyncio.sleep(random.uniform(1.5, 4.0))   # throttle jitter
-                return path, info
-            except NoAudioError:
-                raise   # фото/карусель — аудио нет, дальше бессмысленно
-            except InstaloaderUnavailable as exc:
-                logger.info("instaloader недоступен (%s) — добиваю StarAPI…", exc)
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("instaloader: %s — добиваю StarAPI…", exc)
+        if is_instagram:
+            if settings.instaloader_enabled:
+                from app.pipeline.apify_profile_downloader import NoAudioError
+                from app.pipeline.instaloader_downloader import (
+                    InstaloaderUnavailable,
+                    fetch_via_instaloader,
+                )
+                try:
+                    path, info = await fetch_via_instaloader(url, dest_dir)
+                    _log_source_success(url, info)
+                    await asyncio.sleep(random.uniform(1.5, 4.0))   # throttle jitter
+                    return path, info
+                except NoAudioError:
+                    raise   # фото/карусель — аудио нет, дальше бессмысленно
+                except InstaloaderUnavailable as exc:
+                    logger.info("instaloader недоступен (%s) — добиваю StarAPI…", exc)
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("instaloader: %s — добиваю StarAPI…", exc)
+            else:
+                _log_skip_once(
+                    "instaloader-disabled",
+                    "Каскад: instaloader выключен флагом INSTALOADER_ENABLED.",
+                )
 
         # 3) StarAPI по shortcode — платный резерв, добивает промахи + даёт подписчиков.
-        if is_instagram and settings.rapidapi_key_list:
-            from app.pipeline.starapi_downloader import QuotaExceededError, fetch_via_starapi
-            try:
-                path, info = await fetch_via_starapi(url, dest_dir)
-                await asyncio.sleep(random.uniform(1.5, 4.0))   # throttle jitter
-                return path, info
-            except QuotaExceededError:
-                # Квота StarAPI кончилась. Если есть рабочий платный Apify-фолбэк — не откладываем
-                # джоб, а идём на него (ниже). Иначе пробрасываем: воркер отложит до восстановления квоты.
-                if not (settings.apify_token_list and settings.apify_single_fallback):
-                    raise
-                logger.info("StarAPI квота исчерпана — иду на платный Apify-фолбэк…")
-            except Exception as exc:
-                logger.warning("StarAPI: %s — пробую yt-dlp/Apify…", exc)
+        if is_instagram:
+            if settings.rapidapi_key_list:
+                from app.pipeline.starapi_downloader import QuotaExceededError, fetch_via_starapi
+                try:
+                    path, info = await fetch_via_starapi(url, dest_dir)
+                    _log_source_success(url, info)
+                    await asyncio.sleep(random.uniform(1.5, 4.0))   # throttle jitter
+                    return path, info
+                except QuotaExceededError:
+                    # Квота StarAPI кончилась. Если есть рабочий платный Apify-фолбэк — не откладываем
+                    # джоб, а идём на него (ниже). Иначе пробрасываем: воркер отложит до восстановления квоты.
+                    if not (settings.apify_token_list and settings.apify_single_fallback):
+                        raise
+                    logger.info("StarAPI квота исчерпана — иду на платный Apify-фолбэк…")
+                except Exception as exc:
+                    logger.warning("StarAPI: %s — пробую yt-dlp/Apify…", exc)
+            else:
+                _log_skip_once(
+                    "starapi-no-key",
+                    "Каскад: StarAPI пропущен — не задан ни RAPIDAPI_KEY, ни RAPIDAPI_KEYS.",
+                )
 
         # Фолбэк: yt-dlp (с cookies, если заданы). Платный одиночный Apify-актор —
         # только если явно разрешён флагом apify_single_fallback (по умолчанию выкл, не жжём деньги).
         try:
             path, info = await asyncio.to_thread(_download_sync, url, dest_dir)
+            info["source"] = "yt-dlp"
         except Exception as exc:
             if not (settings.apify_token_list and settings.apify_single_fallback):
                 raise
             logger.warning("yt-dlp: %s — пробую платный Apify-фолбэк…", exc)
             from app.pipeline.apify_downloader import fetch_via_apify
             path, info = await fetch_via_apify(url, dest_dir)
+        _log_source_success(url, info)
         await asyncio.sleep(random.uniform(1.5, 4.0))   # throttle jitter
         return path, info
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -19,6 +20,16 @@ MAX_ATTEMPTS = 3
 MAX_QUOTA_DEFERRALS = 16      # ~8ч ожидания квоты при cooldown 30 мин, потом failed
 STALE_JOB_MINUTES = 45        # in_progress старше этого — считается брошенным (воркер умер)
 STALE_CHECK_INTERVAL_SEC = 300
+
+# Сводка источников за прогон воркера — источник → сколько рилсов им скачано,
+# плюс отдельные счётчики «без аудио» и «ошибок». Печатается в конце drain-прогона,
+# чтобы одной строкой было видно, каким источником фактически ушла партия.
+# Заведено 04.09.2026: вопрос «чем скачаны эти рилсы» разбирали несколько часов, потому что
+# ответа не было ни в логе, ни в базе, а вывод по косвенным признакам (заполненные подписчики,
+# цифры биллинга) оказался неверным.
+_source_counts: Counter = Counter()
+_no_audio_count = 0
+_error_count = 0
 
 # Сколько транскрипций идёт одновременно — экономия RAM. Реальное значение выставляется в
 # run_worker() из TRANSCRIBE_CONCURRENCY: 1 на Mac 8 ГБ, 2 на раннере GitHub Actions.
@@ -77,6 +88,7 @@ def _maybe_close_session(db, session_id: str) -> None:
 
 
 async def _process_job(job: dict) -> None:
+    global _no_audio_count, _error_count
     db = get_db()
     job_id: str = job['id']
     reel_id: str = job['reel_id']
@@ -156,11 +168,14 @@ async def _process_job(job: dict) -> None:
         }).eq('reel_id', reel_id).execute()
 
         db.table('jobs').update({'state': 'done', 'error': None}).eq('id', job_id).execute()
-        logger.info('✓ %s (lang=%s, translate=%s)', url, language, do_translate)
+        source = info.get('source') or 'неизвестен'
+        _source_counts[source] += 1
+        logger.info('✓ %s (lang=%s, translate=%s, источник=%s)', url, language, do_translate, source)
 
     except NoAudioError as exc:
         # Фото/карусель — аудио нет, расшифровывать нечего. Терминально, без ретраев.
         # НО метрики (если источник их дал в exc.info) сохраняем: статистика важнее аудио.
+        _no_audio_count += 1
         logger.info('📷 нет аудио, джоб %s: %s', job_id, exc)
         info = getattr(exc, 'info', None)
         if pull_stats and info:
@@ -190,6 +205,7 @@ async def _process_job(job: dict) -> None:
         # переводим в failed, чтобы джоб не крутился в очереди вечно.
         deferrals = _quota_deferrals(job.get('error')) + 1
         if deferrals > MAX_QUOTA_DEFERRALS:
+            _error_count += 1
             logger.warning('✗ квота не восстановилась за %d отложений, джоб %s → failed', deferrals - 1, job_id)
             db.table('jobs').update({
                 'state': 'failed', 'attempts': attempts, 'error': str(exc),
@@ -213,6 +229,8 @@ async def _process_job(job: dict) -> None:
         logger.error('✗ job %s: %s', job_id, exc)
         next_at = (_utc_now_dt() + timedelta(seconds=30 * attempts)).isoformat()
         state = 'failed' if attempts >= MAX_ATTEMPTS else 'queued'
+        if state == 'failed':
+            _error_count += 1
         db.table('jobs').update({
             'state': state,
             'attempts': attempts,
@@ -230,6 +248,20 @@ async def _process_job(job: dict) -> None:
         except Exception:  # noqa: BLE001
             pass
         _maybe_close_session(db, session_id)
+
+
+def _log_run_summary() -> None:
+    """Итог прогона: каким источником сколько рилсов скачано + без аудио/ошибок.
+
+    Печатается один раз в конце drain-прогона — чтобы по логу GitHub Actions сразу было видно,
+    ушла ли партия через приоритетный Apify или съехала на резервный источник. До 04.09.2026
+    это приходилось выяснять счётом вызовов в сыром логе, и только после завершения прогона:
+    у идущего прогона лог по API недоступен.
+    """
+    parts = [f'{source} {count}' for source, count in _source_counts.most_common()]
+    parts.append(f'без аудио {_no_audio_count}')
+    parts.append(f'ошибок {_error_count}')
+    logger.info('Итог прогона: %s', ', '.join(parts))
 
 
 def _requeue_stale(db) -> None:
@@ -285,6 +317,7 @@ async def run_worker(
         if drain and max_runtime_sec is not None and time.monotonic() - started_at >= max_runtime_sec:
             logger.info('Drain: лимит времени %.0fс исчерпан — новых заданий не беру, выхожу.',
                         max_runtime_sec)
+            _log_run_summary()
             return
         # Сетевой сбой в одной итерации не должен убивать воркер: рестарт процесса
         # оставляет asyncio-примитивы привязанными к мёртвому loop (Python 3.9),
@@ -319,6 +352,7 @@ async def run_worker(
                     logger.info('Drain: очередь пуста (%d/%d)…', empty_polls, empty_polls_to_exit)
                     if empty_polls >= empty_polls_to_exit:
                         logger.info('Drain: очередь разобрана — выхожу.')
+                        _log_run_summary()
                         return
                 await asyncio.sleep(2)
         except Exception as exc:  # noqa: BLE001

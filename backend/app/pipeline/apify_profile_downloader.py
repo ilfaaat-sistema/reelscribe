@@ -151,6 +151,7 @@ async def fetch_via_apify_profile(url: str, dest_dir: Path) -> tuple[Path, dict[
                 "comment_count": item.get("comment_count"),
                 "description": (item.get("caption") or {}).get("text") if isinstance(item.get("caption"), dict) else item.get("caption"),
                 "upload_date": _ts_to_yyyymmdd(item.get("taken_at")),
+                "source": "apify-profile",
             }
             raise NoAudioError(
                 f"{shortcode}: фото/карусель — нет аудио (media_type={media_type})",
@@ -181,6 +182,7 @@ async def fetch_via_apify_profile(url: str, dest_dir: Path) -> tuple[Path, dict[
         "comment_count": item.get("comment_count"),
         "description": (item.get("caption") or {}).get("text") if isinstance(item.get("caption"), dict) else item.get("caption"),
         "upload_date": _ts_to_yyyymmdd(item.get("taken_at")),
+        "source": "apify-profile",
     }
     logger.info(
         "Apify-профиль ✓ %s (@%s views=%s likes=%s)",

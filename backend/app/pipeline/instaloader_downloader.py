@@ -202,6 +202,7 @@ async def fetch_via_instaloader(url: str, dest_dir: Path) -> tuple[Path, dict[st
         "comment_count": post.comments,
         "description": post.caption,
         "upload_date": post.date_utc.strftime("%Y%m%d") if post.date_utc else None,
+        "source": "instaloader",
     }
     logger.info(
         "instaloader ✓ %s (@%s views=%s likes=%s)",

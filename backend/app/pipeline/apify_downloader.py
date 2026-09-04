@@ -130,11 +130,13 @@ async def fetch_via_apify(url: str, dest_dir: Path) -> tuple[Path, dict[str, Any
             "comment_count": item.get("commentsCount"),
             "description": item.get("caption"),
             "upload_date": _parse_ts(item.get("timestamp")),
+            "source": "apify-single",
         }
         raise NoAudioError(f"{shortcode}: пост без видео (фото/карусель)", info=photo_info)
     sc, wav_path, info = await _dl_one(shortcode, item, dest_dir)
     if wav_path is None:
         raise RuntimeError(f"Apify: не удалось скачать аудио для {url}")
+    info["source"] = "apify-single"
     return wav_path, info  # type: ignore[return-value]
 
 

@@ -205,6 +205,7 @@ async def fetch_via_starapi(url: str, dest_dir: Path) -> tuple[Path, dict[str, A
         "comment_count": item.get("comment_count"),
         "description": (item.get("caption") or {}).get("text"),
         "upload_date": _ts_to_yyyymmdd(item.get("taken_at")),
+        "source": "starapi",
     }
     logger.info(
         "StarAPI ✓ %s (views=%s likes=%s followers=%s)",
