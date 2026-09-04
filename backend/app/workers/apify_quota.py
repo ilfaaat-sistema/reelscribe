@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Optional
 
 import httpx
 
@@ -25,6 +26,40 @@ _LIMITS_URL = "https://api.apify.com/v2/users/me/limits"
 # /limits показывал $0.00 при реальных $0.0027 и по нему решили, что Apify вообще не вызывался.
 _USAGE_URL = "https://api.apify.com/v2/users/me/usage/monthly"
 _TIMEOUT = httpx.Timeout(20.0, connect=10.0)
+
+
+def _fresh_usage_usd(token: str) -> Optional[float]:
+    """Свежий расход одного токена по /usage/monthly, либо None при любой ошибке.
+
+    Вынесено отдельно, чтобы использоваться и датчиком остатка (_check_token), и
+    total_spent_usd() — снимком расхода для истории прогонов воркера (app/workers/run_log.py).
+    """
+    headers = {"Authorization": f"Bearer {token}"}
+    resp = httpx.get(_USAGE_URL, headers=headers, timeout=_TIMEOUT)
+    resp.raise_for_status()
+    usage_data = resp.json().get("data", {})
+    return float(usage_data.get("totalUsageCreditsUsdAfterVolumeDiscount") or 0.0)
+
+
+def total_spent_usd() -> Optional[float]:
+    """Суммарный расход Apify за месяц по всем токенам ротации, либо None, если снять не удалось.
+
+    Используется для истории прогонов воркера: снимок в начале и в конце, разница = цена прогона.
+    None — если токены не настроены или НИ ОДИН не ответил (частичный сбой одних токенов при
+    успехе других не считается провалом — суммируем то, что получили).
+    """
+    tokens = settings.apify_token_list
+    if not tokens:
+        return None
+    total = 0.0
+    got_any = False
+    for token in tokens:
+        try:
+            total += _fresh_usage_usd(token)
+            got_any = True
+        except Exception as exc:  # noqa: BLE001 — один неответивший токен не должен срывать снимок
+            logger.warning("Apify usage: токен не ответил (%s)", type(exc).__name__)
+    return round(total, 4) if got_any else None
 
 
 def _check_token(index: int, token: str) -> float:
@@ -53,10 +88,7 @@ def _check_token(index: int, token: str) -> float:
 
     used_fresh = None
     try:
-        resp = httpx.get(_USAGE_URL, headers=headers, timeout=_TIMEOUT)
-        resp.raise_for_status()
-        usage_data = resp.json().get("data", {})
-        used_fresh = float(usage_data.get("totalUsageCreditsUsdAfterVolumeDiscount") or 0.0)
+        used_fresh = _fresh_usage_usd(token)
     except Exception as exc:  # noqa: BLE001 — свежая цифра опциональна, без неё работаем со старой
         text = str(exc)[:120]
         print(f"токен #{index}: /usage/monthly не ответил ({type(exc).__name__} {text}), только отстающая цифра")

@@ -13,6 +13,7 @@ from app.pipeline.download import download_audio
 from app.pipeline.starapi_downloader import QuotaExceededError
 from app.pipeline.metadata import extract_metadata
 from app.pipeline.transcribe import transcribe_audio
+from app.workers import run_log
 
 logger = logging.getLogger(__name__)
 AUDIO_DIR = Path(settings.audio_tmp_dir)
@@ -30,6 +31,12 @@ STALE_CHECK_INTERVAL_SEC = 300
 _source_counts: Counter = Counter()
 _no_audio_count = 0
 _error_count = 0
+
+# Колонка transcripts.source появилась миграцией 0004_observability.sql. Пока она не применена
+# к живой базе (или временно недоступна), первый же неудачный update выставляет этот флаг, и
+# дальше в прогоне source в update просто не отправляется — расшифровки при этом не теряются,
+# см. _update_transcript_done.
+_source_column_unsupported = False
 
 # Сколько транскрипций идёт одновременно — экономия RAM. Реальное значение выставляется в
 # run_worker() из TRANSCRIBE_CONCURRENCY: 1 на Mac 8 ГБ, 2 на раннере GitHub Actions.
@@ -74,6 +81,28 @@ async def _resolve_followers_safe(handle: str) -> int | None:
     except Exception as exc:  # noqa: BLE001 — любой сбой обогащения не должен ронять джоб
         logger.warning('Подписчики @%s: не получены (%s) — продолжаю без них', handle, exc)
         return None
+
+
+def _update_transcript_done(db, reel_id: str, fields: dict, source: str | None) -> None:
+    """Пишет готовую расшифровку, по возможности вместе с source.
+
+    Мягкая деградация — самое важное место задачи: если update с source упал (миграция
+    0004_observability.sql к живой базе ещё не применена, колонки нет), повторяем ТОТ ЖЕ update
+    без source, чтобы расшифровка в любом случае сохранилась, и запоминаем флагом, что колонку
+    больше отправлять не нужно — дальше в прогоне не долбим базу повторными ошибками.
+    """
+    global _source_column_unsupported
+    if not _source_column_unsupported:
+        try:
+            db.table('transcripts').update({**fields, 'source': source}).eq('reel_id', reel_id).execute()
+            return
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                'transcripts.source не записан (%s) — похоже, миграция 0004_observability.sql ещё '
+                'не применена; повторяю запись расшифровки без source', exc,
+            )
+            _source_column_unsupported = True
+    db.table('transcripts').update(fields).eq('reel_id', reel_id).execute()
 
 
 def _maybe_close_session(db, session_id: str) -> None:
@@ -157,7 +186,8 @@ async def _process_job(job: dict) -> None:
             from app.pipeline.translate import translate_to_ru
             text_ru = await asyncio.to_thread(translate_to_ru, text)
 
-        db.table('transcripts').update({
+        raw_source = info.get('source')
+        _update_transcript_done(db, reel_id, {
             'text': text,
             'text_ru': text_ru,
             'language': language,
@@ -165,10 +195,10 @@ async def _process_job(job: dict) -> None:
             'engine': engine_used,   # фактический движок, а не заявленный при импорте
             'status': 'done',
             'fail_reason': None,
-        }).eq('reel_id', reel_id).execute()
+        }, raw_source)
 
         db.table('jobs').update({'state': 'done', 'error': None}).eq('id', job_id).execute()
-        source = info.get('source') or 'неизвестен'
+        source = raw_source or 'неизвестен'
         _source_counts[source] += 1
         logger.info('✓ %s (lang=%s, translate=%s, источник=%s)', url, language, do_translate, source)
 
@@ -310,6 +340,32 @@ async def run_worker(
     tick = 0
     empty_polls = 0
 
+    # История прогонов — только в drain-режиме (разовый прогон на Actions). В бесконечном
+    # локальном режиме run_uuid остаётся None, и run_log везде превращается в no-op.
+    run_uuid: str | None = None
+    run_apify_start_usd: float | None = None
+    last_run_update_total = 0
+    UPDATE_RUN_EVERY_JOBS = 25
+    if drain:
+        run_uuid = run_log.start_run()
+        run_apify_start_usd = run_log.apify_spent_usd_safe()
+
+    def _finish_run_history(outcome: str) -> None:
+        apify_spent = None
+        if run_apify_start_usd is not None:
+            end_usd = run_log.apify_spent_usd_safe()
+            if end_usd is not None:
+                apify_spent = round(end_usd - run_apify_start_usd, 4)
+        run_log.finish_run(
+            run_uuid,
+            outcome=outcome,
+            sources=dict(_source_counts),
+            jobs_done=sum(_source_counts.values()),
+            jobs_no_audio=_no_audio_count,
+            jobs_failed=_error_count,
+            apify_spent_usd=apify_spent,
+        )
+
     while True:
         # Мягкий дедлайн проверяется ТОЛЬКО здесь, между итерациями — то есть после того, как
         # предыдущий gather полностью завершился. Взятая пачка всегда дорабатывается целиком,
@@ -318,6 +374,7 @@ async def run_worker(
             logger.info('Drain: лимит времени %.0fс исчерпан — новых заданий не беру, выхожу.',
                         max_runtime_sec)
             _log_run_summary()
+            _finish_run_history('timeout')
             return
         # Сетевой сбой в одной итерации не должен убивать воркер: рестарт процесса
         # оставляет asyncio-примитивы привязанными к мёртвому loop (Python 3.9),
@@ -346,6 +403,17 @@ async def run_worker(
             if jobs:
                 empty_polls = 0
                 await asyncio.gather(*[_process_job(j) for j in jobs])
+                if run_uuid is not None:
+                    total_processed = sum(_source_counts.values()) + _no_audio_count + _error_count
+                    if total_processed - last_run_update_total >= UPDATE_RUN_EVERY_JOBS:
+                        run_log.update_run(
+                            run_uuid,
+                            sources=dict(_source_counts),
+                            jobs_done=sum(_source_counts.values()),
+                            jobs_no_audio=_no_audio_count,
+                            jobs_failed=_error_count,
+                        )
+                        last_run_update_total = total_processed
             else:
                 if drain:
                     empty_polls += 1
@@ -353,6 +421,7 @@ async def run_worker(
                     if empty_polls >= empty_polls_to_exit:
                         logger.info('Drain: очередь разобрана — выхожу.')
                         _log_run_summary()
+                        _finish_run_history('drained')
                         return
                 await asyncio.sleep(2)
         except Exception as exc:  # noqa: BLE001

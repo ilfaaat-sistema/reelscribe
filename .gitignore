@@ -25,3 +25,6 @@ message_*.json
 
 # постоянные git worktree модулей (см. скилл module-flow) — сами по себе в репозиторий не идут
 worktrees/
+
+# снимки scripts/health.py (датчик состояния сервиса) — локальные, не для git
+.health/
