@@ -1,6 +1,13 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "disabledMcpjsonServers": ["apify", "github", "miro", "render", "elevenlabs", "supabase"],
+  "disabledMcpjsonServers": [
+    "apify",
+    "github",
+    "miro",
+    "render",
+    "elevenlabs",
+    "supabase"
+  ],
   "permissions": {
     "allow": [
       "Bash(ruff check:*)",
@@ -13,7 +20,6 @@
       "Bash(git add:*)"
     ],
     "ask": [
-      "Bash(git push:*)",
       "Bash(rm:*)",
       "Bash(render:*)"
     ],
