@@ -45,6 +45,34 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _parse_iso(ts: str) -> datetime:
+    """Строка времени из PostgREST → datetime, устойчиво к мелким отличиям формата.
+
+    Прод работает на Python 3.12, локальный venv — на 3.9, и `datetime.fromisoformat`
+    ведёт себя на них по-разному:
+    1. Суффикс 'Z' вместо '+00:00' — 3.9 его не понимает вообще (3.11+ понимает).
+    2. Дробная часть секунд произвольной длины. Postgres хранит её с той точностью, что
+       реально записана (например '.46088' — 5 знаков), а fromisoformat в 3.9 принимает
+       СТРОГО 3 или 6 знаков после точки — на любой другой длине падает с
+       'Invalid isoformat string'. В 3.11+ это ограничение снято, поэтому баг
+       воспроизводится только локально, но там он тихо гасит чтение cooldown/кэша
+       (см. try/except в вызывающих функциях) — соседний воркер перестаёт быть виден.
+    Лечим оба места вручную: заменяем 'Z', затем дополняем/обрезаем дробную часть до
+    ровно 6 знаков, не трогая идущий следом часовой пояс.
+    """
+    ts = ts.replace('Z', '+00:00')
+    if '.' in ts:
+        head, rest = ts.split('.', 1)
+        frac, tz = rest, ''
+        for i, ch in enumerate(rest):
+            if ch in '+-':
+                frac, tz = rest[:i], rest[i:]
+                break
+        frac = (frac + '000000')[:6]
+        ts = f'{head}.{frac}{tz}'
+    return datetime.fromisoformat(ts)
+
+
 # ── Cooldown ключей ──────────────────────────────────────────────────────────────────────────
 
 def _load_cooldowns_sync(provider: str) -> dict:
@@ -61,11 +89,7 @@ def _load_cooldowns_sync(provider: str) -> dict:
         until = r.get('until')
         if not until:
             continue
-        # Postgres отдаёт ISO с таймзоной; '+00:00' и 'Z' оба валидны для fromisoformat в 3.11+,
-        # но на 3.9 'Z' не парсится — заменяем явно.
-        out[(r['key_ref'], r.get('actor') or '')] = datetime.fromisoformat(
-            until.replace('Z', '+00:00')
-        )
+        out[(r['key_ref'], r.get('actor') or '')] = _parse_iso(until)
     return out
 
 
@@ -114,7 +138,7 @@ def _get_followers_sync(username: str) -> Any:
     row = rows[0]
     expires_at = row.get('expires_at')
     if expires_at:
-        exp = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+        exp = _parse_iso(expires_at)
         if _now() >= exp:
             return MISS          # запись протухла — считаем, что её нет
     return row.get('followers')  # может быть None — это закэшированная неудача
