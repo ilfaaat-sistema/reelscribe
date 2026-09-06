@@ -54,3 +54,14 @@ create index if not exists worker_runs_started_at_idx
 
 comment on table public.worker_runs is
     'История прогонов воркера: что разобрано, каким источником, во что обошлось. Пишется best-effort.';
+
+-- ── Доступ ──────────────────────────────────────────────────────────────────
+-- Supabase включает RLS на новых таблицах, и без политики воркер (ходит под anon-ключом)
+-- получает 42501 «new row violates row-level security policy» — история прогонов молча
+-- остаётся пустой. Именно на этом 06.09.2026 таблица провисела впустую до первой проверки.
+-- Политика — копия того, что стоит у соседних таблиц (`jobs` → anon_all, `key_cooldown` →
+-- anon_full_access_key_cooldown): сервис сознательно работает без авторизации, доступ у
+-- всех, у кого есть ссылка (решение от 2026-07-03, см. CLAUDE.md).
+drop policy if exists anon_full_access_worker_runs on public.worker_runs;
+create policy anon_full_access_worker_runs on public.worker_runs
+    for all to anon, authenticated using (true) with check (true);
