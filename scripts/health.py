@@ -152,12 +152,17 @@ def collect_gaps(db: Any) -> dict:
     # c) без просмотров
     r_views = db.table("reels").select("id", count="exact").is_("views", "null").limit(1).execute()
 
-    # d) готовая иностранная расшифровка без перевода на русский
+    # d) готовая иностранная расшифровка без перевода на русский.
+    # Условие `text` непустой — обязательное: распознавание возвращает пустую строку у роликов
+    # без речи (одна музыка), и такие записи переводить нечего. Без этого условия датчик
+    # 06.09.2026 показывал 14 «непереведённых», у которых текста не было вовсе.
     r_untranslated = (
         db.table("transcripts").select("id", count="exact")
         .eq("status", "done")
         .not_.is_("language", "null")
         .neq("language", "ru")
+        .not_.is_("text", "null")
+        .neq("text", "")
         .or_("text_ru.is.null,text_ru.eq.")
         .limit(1).execute()
     )
