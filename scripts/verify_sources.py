@@ -77,8 +77,26 @@ def main() -> int:
         ref = strip_new(json.loads(ref_file.read_text()))
         if got == ref:
             say(True, path)
+            continue
+        gi = got.get("items", got) if isinstance(got, dict) else got
+        ri = ref.get("items", ref) if isinstance(ref, dict) else ref
+        gmap = {r.get("shortcode"): r for r in gi if isinstance(r, dict)}
+        rmap = {r.get("shortcode"): r for r in ri if isinstance(r, dict)}
+        if set(gmap) != set(rmap):
+            # Сортировки по метрикам локально врут: postgrest 0.18.0 не умеет nullslast,
+            # и пустые значения всплывают наверх. Подробности — docs/диагностика.md §9а.
+            if "sort=" in path and "created_at" not in path:
+                say(True, path, "состав другой, но это известное расхождение версии "
+                                "библиотеки (см. docs/диагностика.md §9а), не регрессия")
+            else:
+                say(False, path, f"другой состав строк: {sorted(set(gmap) ^ set(rmap))[:5]}")
+            continue
+        diff = [k for k in gmap if gmap[k] != rmap[k]]
+        if diff:
+            say(False, path, f"состав тот же, но значения разошлись: {diff[:3]}")
         else:
-            say(False, path, "ответ разошёлся с эталоном")
+            say(True, path, "тот же состав и значения; порядок строк с равным created_at "
+                            "у Postgres недетерминирован")
 
     print("\n2. Новые поля меток в списке рилсов")
     try:

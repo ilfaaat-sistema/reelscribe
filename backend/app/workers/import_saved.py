@@ -24,8 +24,18 @@
 такие коллекции сознательно схлопываются в одну метку, это следствие принятой в ТЗ 06 схемы, а не
 баг обхода.
 
+Три режима (по возрастанию последствий):
+  1. `--dry-run` — ничего не пишет в БД вообще, только считает и сохраняет отчёт на диск.
+  2. `--labels-only` — проставляет метки в `reel_sources` ТОЛЬКО тем shortcode, что уже есть в
+     `reels`; недостающие ничего не создаёт (ни `reels`, ни `transcripts`, ни `jobs` — деньги
+     владельца не тратятся), а просто считает их и перечисляет в отчёте. Разметка существующего
+     бесплатна (это SQL), поэтому идёт сразу, без отдельного подтверждения.
+  3. Без флагов — полный прогон: то же, что `--labels-only`, плюс недостающие рилсы заводятся и
+     ставятся в очередь на скачивание/распознавание через `_setup_jobs` (**платно**, см. §8 ТЗ 06).
+     Запускается только после явного «да» владельца с цифрой в рублях (её даёт `--dry-run`).
+
 Запуск:
-    # сначала всегда так — ничего не пишет в БД, только считает и сохраняет отчёт на диск
+    # 1. сначала всегда так — ничего не пишет в БД, только считает и сохраняет отчёт на диск
     python -m app.workers.import_saved --root "<путь к выгрузке>" --account ilfaaat_sistema \
         --folders "Нейросети,3д,Нейросети для фото и видео,Повторить про нейросети,Создание сайтов" \
         --dry-run --out /tmp/report.json
@@ -33,7 +43,12 @@
     python -m app.workers.import_saved --root "<путь к выгрузке>" --account neyro_set7 \
         --folders all --direct --dry-run --out /tmp/report2.json
 
-    # боевой прогон одной папки
+    # 2. разметить то, что уже в базе, — бесплатно, ничего нового не создаёт
+    python -m app.workers.import_saved --root "<путь>" --account ilfaaat_sistema \
+        --folders "Нейросети,3д,Нейросети для фото и видео,Повторить про нейросети,Создание сайтов" \
+        --direct --labels-only
+
+    # 3. боевой прогон одной папки (создаёт недостающие рилсы — платно)
     python -m app.workers.import_saved --root "<путь>" --account ilfaaat_sistema --folders "3д"
 """
 from __future__ import annotations
@@ -341,6 +356,40 @@ def sync_to_db(sources: dict, account: str) -> dict:
     return {'new_reels_created': created, 'labels_upserted': upserted, 'labels_skipped': skipped}
 
 
+def sync_labels_only(sources: dict, account: str) -> dict:
+    """Проставляет метки ТОЛЬКО тем shortcode, что уже есть в `reels` — ничего не создаёт.
+
+    Недостающие (которых ещё нет в базе) не трогает вообще: ни `reels`, ни `transcripts`, ни
+    `jobs` — `_setup_jobs` здесь не вызывается ни разу. Их число просто возвращается, чтобы
+    попасть в отчёт (владелец решает по нему, стоит ли запускать платный добор).
+    """
+    db = get_db()
+    all_shortcodes = sorted({sc for items in sources.values() for sc in items})
+    sc_to_id = _lookup_reel_ids(db, all_shortcodes)
+    missing = [sc for sc in all_shortcodes if sc not in sc_to_id]
+
+    rows = []
+    for (kind, name), items in sources.items():
+        for sc, item in items.items():
+            reel_id = sc_to_id.get(sc)
+            if reel_id is None:
+                continue  # ещё не в базе — не создаём, добор делается отдельным явным прогоном
+            rows.append({
+                'reel_id': reel_id,
+                'account': account,
+                'kind': kind,
+                'name': name,
+                'added_at': item.added_at,
+            })
+
+    upserted = 0
+    for chunk in _chunks(rows, 500):
+        db.table('reel_sources').upsert(chunk, on_conflict='reel_id,account,kind,name').execute()
+        upserted += len(chunk)
+
+    return {'new_reels_created': 0, 'labels_upserted': upserted, 'labels_skipped': 0, 'not_in_db': len(missing)}
+
+
 def _print_summary(report: dict) -> None:
     print(f"Учётка: {report['account']}")
     for g in report['groups']:
@@ -360,11 +409,18 @@ def main() -> None:
     parser.add_argument('--folders', default=None, help='список папок через запятую, либо "all"')
     parser.add_argument('--direct', action='store_true', help='взять ссылки из переписки (messages/**/*.json)')
     parser.add_argument('--dry-run', action='store_true', help='ничего не писать в БД, только посчитать и сохранить отчёт')
+    parser.add_argument(
+        '--labels-only', action='store_true',
+        help='проставить метки только тем рилсам, что уже есть в базе; недостающие НЕ создавать '
+             '(без трат — добор новых делается отдельным явным прогоном без этого флага)',
+    )
     parser.add_argument('--out', default=None, help='путь для JSON-отчёта (обязателен по сути для --dry-run)')
     args = parser.parse_args()
 
     if args.folders is None and not args.direct:
         parser.error('нужно указать хотя бы одно: --folders или --direct')
+    if args.dry_run and args.labels_only:
+        parser.error('--dry-run и --labels-only взаимоисключающие — dry-run и так ничего не пишет')
 
     root = Path(args.root).expanduser()
     if not root.exists():
@@ -386,6 +442,29 @@ def main() -> None:
         out_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
         logger.info('Отчёт сохранён: %s', out_path)
 
+        _print_summary(report)
+        return
+
+    if args.labels_only:
+        # Отчёт — ДО записи в БД: числа (сколько уже в базе / сколько новых осталось) не зависят
+        # от факта апсерта меток, а посчитать и сохранить их первым делом — общее правило проекта
+        # для любой не-бесплатной по времени операции.
+        db = get_db()
+        all_shortcodes = sorted({sc for items in sources.values() for sc in items})
+        sc_to_id = _lookup_reel_ids(db, all_shortcodes)
+        report = make_report(sources, args.account, sc_to_id)
+
+        out_path = Path(args.out) if args.out else Path(f'/tmp/import_saved_{args.account}_labels_only.json')
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
+        logger.info('Отчёт сохранён: %s', out_path)
+
+        result = sync_labels_only(sources, args.account)
+        logger.info(
+            'Готово (labels-only, без создания новых). Меток проставлено: %d, ещё не в базе '
+            '(добор не запускался): %d',
+            result['labels_upserted'], result['not_in_db'],
+        )
         _print_summary(report)
         return
 
