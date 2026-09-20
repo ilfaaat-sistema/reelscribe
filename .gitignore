@@ -19,6 +19,8 @@ dist/
 *.csv
 # выгрузки Instagram (переписки, сохранённое) — десятки МБ личного, в git не кладём
 your_instagram_activity*/
+Мои инстаграммы/
+instagram-*-*/
 message_*.json
 .vercel
 .env*
