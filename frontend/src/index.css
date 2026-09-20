@@ -99,6 +99,10 @@ input[type=checkbox]{accent-color:var(--iris);width:15px;height:15px}
 .t-reel{color:var(--iris);border-color:color-mix(in srgb,var(--iris) 55%,transparent)}
 .t-post{color:var(--teal);border-color:color-mix(in srgb,var(--teal) 55%,transparent)}
 .t-tv{color:var(--amber);border-color:color-mix(in srgb,var(--amber) 55%,transparent)}
+.srcbadges{display:flex;flex-wrap:wrap;gap:4px;max-width:220px}
+.tag.t-acct{color:var(--sky);border-color:color-mix(in srgb,var(--sky) 55%,transparent)}
+.tag.t-folder{color:var(--green);border-color:color-mix(in srgb,var(--green) 55%,transparent)}
+.tag.t-direct{color:var(--fire);border-color:color-mix(in srgb,var(--fire) 55%,transparent)}
 /* RESULTS */
 .resview{flex:1;display:flex;flex-direction:column;min-height:0}
 .rtop{display:flex;align-items:center;gap:12px;padding:11px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap;flex-shrink:0}

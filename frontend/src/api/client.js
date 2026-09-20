@@ -72,6 +72,8 @@ export const previewImport = (links_text) =>
 
 export const getSessions = () => req('/sessions')
 
+export const getSources = () => req('/sources')
+
 export const getSession = (id) => req(`/sessions/${id}`)
 
 export const updateSessionComment = (id, comment) =>

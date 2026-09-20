@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { parseLinks } from '../lib/utils'
-import { importLinks, getSessions, previewImport } from '../api/client'
+import { importLinks, getSessions, getSources, previewImport } from '../api/client'
 
 function fmtDate(iso) {
   if (!iso) return ''
@@ -67,6 +67,7 @@ export default function Import() {
   const [pullStats, setPullStats] = useState(true)
   const [comment, setComment] = useState('')
   const [sessions, setSessions] = useState([])
+  const [sources, setSources] = useState([])
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
   const [dragging, setDragging] = useState(false)
@@ -81,7 +82,27 @@ export default function Import() {
 
   useEffect(() => {
     getSessions().then(setSessions).catch(() => {})
+    getSources().then(r => setSources(r?.items || [])).catch(() => {})
   }, [])
+
+  // Группировка меток источников для блока «Мои источники»: учётка → её папки/директ со счётчиками.
+  const sourceAccounts = useMemo(() => {
+    const map = new Map()
+    for (const s of sources) {
+      if (!map.has(s.account)) map.set(s.account, { total: 0, done: 0, items: [] })
+      const g = map.get(s.account)
+      g.total += s.total || 0
+      g.done += s.done || 0
+      g.items.push(s)
+    }
+    for (const g of map.values()) {
+      g.items.sort((a, b) => {
+        if (a.kind !== b.kind) return a.kind === 'direct' ? 1 : -1
+        return a.name.localeCompare(b.name, 'ru')
+      })
+    }
+    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0], 'ru'))
+  }, [sources])
 
   // Дебаунс: сколько вставленных ссылок уже распознаны ранее (подтянутся из кэша).
   useEffect(() => {
@@ -270,7 +291,7 @@ export default function Import() {
             {!count && <p style={{ color: 'var(--faint)', fontSize: 12, marginTop: 12 }}>Вставь ссылки слева — здесь появится превью</p>}
           </div>
 
-          {sessions.length > 0 && (
+          {(sessions.length > 0 || sourceAccounts.length > 0) && (
             <div style={{ marginTop: 16 }}>
               <button
                 className="btn sm ghost"
@@ -279,28 +300,62 @@ export default function Import() {
               >
                 📊 Все распознавания →
               </button>
-              <div className="label">История импортов</div>
-              <div className="histlist">
-                {sessions.slice(0, 5).map(s => (
-                  <div
-                    key={s.id}
-                    className="hist"
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => navigate(`/results/${s.id}`)}
-                  >
-                    <div className="hi-main">
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>
-                        {s.total} рилс · {fmtDate(s.created_at)}
+              {sourceAccounts.length > 0 ? (
+                <>
+                  <div className="label">Мои источники</div>
+                  <div className="histlist">
+                    {sourceAccounts.map(([account, g]) => (
+                      <div key={account} className="hist" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+                        <div
+                          className="hi-main"
+                          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+                          onClick={() => navigate(`/results?account=${encodeURIComponent(account)}`)}
+                        >
+                          <span className="tag t-acct">{account}</span>
+                          <span className="hi-sub" style={{ margin: 0 }}>{g.total} всего · {g.done} расшифровано</span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 4 }}>
+                          {g.items.map(it => (
+                            <div
+                              key={`${it.kind}-${it.name}`}
+                              style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+                              onClick={() => navigate(`/results?account=${encodeURIComponent(account)}&folder=${encodeURIComponent(it.name)}`)}
+                            >
+                              <span className={`tag ${it.kind === 'direct' ? 't-direct' : 't-folder'}`}>{it.name}</span>
+                              <span className="hi-sub" style={{ margin: 0 }}>{it.total} всего · {it.done} расшифровано</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      <div className="hi-sub">
-                        {s.loaded ?? 0} готово · {s.failed ?? 0} ошибок
-                        {(s.queued ?? 0) > 0 ? ` · ${s.queued} в очереди` : ''}
-                      </div>
-                      {s.comment && <div className="hi-note">{s.comment}</div>}
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </>
+              ) : sessions.length > 0 && (
+                <>
+                  <div className="label">История импортов</div>
+                  <div className="histlist">
+                    {sessions.slice(0, 5).map(s => (
+                      <div
+                        key={s.id}
+                        className="hist"
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => navigate(`/results/${s.id}`)}
+                      >
+                        <div className="hi-main">
+                          <div style={{ fontWeight: 600, fontSize: 13 }}>
+                            {s.total} рилс · {fmtDate(s.created_at)}
+                          </div>
+                          <div className="hi-sub">
+                            {s.loaded ?? 0} готово · {s.failed ?? 0} ошибок
+                            {(s.queued ?? 0) > 0 ? ` · ${s.queued} в очереди` : ''}
+                          </div>
+                          {s.comment && <div className="hi-note">{s.comment}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

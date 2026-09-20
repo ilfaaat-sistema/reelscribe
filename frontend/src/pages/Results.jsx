@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { getReels, getSession, retryJobs, getProgress } from '../api/client'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { getReels, getSession, retryJobs, getProgress, getSources } from '../api/client'
 import { fmtV, fmtPct, erClass } from '../lib/utils'
 import ReelDrawer from '../components/ReelDrawer'
 import ExportModal from '../components/ExportModal'
@@ -47,6 +47,19 @@ const COLS = [
     } },
   { key: 'author', th: 'Автор', title: 'Логин автора — клик по строке открывает карточку рилса', cls: 'grp-auth',
     cell: r => (r.author_handle ? <span className="authlink">@{r.author_handle}</span> : <span className="mono">@{r.shortcode}</span>) },
+  { key: 'src', th: 'Источник', title: 'Учётка и папка сохранённого, откуда взят рилс', cls: 'nos c-src',
+    cell: r => {
+      const accounts = r.accounts || []
+      const folders = r.folders || []
+      if (!accounts.length && !folders.length && !r.from_direct) return <span className="mono">—</span>
+      return (
+        <div className="srcbadges">
+          {accounts.map(a => <span key={`a-${a}`} className="tag t-acct">{a}</span>)}
+          {folders.map(f => <span key={`f-${f}`} className="tag t-folder">{f}</span>)}
+          {r.from_direct && <span className="tag t-direct">Директ</span>}
+        </div>
+      )
+    } },
   { key: 'url', th: '🔗', title: 'Ссылка на рилс в Instagram', cls: 'nos',
     cell: r => <a className="authlink" href={r.url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>↗</a> },
   { key: 'views', th: '👁', title: 'Просмотры — сколько раз посмотрели видео', sortKey: 'views', cls: 'c-num grp-reach',
@@ -217,6 +230,7 @@ function ReaderView({ reels, onOpen }) {
 export default function Results() {
   const { sessionId } = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [mode, setMode] = useState('analytics')
   const [chip, setChip] = useState('all')
   const [search, setSearch] = useState('')
@@ -229,18 +243,42 @@ export default function Results() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [showFilt, setShowFilt] = useState(false)
+  const [showFilt, setShowFilt] = useState(() => Boolean(searchParams.get('account') || searchParams.get('folder')))
   const [showCols, setShowCols] = useState(false)
   const [cols, setCols] = useState(COLS.map(c => c.key))
   const [selected, setSelected] = useState([])
   const [drawerReelId, setDrawerReelId] = useState(null)
   const [showExport, setShowExport] = useState(false)
-  const [filters, setFilters] = useState({ author: '', min_views: '', min_er: '' })
+  const [filters, setFilters] = useState({
+    author: '',
+    min_views: '',
+    min_er: '',
+    account: searchParams.get('account') || '',
+    folder: searchParams.get('folder') || '',
+  })
+  const [sources, setSources] = useState([])
   const [dragSrc, setDragSrc] = useState(null)
   const [sessionNote, setSessionNote] = useState(null)
   const [progress, setProgress] = useState(null)
   const searchTimer = useRef(null)
   const abortRef = useRef(null)
+
+  useEffect(() => {
+    getSources().then(r => setSources(r?.items || [])).catch(() => {})
+  }, [])
+
+  const accountOptions = useMemo(
+    () => [...new Set(sources.map(s => s.account))].sort((a, b) => a.localeCompare(b, 'ru')),
+    [sources]
+  )
+  const folderOptions = useMemo(() => {
+    // Включаем и kind==='direct' («Директ»), не только папки: иначе селект «Папка» не может
+    // показать значение, применённое кликом по «Директ» из блока источников (folder=Директ),
+    // и виснет на «Все», хотя фильтр реально работает.
+    const pool = filters.account ? sources.filter(s => s.account === filters.account) : sources
+    return [...new Set(pool.filter(s => s.kind === 'folder' || s.kind === 'direct').map(s => s.name))]
+      .sort((a, b) => a.localeCompare(b, 'ru'))
+  }, [sources, filters.account])
 
   const load = useCallback(async (opts = {}) => {
     const { pageNum = 1, append = false, silent = false, limit } = opts
@@ -264,6 +302,8 @@ export default function Results() {
       if (filters.author) params.author = filters.author
       if (filters.min_views) params.min_views = filters.min_views
       if (filters.min_er) params.min_er = filters.min_er
+      if (filters.account) params.account = filters.account
+      if (filters.folder) params.folder = filters.folder
       const { items, total: t } = await getReels(params, controller.signal)
       if (controller.signal.aborted) return
       setTotal(t)
@@ -440,6 +480,20 @@ export default function Results() {
           <input placeholder="@handle" value={filters.author} onChange={e => setFilters(f => ({ ...f, author: e.target.value }))} />
         </div>
         <div className="fgroup">
+          <label>Учётка</label>
+          <select value={filters.account} onChange={e => setFilters(f => ({ ...f, account: e.target.value, folder: '' }))}>
+            <option value="">Все</option>
+            {accountOptions.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+        </div>
+        <div className="fgroup">
+          <label>Папка</label>
+          <select value={filters.folder} onChange={e => setFilters(f => ({ ...f, folder: e.target.value }))}>
+            <option value="">Все</option>
+            {folderOptions.map(name => <option key={name} value={name}>{name}</option>)}
+          </select>
+        </div>
+        <div className="fgroup">
           <label>Мин. просмотры</label>
           <input type="number" placeholder="50000" value={filters.min_views} onChange={e => setFilters(f => ({ ...f, min_views: e.target.value }))} />
         </div>
@@ -468,7 +522,7 @@ export default function Results() {
             По убыванию
           </label>
         </div>
-        <button className="btn sm ghost" onClick={() => setFilters({ author: '', min_views: '', min_er: '' })}>
+        <button className="btn sm ghost" onClick={() => setFilters({ author: '', min_views: '', min_er: '', account: '', folder: '' })}>
           Сбросить
         </button>
       </div>
@@ -592,6 +646,8 @@ export default function Results() {
             author: filters.author || undefined,
             min_views: filters.min_views || undefined,
             min_er: filters.min_er || undefined,
+            account: filters.account || undefined,
+            folder: filters.folder || undefined,
             sort: sortKey,
             dir: sortDesc ? 'desc' : 'asc',
           }}
