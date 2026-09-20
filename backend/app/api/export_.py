@@ -37,6 +37,9 @@ _RU = {
     'transcript': 'Расшифровка',
     'transcript_ru': 'Расшифровка RU',
     'note': 'Заметка',
+    'accounts': 'Аккаунт(ы)',
+    'folders': 'Папка(и)',
+    'source_direct': 'Директ',
 }
 
 
@@ -44,6 +47,8 @@ def _fetch(
     ids: Optional[list[UUID]],
     session: Optional[UUID] = None,
     author: Optional[str] = None,
+    account: Optional[str] = None,
+    folder: Optional[str] = None,
     min_views: Optional[int] = None,
     min_er: Optional[float] = None,
     filt: str = 'all',
@@ -52,7 +57,15 @@ def _fetch(
     desc: bool = True,
 ) -> list[dict]:
     db = get_db()
-    query = db.table('reels').select('*, transcripts(text, text_ru, status, language), reel_notes(note)')
+    # account/folder применяются только в ветке без явных ids — тем же приёмом !inner,
+    # что и в /api/reels (ID-lookup не годится: тысячи uuid не влезут в URL).
+    if not ids and (account or folder):
+        sources_part = 'reel_sources!inner(account, kind, name)'
+    else:
+        sources_part = 'reel_sources(account, kind, name)'
+    query = db.table('reels').select(
+        f'*, transcripts(text, text_ru, status, language), reel_notes(note), {sources_part}'
+    )
     from app.api.reels import _SORT_MAP
     query = query.order(_SORT_MAP.get(sort, 'created_at'), desc=desc, nullsfirst=False)
     if ids:
@@ -66,6 +79,10 @@ def _fetch(
             query = query.in_('id', reel_ids)
         if author:
             query = query.eq('author_handle', author)
+        if account:
+            query = query.eq('reel_sources.account', account)
+        if folder:
+            query = query.eq('reel_sources.name', folder.strip())
         if min_views is not None:
             query = query.gte('views', min_views)
         if min_er is not None:
@@ -115,6 +132,10 @@ def _to_flat(r: dict, lang: str) -> dict:
     t = (r.get('transcripts') or [{}])[0]
     note_list = r.get('reel_notes') or []
     note = note_list[0].get('note', '') if note_list else ''
+    sources = r.get('reel_sources') or []
+    accounts = sorted({s['account'] for s in sources if s.get('account')})
+    folders = sorted({s['name'] for s in sources if s.get('kind') == 'folder' and s.get('name')})
+    from_direct = any(s.get('kind') == 'direct' for s in sources)
     row = {
         'shortcode': r.get('shortcode', ''),
         'url': r.get('url', ''),
@@ -133,6 +154,9 @@ def _to_flat(r: dict, lang: str) -> dict:
         'language': t.get('language', ''),
         'status': t.get('status', ''),
         'note': note,
+        'accounts': ', '.join(accounts),
+        'folders': ', '.join(folders),
+        'source_direct': 'Директ' if from_direct else '',
     }
     if lang == 'orig':
         row['transcript'] = t.get('text', '')
@@ -154,6 +178,8 @@ async def export_reels(
     q: Optional[str] = Query(None),
     filter: Annotated[str, Query()] = "all",  # noqa: A002
     author: Optional[str] = Query(None),
+    account: Optional[str] = Query(None),
+    folder: Optional[str] = Query(None),
     min_views: Optional[int] = Query(None),
     min_er: Optional[float] = Query(None),
     sort: Annotated[str, Query()] = "created_at",
@@ -161,7 +187,8 @@ async def export_reels(
 ) -> Response:
     rows = _fetch(
         ids if scope == 'selected' else None,
-        session=session, author=author, min_views=min_views, min_er=min_er,
+        session=session, author=author, account=account, folder=folder,
+        min_views=min_views, min_er=min_er,
         filt=filter, q=q,
         sort=sort, desc=direction.lower() != 'asc',
     )

@@ -75,6 +75,9 @@ class ReelRow(BaseModel):
     transcript_text: Optional[str]   # расшифровка речи (НЕ caption)
     transcript_text_ru: Optional[str]
     has_note: bool = False
+    accounts: list[str] = []
+    folders: list[str] = []
+    from_direct: bool = False
 
 
 class ReelDetail(ReelRow):
@@ -93,6 +96,22 @@ class ReelListResponse(BaseModel):
 
 class NoteUpdate(BaseModel):
     note: str
+
+
+# ── Sources ───────────────────────────────────────────────────────────────────
+
+class SourceStat(BaseModel):
+    account: str
+    kind: str
+    name: str
+    total: int
+    done: int
+    queued: int
+    failed: int
+
+
+class SourcesResponse(BaseModel):
+    items: list[SourceStat]
 
 
 # ── Export ────────────────────────────────────────────────────────────────────

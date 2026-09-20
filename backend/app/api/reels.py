@@ -7,7 +7,14 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query
 
 from app.core.db import get_db
-from app.models.schemas import NoteUpdate, ReelDetail, ReelListResponse, ReelRow
+from app.models.schemas import (
+    NoteUpdate,
+    ReelDetail,
+    ReelListResponse,
+    ReelRow,
+    SourcesResponse,
+    SourceStat,
+)
 
 router = APIRouter(tags=["reels"])
 
@@ -27,8 +34,17 @@ _SORT_MAP = {
 }
 
 
+def _sources_agg(sources: list[dict]) -> tuple[list[str], list[str], bool]:
+    """Из embed'а reel_sources собирает уникальные учётки, папки и флаг «есть в директе»."""
+    accounts = sorted({s['account'] for s in sources if s.get('account')})
+    folders = sorted({s['name'] for s in sources if s.get('kind') == 'folder' and s.get('name')})
+    from_direct = any(s.get('kind') == 'direct' for s in sources)
+    return accounts, folders, from_direct
+
+
 def _build_row(r: dict, note_ids: set[str]) -> ReelRow:
     t = (r.get('transcripts') or [{}])[0]
+    accounts, folders, from_direct = _sources_agg(r.get('reel_sources') or [])
     return ReelRow(
         id=r['id'],
         shortcode=r['shortcode'],
@@ -49,6 +65,9 @@ def _build_row(r: dict, note_ids: set[str]) -> ReelRow:
         transcript_text=t.get('text'),
         transcript_text_ru=t.get('text_ru'),
         has_note=r['id'] in note_ids,
+        accounts=accounts,
+        folders=folders,
+        from_direct=from_direct,
     )
 
 
@@ -77,6 +96,8 @@ async def list_reels(
     q: Optional[str] = Query(None),
     filter: Annotated[str, Query()] = "all",  # noqa: A002
     author: Optional[str] = Query(None),
+    account: Optional[str] = Query(None),
+    folder: Optional[str] = Query(None),
     sort: Annotated[str, Query()] = "created_at",
     direction: Annotated[str, Query(alias="dir")] = "desc",
     min_views: Optional[int] = Query(None),
@@ -92,14 +113,25 @@ async def list_reels(
     # done/failed фильтруем на стороне БД: !inner превращает вложенный select в JOIN,
     # и .eq по transcripts.status отсекает родительские строки (а не только вложенные).
     if filter in ('done', 'failed'):
-        select = '*, transcripts!inner(status, text, text_ru)'
+        transcripts_part = 'transcripts!inner(status, text, text_ru)'
     else:
-        select = '*, transcripts(status, text, text_ru)'
+        transcripts_part = 'transcripts(status, text, text_ru)'
+    # account/folder — тот же приём: !inner на reel_sources, чтобы отфильтровать
+    # родительские строки прямо на стороне PostgREST (без ID-lookup, id тысячи).
+    if account or folder:
+        sources_part = 'reel_sources!inner(account, kind, name)'
+    else:
+        sources_part = 'reel_sources(account, kind, name)'
+    select = f'*, {transcripts_part}, {sources_part}'
     query = db.table('reels').select(select, count='exact')
     if filter == 'done':
         query = query.eq('transcripts.status', 'done')
     elif filter == 'failed':
         query = query.eq('transcripts.status', 'failed')
+    if account:
+        query = query.eq('reel_sources.account', account)
+    if folder:
+        query = query.eq('reel_sources.name', folder.strip())
 
     if session:
         job_rows = db.table('jobs').select('reel_id').eq('session_id', str(session)).execute()
@@ -156,7 +188,7 @@ async def get_reel(reel_id: UUID) -> ReelDetail:
     db = get_db()
     row = (
         db.table('reels')
-        .select('*, transcripts(*), reel_notes(note)')
+        .select('*, transcripts(*), reel_notes(note), reel_sources(account, kind, name)')
         .eq('id', str(reel_id))
         .execute()
     )
@@ -166,6 +198,7 @@ async def get_reel(reel_id: UUID) -> ReelDetail:
     t = (r.get('transcripts') or [{}])[0]
     note_list = r.get('reel_notes') or []
     note = note_list[0].get('note') if note_list else None
+    accounts, folders, from_direct = _sources_agg(r.get('reel_sources') or [])
 
     return ReelDetail(
         id=r['id'],
@@ -187,6 +220,9 @@ async def get_reel(reel_id: UUID) -> ReelDetail:
         transcript_text=t.get('text'),
         transcript_text_ru=t.get('text_ru'),
         has_note=bool(note),
+        accounts=accounts,
+        folders=folders,
+        from_direct=from_direct,
         transcript_language=t.get('language'),
         transcript_duration_sec=t.get('duration_sec'),
         summary=t.get('summary'),
@@ -206,3 +242,13 @@ async def update_note(reel_id: UUID, body: NoteUpdate) -> dict:
 @router.post("/reels/{reel_id}/summary")
 async def generate_summary(reel_id: UUID) -> dict:
     raise HTTPException(501, "саммари ещё не реализовано")
+
+
+# Путь "/sources" не пересекается с "/reels/{reel_id}" (разные корневые сегменты),
+# поэтому порядок регистрации в роутере не важен.
+@router.get("/sources", response_model=SourcesResponse)
+async def list_sources() -> SourcesResponse:
+    db = get_db()
+    rows = db.rpc('reel_sources_stats', {}).execute()
+    items = [SourceStat(**row) for row in rows.data]
+    return SourcesResponse(items=items)
