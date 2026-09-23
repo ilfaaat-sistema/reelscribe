@@ -5,6 +5,9 @@ import Results from './pages/Results'
 import History from './pages/History'
 import Errors from './pages/Errors'
 
+// Адрес соседнего инструмента (Рилс радар); пусто — ссылка в шапке скрыта
+const RADAR_URL = import.meta.env.VITE_RADAR_URL || ''
+
 function Header() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -39,6 +42,7 @@ function Header() {
           ← Новый импорт
         </button>
       )}
+      {RADAR_URL && <a className="btn ghost sm" href={RADAR_URL}>Reels Радар ↗</a>}
       <button className="btn ghost sm" onClick={() => navigate('/history')}>
         История
       </button>

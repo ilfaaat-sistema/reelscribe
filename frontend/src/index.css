@@ -27,6 +27,7 @@ h1{font-size:16px;font-weight:680;margin:0}.spacer{flex:1}
 .btn{background:var(--iris);color:#fff;border:0;padding:9px 16px;border-radius:9px;font-weight:600;font-size:12.5px}
 .btn:hover{filter:brightness(1.08)}.btn:disabled{opacity:.45;cursor:default;filter:none}
 .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--tx)}
+a.btn{text-decoration:none;display:inline-block}
 .btn.sm{padding:7px 12px;font-size:12px}
 /* IMPORT */
 .imp{max-width:960px;margin:0 auto;padding:28px 22px 60px;width:100%;overflow:auto;flex:1}
