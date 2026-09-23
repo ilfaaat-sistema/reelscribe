@@ -3,8 +3,8 @@
 
 Раньше картину прода собирали вручную командами из `docs/диагностика.md` —
 копировали одну за другой в терминал. Этот скрипт делает то же самое одним
-прогоном: очередь, дыры в данных, деньги Apify, ключи StarAPI, cooldown и
-прогоны воркера. Ничего в пайплайне не меняет — только читает.
+прогоном: очередь, дыры в данных, деньги Apify, ключи StarAPI, cooldown,
+качество переводов и прогоны воркера. Ничего в пайплайне не меняет — только читает.
 
 Запуск (из КОРНЯ проекта, не из backend/):
     backend/.venv/bin/python scripts/health.py             # без проверки ключей StarAPI
@@ -281,7 +281,59 @@ def collect_cooldown(db: Any) -> dict:
     return {"активных_записей": len(rows), "записи": rows}
 
 
-# ── 6. Прогоны воркера ───────────────────────────────────────────────────────
+# ── 6. Качество переводов ────────────────────────────────────────────────────
+
+def collect_translation_quality(db: Any) -> dict:
+    """Считает по живой базе, сколько переводов расшифровок и подписей попадает в каждую
+    категорию брака translation_failure_reason (перенесено из чистки 23.09.2026: расшифровок
+    246 error_marker + 59 unchanged из 703, подписей 458 unchanged из 458).
+    """
+    from app.pipeline.translate import translation_failure_reason
+
+    def _tally(rows: list[dict], original_field: str, translated_field: str) -> dict:
+        counts: Counter = Counter()
+        examples: dict = {}
+        for r in rows:
+            reason = translation_failure_reason(r.get(original_field), r.get(translated_field))
+            if reason is None:
+                continue
+            counts[reason] += 1
+            examples.setdefault(reason, []).append(r.get("shortcode"))
+        return {
+            "всего_проверено": len(rows),
+            "по_причинам": dict(counts),
+            "примеры_shortcode": {k: v[:5] for k, v in examples.items()},
+        }
+
+    tr_rows = _fetch_all(
+        db, "transcripts", "text,text_ru,reel_id",
+        build=lambda q: q.not_.is_("text_ru", "null").neq("text_ru", ""),
+    )
+    # Батч для .in_() гораздо меньше _PAGE: сотни UUID в одном запросе раздувают query-string
+    # до 400 Bad Request на стороне PostgREST (поймано на живой базе 23.09.2026).
+    _IN_BATCH = 100
+    reel_ids = [r["reel_id"] for r in tr_rows if r.get("reel_id")]
+    shortcode_by_id: dict = {}
+    if reel_ids:
+        for i in range(0, len(reel_ids), _IN_BATCH):
+            batch = reel_ids[i:i + _IN_BATCH]
+            rows = db.table("reels").select("id,shortcode").in_("id", batch).execute().data or []
+            shortcode_by_id.update({r["id"]: r["shortcode"] for r in rows})
+    for r in tr_rows:
+        r["shortcode"] = shortcode_by_id.get(r.get("reel_id"))
+
+    caption_rows = _fetch_all(
+        db, "reels", "shortcode,caption,caption_ru",
+        build=lambda q: q.not_.is_("caption_ru", "null").neq("caption_ru", ""),
+    )
+
+    return {
+        "расшифровки": _tally(tr_rows, "text", "text_ru"),
+        "подписи": _tally(caption_rows, "caption", "caption_ru"),
+    }
+
+
+# ── 7. Прогоны воркера ───────────────────────────────────────────────────────
 
 def collect_worker_runs(db: Any) -> dict:
     result: dict = {}
@@ -320,7 +372,7 @@ def collect_worker_runs(db: Any) -> dict:
     return result
 
 
-# ── 7. Вердикт ───────────────────────────────────────────────────────────────
+# ── 8. Вердикт ───────────────────────────────────────────────────────────────
 
 def build_verdict(report: dict) -> list:
     warnings: list = []
@@ -367,6 +419,20 @@ def build_verdict(report: dict) -> list:
                 warnings.append("⚠ " + line)
             else:
                 info.append(line)
+
+    tq = report.get("translation_quality", {})
+    if "ошибка" in tq:
+        warnings.append(f"⚠ секция «качество переводов» не собралась — {tq['ошибка']}")
+    else:
+        for label, key in (("расшифровок", "расшифровки"), ("подписей", "подписи")):
+            sec = tq.get(key, {})
+            reasons = sec.get("по_причинам", {})
+            hard = sum(v for k, v in reasons.items() if k != "unchanged")
+            unchanged = reasons.get("unchanged", 0)
+            if hard:
+                warnings.append(f"⚠ {hard} {label} с браком перевода (жёсткие причины): {_fmt_counts({k: v for k, v in reasons.items() if k != 'unchanged'})}.")
+            if unchanged:
+                info.append(f"{unchanged} {label} дословно совпадают с оригиналом (unchanged).")
 
     cooldown = report.get("cooldown", {})
     if "ошибка" in cooldown:
@@ -454,7 +520,18 @@ def render(report: dict) -> str:
         for rec in c["записи"]:
             out.append(f"  {rec['provider']} …{rec['key_ref'][-6:]} (actor={rec['actor'] or '—'}) до {rec['until']}")
 
-    out.append("\n6. ПРОГОНЫ ВОРКЕРА")
+    out.append("\n6. КАЧЕСТВО ПЕРЕВОДОВ")
+    tq = report["translation_quality"]
+    if "ошибка" in tq:
+        out.append(f"  недоступно: {tq['ошибка']}")
+    else:
+        for label, key in (("расшифровки", "расшифровки"), ("подписи", "подписи")):
+            sec = tq[key]
+            out.append(f"  {label} (проверено {sec['всего_проверено']}): {_fmt_counts(sec['по_причинам']) if sec['по_причинам'] else 'брака нет'}")
+            for reason, shortcodes in sec["примеры_shortcode"].items():
+                out.append(f"    {reason}: {', '.join(shortcodes)}")
+
+    out.append("\n7. ПРОГОНЫ ВОРКЕРА")
     w = report["worker_runs"]
     if "ошибка" in w:
         out.append(f"  недоступно: {w['ошибка']}")
@@ -482,7 +559,7 @@ def render(report: dict) -> str:
                     f"failed={rec.get('jobs_failed')} apify=${rec.get('apify_spent_usd')}"
                 )
 
-    out.append("\n7. ВЕРДИКТ")
+    out.append("\n8. ВЕРДИКТ")
     for line in report["вердикт"]:
         out.append(f"  {line}")
 
@@ -519,6 +596,7 @@ def main() -> int:
     report["apify"] = _safe_section("деньги Apify", collect_apify)
     report["starapi"] = _safe_section("ключи StarAPI", collect_starapi, args.starapi)
     report["cooldown"] = _safe_section("cooldown", collect_cooldown, db)
+    report["translation_quality"] = _safe_section("качество переводов", collect_translation_quality, db)
     report["worker_runs"] = _safe_section("прогоны воркера", collect_worker_runs, db)
     report["вердикт"] = build_verdict(report)
 

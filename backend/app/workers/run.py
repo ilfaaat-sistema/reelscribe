@@ -10,9 +10,10 @@ from app.core.config import settings
 from app.core.db import get_db
 from app.pipeline.apify_profile_downloader import NoAudioError
 from app.pipeline.download import download_audio
-from app.pipeline.starapi_downloader import QuotaExceededError
 from app.pipeline.metadata import extract_metadata
+from app.pipeline.starapi_downloader import QuotaExceededError
 from app.pipeline.transcribe import transcribe_audio
+from app.pipeline.translate import TranslationFailedError
 from app.workers import run_log
 
 logger = logging.getLogger(__name__)
@@ -105,6 +106,23 @@ def _update_transcript_done(db, reel_id: str, fields: dict, source: str | None) 
     db.table('transcripts').update(fields).eq('reel_id', reel_id).execute()
 
 
+def _translate_transcript_safe(text: str, language: str) -> str | None:
+    """Перевод расшифровки, который никогда не роняет джоб.
+
+    Расшифровка уже стоила денег (скачивание + ASR), поэтому провал перевода не должен
+    уводить job в except Exception в _process_job — тогда пропала бы и уже готовая
+    расшифровка. Ловим именно TranslationFailedError/TranslationQuotaExceededError
+    (наследник первого), логируем и возвращаем None — вызывающий код сохраняет
+    расшифровку со статусом done без перевода.
+    """
+    from app.pipeline.translate import TranslationFailedError, translate_to_ru
+    try:
+        return translate_to_ru(text)
+    except TranslationFailedError as exc:
+        logger.warning('Перевод расшифровки (%s) не удался (%s) — сохраняю без перевода', language, exc.reason)
+        return None
+
+
 def _maybe_close_session(db, session_id: str) -> None:
     if not session_id:
         return
@@ -185,8 +203,7 @@ async def _process_job(job: dict) -> None:
         if do_translate and text and language and language != 'ru':
             logger.info('Перевожу %s → ru…', language)
             db.table('transcripts').update({'status': 'translating'}).eq('reel_id', reel_id).execute()
-            from app.pipeline.translate import translate_to_ru
-            text_ru = await asyncio.to_thread(translate_to_ru, text)
+            text_ru = await asyncio.to_thread(_translate_transcript_safe, text, language)
 
         # Перевод текста поста — рядом с переводом расшифровки, но отдельно от неё: язык
         # подписи не связан с языком речи, решение по needs_translation (ТЗ 07 §3). Ошибка
@@ -197,6 +214,8 @@ async def _process_job(job: dict) -> None:
                 if needs_translation(caption):
                     caption_ru = await asyncio.to_thread(translate_to_ru, caption)
                     db.table('reels').update({'caption_ru': caption_ru}).eq('id', reel_id).execute()
+            except TranslationFailedError as exc:
+                logger.warning('Подпись рилса %s: перевод не прошёл проверку (%s)', reel_id, exc.reason)
             except Exception as exc:  # noqa: BLE001 — перевод подписи необязателен для успеха рилса
                 logger.warning('Подпись рилса %s: перевод не удался — %s', reel_id, exc)
 

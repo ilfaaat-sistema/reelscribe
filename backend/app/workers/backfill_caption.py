@@ -20,7 +20,12 @@ import asyncio
 import logging
 
 from app.core.db import get_db
-from app.pipeline.translate import needs_translation, translate_to_ru
+from app.pipeline.translate import (
+    TranslationFailedError,
+    TranslationQuotaExceededError,
+    needs_translation,
+    translate_to_ru,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +99,16 @@ async def backfill(
             caption_ru = await asyncio.to_thread(translate_to_ru, row['caption'])
             db.table('reels').update({'caption_ru': caption_ru}).eq('id', row['id']).execute()
             translated += 1
+        except TranslationQuotaExceededError as exc:
+            # Квота/ключ DeepL не восстановятся за секунды — не перебираем впустую остаток.
+            logger.warning('Квота DeepL исчерпана (%s) — останавливаю прогон на записи %d/%d', exc, i, total)
+            break
+        except TranslationFailedError as exc:
+            failed += 1
+            logger.warning(
+                'Рилс %s (%s): перевод подписи не прошёл проверку (%s) — caption_ru не пишу',
+                row['id'], row.get('shortcode'), exc.reason,
+            )
         except Exception as exc:  # noqa: BLE001 — сбой одной записи не должен ронять весь проход
             failed += 1
             logger.warning(

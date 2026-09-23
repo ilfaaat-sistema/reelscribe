@@ -16,6 +16,14 @@ python-multipart>=0.0.9
 sse-starlette>=1.8.2
 imageio-ffmpeg>=0.5.1
 deep-translator>=1.11.4
+# Две библиотеки перевода — намеренно, не «дубль на удаление»: deep_translator даёт
+# бесплатный Google Translate (фолбэк, без ключа), а официальный deepl нужен именно как
+# ОФИЦИАЛЬНЫЙ клиент DeepL, а не как чиненое имя класса в deep_translator. Причина: у
+# deep_translator.exceptions.ServerException нет HTTP-кода ответа, поэтому «квота DeepL
+# кончилась» (456) неотличимо от «сервер лёг» — а вести себя на эти два случая нужно
+# по-разному (квота — не фолбэчить на Google и остановить прогон, сервер лёг — фолбэчить).
+# У официального deepl для этого есть QuotaExceededException/AuthorizationException.
+deepl>=1.32.0
 
 # mlx только на Apple Silicon — на Linux (GitHub Actions раннер) пропускается, там cloud/faster-whisper
 mlx-whisper>=0.4; sys_platform == "darwin" and platform_machine == "arm64"

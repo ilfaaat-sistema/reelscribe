@@ -8,6 +8,7 @@
 Запуск:
     python -m app.workers.backfill_translate                 # все расшифровки с пустым text_ru
     python -m app.workers.backfill_translate --session <UUID> # только рилсы указанной сессии
+    python -m app.workers.backfill_translate --limit 20       # ограничить число переводов за прогон
 """
 from __future__ import annotations
 
@@ -16,7 +17,11 @@ import asyncio
 import logging
 
 from app.core.db import get_db
-from app.pipeline.translate import translate_to_ru
+from app.pipeline.translate import (
+    TranslationFailedError,
+    TranslationQuotaExceededError,
+    translate_to_ru,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +34,7 @@ def _reel_ids_for_session(db, session_id: str) -> list[str]:
     return [j['reel_id'] for j in jobs.data]
 
 
-async def backfill(session_id: str | None = None) -> tuple[int, int]:
+async def backfill(session_id: str | None = None, limit: int | None = None) -> tuple[int, int]:
     db = get_db()
     query = (
         db.table('transcripts')
@@ -49,6 +54,8 @@ async def backfill(session_id: str | None = None) -> tuple[int, int]:
         query = query.in_('reel_id', ids)
 
     rows = query.execute().data
+    if limit is not None:
+        rows = rows[:limit]
     total = len(rows)
     logger.info('Расшифровок без перевода: %d', total)
 
@@ -59,6 +66,16 @@ async def backfill(session_id: str | None = None) -> tuple[int, int]:
             text_ru = await asyncio.to_thread(translate_to_ru, row['text'])
             db.table('transcripts').update({'text_ru': text_ru}).eq('id', row['id']).execute()
             translated += 1
+        except TranslationQuotaExceededError as exc:
+            # Квота/ключ DeepL не восстановятся за секунды — не перебираем впустую остаток.
+            logger.warning('Квота DeepL исчерпана (%s) — останавливаю прогон на записи %d/%d', exc, i, total)
+            break
+        except TranslationFailedError as exc:
+            failed += 1
+            logger.warning(
+                'Расшифровка %s (%s): перевод не прошёл проверку (%s) — text_ru не пишу',
+                row['id'], row.get('language'), exc.reason,
+            )
         except Exception as exc:  # noqa: BLE001 — сбой одной записи не должен ронять весь проход
             failed += 1
             logger.warning('Расшифровка %s (%s): перевод не удался — %s', row['id'], row.get('language'), exc)
@@ -77,8 +94,9 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
     parser = argparse.ArgumentParser(description='Дозаполнить перевод расшифровок (text_ru).')
     parser.add_argument('--session', help='только рилсы указанной сессии (UUID)')
+    parser.add_argument('--limit', type=int, default=None, help='ограничить число переводов за прогон')
     args = parser.parse_args()
-    translated, failed = asyncio.run(backfill(args.session))
+    translated, failed = asyncio.run(backfill(args.session, args.limit))
     print(f'Переведено: {translated}, не удалось: {failed}')
 
 
