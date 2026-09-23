@@ -123,6 +123,12 @@ jobs:
           cache: 'pip'
           cache-dependency-path: backend/requirements-worker.txt
 
+      # ffprobe нужен yt-dlp — последнему источнику каскада. Пакет imageio-ffmpeg даёт только
+      # сам ffmpeg, и под именем вида ffmpeg-linux64-v4.2.2, поэтому yt-dlp его не признаёт
+      # и падает с «ffprobe and ffmpeg not found» (поймано 23.09.2026 на четырёх рилсах).
+      - name: Системный ffmpeg с ffprobe
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+
       - name: Установка зависимостей
         working-directory: backend
         run: pip install -r requirements-worker.txt
@@ -227,6 +233,8 @@ jobs:
           APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
           APIFY_API_TOKENS: ${{ secrets.APIFY_API_TOKENS }}
 
-# Системный ffmpeg через apt намеренно не ставится: пакет imageio-ffmpeg (тянется зависимостями
-# воркера) несёт собственный статический бинарник ffmpeg — проверено, работает без apt-пакета.
-# Если ffmpeg вдруг не находится — ищи проблему не здесь, apt install тут не нужен.
+# Про ffmpeg. Распознаванию хватает пакета imageio-ffmpeg: transcribe.py и media.py спрашивают
+# путь к бинарнику у самой библиотеки. А вот yt-dlp (последний источник каскада) ищет в PATH
+# ffmpeg И ffprobe по этим именам — imageio-ffmpeg не даёт ни второго вовсе, ни первого под
+# нужным именем. Поэтому системный пакет ставится шагом выше; прежний комментарий утверждал
+# обратное и стоил четырёх упавших рилсов 23.09.2026.
