@@ -160,6 +160,7 @@ async def _process_job(job: dict) -> None:
 
         audio_path, info = await download_audio(url, AUDIO_DIR)
 
+        caption: str | None = None
         if pull_stats:
             meta = extract_metadata(info)
             # Подписчиков дотягиваем ЗДЕСЬ, единой точкой для всех источников (Apify/StarAPI/yt-dlp):
@@ -169,6 +170,7 @@ async def _process_job(job: dict) -> None:
                 followers = await _resolve_followers_safe(meta['author_handle'])
                 if followers is not None:
                     meta['author_followers'] = followers
+            caption = meta.get('caption')
             update = {k: v for k, v in meta.items() if v is not None}
             if update:
                 db.table('reels').update(update).eq('id', reel_id).execute()
@@ -185,6 +187,18 @@ async def _process_job(job: dict) -> None:
             db.table('transcripts').update({'status': 'translating'}).eq('reel_id', reel_id).execute()
             from app.pipeline.translate import translate_to_ru
             text_ru = await asyncio.to_thread(translate_to_ru, text)
+
+        # Перевод текста поста — рядом с переводом расшифровки, но отдельно от неё: язык
+        # подписи не связан с языком речи, решение по needs_translation (ТЗ 07 §3). Ошибка
+        # перевода подписи НЕ должна ронять обработку рилса — расшифровка уже готова.
+        if do_translate and caption:
+            try:
+                from app.pipeline.translate import needs_translation, translate_to_ru
+                if needs_translation(caption):
+                    caption_ru = await asyncio.to_thread(translate_to_ru, caption)
+                    db.table('reels').update({'caption_ru': caption_ru}).eq('id', reel_id).execute()
+            except Exception as exc:  # noqa: BLE001 — перевод подписи необязателен для успеха рилса
+                logger.warning('Подпись рилса %s: перевод не удался — %s', reel_id, exc)
 
         raw_source = info.get('source')
         _update_transcript_done(db, reel_id, {

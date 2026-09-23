@@ -61,6 +61,7 @@ class ReelRow(BaseModel):
     url: str
     type: str
     caption: Optional[str]           # текст поста (подпись автора)
+    caption_ru: Optional[str] = None  # перевод текста поста на русский (пуст, если не требовался)
     author_handle: Optional[str]
     author_followers: Optional[int]
     views: Optional[int]

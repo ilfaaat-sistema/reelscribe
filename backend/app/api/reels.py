@@ -51,6 +51,7 @@ def _build_row(r: dict, note_ids: set[str]) -> ReelRow:
         url=r['url'],
         type=r['type'],
         caption=r.get('caption'),
+        caption_ru=r.get('caption_ru'),
         author_handle=r.get('author_handle'),
         author_followers=r.get('author_followers'),
         views=r.get('views'),
@@ -72,7 +73,7 @@ def _build_row(r: dict, note_ids: set[str]) -> ReelRow:
 
 
 def _search_reel_ids(db, q: str) -> set[str]:
-    """id рилсов, где q встречается в caption ИЛИ в тексте расшифровки (по всей базе).
+    """id рилсов, где q встречается в caption/caption_ru ИЛИ в тексте расшифровки (по всей базе).
 
     PostgREST не умеет OR между родительской и вложенной таблицей, поэтому два
     точечных запроса за id + объединение — вместо фильтрации страницы в Python.
@@ -80,7 +81,12 @@ def _search_reel_ids(db, q: str) -> set[str]:
     safe = re.sub(r'[,()*%]', ' ', q).strip()
     if not safe:
         return set()
-    cap = db.table('reels').select('id').ilike('caption', f'%{safe}%').execute()
+    cap = (
+        db.table('reels')
+        .select('id')
+        .or_(f'caption.ilike.*{safe}*,caption_ru.ilike.*{safe}*')
+        .execute()
+    )
     tr = (
         db.table('transcripts')
         .select('reel_id')
@@ -206,6 +212,7 @@ async def get_reel(reel_id: UUID) -> ReelDetail:
         url=r['url'],
         type=r['type'],
         caption=r.get('caption'),
+        caption_ru=r.get('caption_ru'),
         author_handle=r.get('author_handle'),
         author_followers=r.get('author_followers'),
         views=r.get('views'),

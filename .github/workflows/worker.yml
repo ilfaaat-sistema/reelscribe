@@ -219,6 +219,19 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
 
+      # Перевод текстов постов (ТЗ 07). Отдельным шагом от переводов расшифровки: подпись живёт
+      # в reels.caption_ru, а не в transcripts, и появляется у рилса вместе с метриками, а не
+      # с распознаванием. Тоже бесплатно через Google Translate, ключи сюда не нужны.
+      # Запускать это с ноутбука бесполезно: бесплатный Google режет запросы по IP, на раннере
+      # адрес другой и перевод проходит (проверено 23.09.2026).
+      - name: Перевод текстов постов
+        if: always()
+        working-directory: backend
+        run: python -m app.workers.backfill_caption
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+
       # Та же строка после работы: разница с замером «до» и есть цена прогона в долларах.
       # Важно: /users/me/limits агрегируется с задержкой в несколько минут, поэтому свежий
       # расход тут может быть занижен — точные цифры смотреть в кабинете Apify.

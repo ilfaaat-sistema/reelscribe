@@ -1,10 +1,34 @@
 from __future__ import annotations
 
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
 _MAX_CHUNK = 4500  # Google/DeepL chunk limit
+
+# Правило «нужно ли переводить» (ТЗ 07 §3), одно на пайплайн и бэкфилл: доля кириллических
+# букв среди буквенных символов ниже порога при не менее чем _MIN_LETTERS буквах. Короткие
+# подписи из одних хэштегов/эмодзи (букв меньше порога) сигнала не дают — не переводим.
+_LETTER_RE = re.compile(r'[^\W\d_]', re.UNICODE)
+_CYRILLIC_RE = re.compile(r'[а-яёА-ЯЁ]')
+_MIN_LETTERS = 12
+_CYRILLIC_RATIO_THRESHOLD = 0.3
+
+
+def needs_translation(text: str | None) -> bool:
+    """Нужно ли переводить текст на русский — по доле кириллических букв среди буквенных.
+
+    Используется и для расшифровок, и для подписи поста (caption): язык подписи не совпадает
+    с языком речи, поэтому решение принимается по самому тексту, а не по transcripts.language.
+    """
+    if not text:
+        return False
+    letters = _LETTER_RE.findall(text)
+    if len(letters) < _MIN_LETTERS:
+        return False
+    cyrillic = sum(1 for ch in letters if _CYRILLIC_RE.match(ch))
+    return (cyrillic / len(letters)) < _CYRILLIC_RATIO_THRESHOLD
 
 
 def translate_to_ru(text: str) -> str:

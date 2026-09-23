@@ -17,7 +17,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-NEW_FIELDS = {"accounts", "folders", "from_direct"}
+NEW_FIELDS = {"accounts", "folders", "from_direct", "caption_ru"}
 ROOT = Path(__file__).resolve().parent.parent
 BASELINE = ROOT / ".baseline"
 

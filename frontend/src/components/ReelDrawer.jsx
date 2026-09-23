@@ -11,6 +11,8 @@ export default function ReelDrawer({ reelId, onClose }) {
   const [reel, setReel] = useState(null)
   const [showRu, setShowRu] = useState(false)
   const [showCaption, setShowCaption] = useState(true)
+  const [showCaptionRu, setShowCaptionRu] = useState(false)
+  const [playing, setPlaying] = useState(false)
   const [note, setNote] = useState('')
   const [loadError, setLoadError] = useState(null)
   const noteRef = useRef(null)
@@ -21,6 +23,7 @@ export default function ReelDrawer({ reelId, onClose }) {
     setReel(null)
     setNote('')
     setLoadError(null)
+    setPlaying(false)
     getReel(reelId).then(r => {
       setReel(r)
       setNote(r.note || '')
@@ -50,6 +53,9 @@ export default function ReelDrawer({ reelId, onClose }) {
   const txRu = reel?.transcript_text_ru || ''
   const hasTr = !!txOrig || !!txRu
   const displayTx = showRu ? (txRu || txOrig) : txOrig
+  const capOrig = reel?.caption || ''
+  const capRu = reel?.caption_ru || ''
+  const displayCap = showCaptionRu ? (capRu || capOrig) : capOrig
 
   return (
     <>
@@ -59,22 +65,43 @@ export default function ReelDrawer({ reelId, onClose }) {
 
         {reel && (
           <>
-            <a
-              className="vprev"
-              href={reel.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{display:'block'}}
-            >
-              <span className="vtag">
-                <span className={`tag ${reel.type === 'reel' ? 't-reel' : reel.type === 'tv' ? 't-tv' : 't-post'}`}>{reel.type}</span>
-              </span>
-              <span className="vopen">открыть ↗</span>
-              <span className="play-btn" />
-              <span className="vlabel">
-                @{reel.author_handle} · {fmtV(reel.views)} просмотров
-              </span>
-            </a>
+            {playing ? (
+              /* Публичный проигрыватель Instagram. Путь /p/ универсален: так открываются и рилсы,
+                 и посты, и карусели. Удалённые и закрытые публикации показывают заглушку самого
+                 Instagram — для них рядом остаётся ссылка «открыть». */
+              <div className="vembed-wrap">
+                <div className="vbar">
+                  <button className="vcollapse" type="button" onClick={() => setPlaying(false)}>↩ свернуть</button>
+                  <a href={reel.url} target="_blank" rel="noopener noreferrer">открыть в Instagram ↗</a>
+                </div>
+                <iframe
+                  className="vembed"
+                  src={`https://www.instagram.com/p/${reel.shortcode}/embed/`}
+                  title={`Публикация @${reel.author_handle}`}
+                  loading="lazy"
+                  allow="autoplay; encrypted-media; picture-in-picture"
+                  allowFullScreen
+                  scrolling="no"
+                />
+              </div>
+            ) : (
+              <button className="vprev" type="button" onClick={() => setPlaying(true)} title="Смотреть здесь">
+                <span className="vtag">
+                  <span className={`tag ${reel.type === 'reel' ? 't-reel' : reel.type === 'tv' ? 't-tv' : 't-post'}`}>{reel.type}</span>
+                </span>
+                <a
+                  className="vopen"
+                  href={reel.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={e => e.stopPropagation()}
+                >открыть ↗</a>
+                <span className="play-btn" />
+                <span className="vlabel">
+                  @{reel.author_handle} · {fmtV(reel.views)} просмотров
+                </span>
+              </button>
+            )}
 
             <div className="dbody">
               <div className="author-row">
@@ -134,12 +161,31 @@ export default function ReelDrawer({ reelId, onClose }) {
                 <>
                   <div
                     className="seclabel posthead"
+                    style={{justifyContent:'space-between'}}
                     onClick={() => setShowCaption(c => !c)}
                   >
-                    📝 Текст поста {showCaption ? '▾' : '▸'}
+                    <span>📝 Текст поста {showCaption ? '▾' : '▸'}</span>
+                    {reel.caption_ru && (
+                      <div style={{display:'flex',gap:6}} onClick={e => e.stopPropagation()}>
+                        <button
+                          className="btn sm ghost"
+                          style={{padding:'3px 9px',fontSize:11}}
+                          onClick={() => setShowCaptionRu(false)}
+                        >
+                          Оригинал
+                        </button>
+                        <button
+                          className="btn sm ghost"
+                          style={{padding:'3px 9px',fontSize:11,background: showCaptionRu ? 'var(--teal)' : undefined, borderColor: showCaptionRu ? 'var(--teal)' : undefined}}
+                          onClick={() => setShowCaptionRu(true)}
+                        >
+                          Русский
+                        </button>
+                      </div>
+                    )}
                   </div>
                   {showCaption && (
-                    <div className="postcard">{reel.caption}</div>
+                    <div className="postcard">{displayCap}</div>
                   )}
                 </>
               )}
