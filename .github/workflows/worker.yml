@@ -238,6 +238,21 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
 
+      # Язык оригинала подписи. Отдельным шагом, потому что у записей, переведённых до
+      # появления колонки caption_lang, язык взять неоткуда: DeepL сообщает его только
+      # в ответе на перевод. Режим --lang-only шлёт первые 200 символов, перевод
+      # выбрасывает и берёт лишь определённый язык — примерно вдвое дешевле по квоте.
+      # Шаг идемпотентный: берёт только записи с пустым caption_lang, поэтому когда
+      # остаток будет размечен, он станет отрабатывать вхолостую за секунды.
+      - name: Язык текстов постов
+        if: always()
+        working-directory: backend
+        run: python -m app.workers.backfill_caption --lang-only
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
+
       # Та же строка после работы: разница с замером «до» и есть цена прогона в долларах.
       # Важно: /users/me/limits агрегируется с задержкой в несколько минут, поэтому свежий
       # расход тут может быть занижен — точные цифры смотреть в кабинете Apify.
