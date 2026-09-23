@@ -174,7 +174,14 @@ export default function ReelDrawer({ reelId, onClose }) {
                     style={{justifyContent:'space-between'}}
                     onClick={() => setShowCaption(c => !c)}
                   >
-                    <span>📝 Текст поста {showCaption ? '▾' : '▸'}</span>
+                    <span>
+                      📝 Текст поста {showCaption ? '▾' : '▸'}
+                      {reel.caption_lang && reel.caption_lang !== 'ru' && (
+                        <span className="trbadge lang" style={{marginLeft:8}} title="язык оригинала">
+                          {reel.caption_lang}
+                        </span>
+                      )}
+                    </span>
                     {reel.caption_ru && (
                       <div style={{display:'flex',gap:6}} onClick={e => e.stopPropagation()}>
                         <button

@@ -210,10 +210,13 @@ async def _process_job(job: dict) -> None:
         # перевода подписи НЕ должна ронять обработку рилса — расшифровка уже готова.
         if do_translate and caption:
             try:
-                from app.pipeline.translate import needs_translation, translate_to_ru
+                from app.pipeline.translate import needs_translation, translate_to_ru_detailed
                 if needs_translation(caption):
-                    caption_ru = await asyncio.to_thread(translate_to_ru, caption)
-                    db.table('reels').update({'caption_ru': caption_ru}).eq('id', reel_id).execute()
+                    caption_ru, caption_lang = await asyncio.to_thread(translate_to_ru_detailed, caption)
+                    update = {'caption_ru': caption_ru}
+                    if caption_lang:
+                        update['caption_lang'] = caption_lang
+                    db.table('reels').update(update).eq('id', reel_id).execute()
             except TranslationFailedError as exc:
                 logger.warning('Подпись рилса %s: перевод не прошёл проверку (%s)', reel_id, exc.reason)
             except Exception as exc:  # noqa: BLE001 — перевод подписи необязателен для успеха рилса

@@ -113,14 +113,71 @@ def translate_to_ru(text: str) -> str:
     перевод получить не удалось — ни при каком исходе исходный текст не возвращается молча.
     Если текст режется на несколько кусков и хотя бы один непригоден — исключение летит
     целиком, частичный (наполовину переведённый) результат не склеивается и не пишется.
+
+    Тонкая обёртка над translate_to_ru_detailed для мест, которым язык оригинала не нужен
+    (старая сигнатура, не трогаем — используется в нескольких местах пайплайна).
+    """
+    return translate_to_ru_detailed(text)[0]
+
+
+def translate_to_ru_detailed(text: str) -> tuple[str, str | None]:
+    """Как translate_to_ru, но вместе с языком оригинала.
+
+    Язык узнаём у самого DeepL: он и так определяет исходный язык, чтобы перевести
+    (result.detected_source_lang, двухбуквенный код вроде 'EN', 'TR', 'HI' — приводим к
+    нижнему регистру). Отдельный определитель языка не нужен и не заводим. Если перевод
+    шёл через запасной Google (нет DEEPL_API_KEY, либо DeepL временно недоступен и часть
+    кусков ушла через Google-фолбэк внутри _deepl) — для таких кусков языка нет, возвращаем
+    None; это нормально и не ошибка (см. вызывающий код).
     """
     if not text or not text.strip():
-        return text
+        return text, None
     from app.core.config import settings
     chunks = _split(text.strip(), _MAX_CHUNK)
     if settings.deepl_api_key:
         return _deepl(chunks, settings.deepl_api_key)
-    return _google(chunks)
+    return _google(chunks), None
+
+
+def detect_caption_lang(text: str, sample_len: int = 200) -> str | None:
+    """Язык оригинала текста через DeepL — без записи перевода.
+
+    Только для бэкфилла caption_lang у подписей, у которых caption_ru уже переведён (см.
+    backfill_caption.py --lang-only): переводить текст заново ради одного поля языка — трата
+    квоты, а определять его отдельным детектором — лишняя зависимость. DeepL всё равно
+    определяет исходный язык, чтобы перевести, поэтому шлём в него только первые sample_len
+    символов текста, а сам перевод из ответа отбрасываем.
+
+    Бросает TranslationQuotaExceededError на исчерпании квоты/невалидном ключе — как и
+    остальные функции модуля, с тем же предохранителем на процесс. Работает только с DeepL:
+    у Google (deep_translator) языка в ответе нет — вызывающий код должен сам проверить
+    settings.deepl_api_key до вызова.
+    """
+    global _deepl_disabled_reason
+    import deepl
+    from app.core.config import settings
+
+    if not text or not text.strip():
+        return None
+    if not settings.deepl_api_key:
+        raise RuntimeError('detect_caption_lang требует DEEPL_API_KEY (иначе языка не узнать)')
+    if _deepl_disabled_reason is not None:
+        raise TranslationQuotaExceededError(_deepl_disabled_reason)
+
+    sample = text.strip()[:sample_len]
+    translator = deepl.Translator(settings.deepl_api_key)
+    try:
+        result = translator.translate_text(sample, target_lang='RU')
+    except (deepl.QuotaExceededException, deepl.AuthorizationException) as exc:
+        _deepl_disabled_reason = f'{type(exc).__name__}: {exc}'
+        logger.error('DeepL: %s — дальше в этом прогоне DeepL не используется', _deepl_disabled_reason)
+        raise TranslationQuotaExceededError(_deepl_disabled_reason) from exc
+
+    if isinstance(result, list):
+        lang = result[0].detected_source_lang if result else None
+    else:
+        lang = result.detected_source_lang
+    return lang.lower() if lang else None
 
 
 def _validate_chunk(original: str, translated: str) -> str:
@@ -159,12 +216,16 @@ def _google(chunks: list[str]) -> str:
     return ' '.join(parts)
 
 
-def _deepl(chunks: list[str], api_key: str) -> str:
+def _deepl(chunks: list[str], api_key: str) -> tuple[str, str | None]:
     """Официальный пакет deepl (не deep_translator — см. ТЗ: только у него отличимы квота/сеть).
 
     При исчерпании квоты или неверном ключе — TranslationQuotaExceededError и предохранитель
     на остаток процесса (без фолбэка на Google, чтобы переход на DeepL не терялся в первый же
-    день). При прочих ошибках DeepL — предупреждение в лог и фолбэк на Google для этого куска.
+    день). При прочих ошибках DeepL — предупреждение в лог и фолбэк на Google для этого куска
+    (для такого куска язык не узнаём — см. translate_to_ru_detailed).
+
+    Возвращает (перевод, язык): язык — из detected_source_lang первого куска, где DeepL его
+    определил; при нескольких кусках одного текста язык один и тот же, дальше не уточняем.
     """
     global _deepl_disabled_reason
     import deepl
@@ -174,10 +235,16 @@ def _deepl(chunks: list[str], api_key: str) -> str:
 
     translator = deepl.Translator(api_key)
     parts: list[str] = []
+    detected_lang: str | None = None
     for chunk in chunks:
         try:
             result = translator.translate_text(chunk, target_lang='RU')
-            translated = result.text if not isinstance(result, list) else ' '.join(r.text for r in result)
+            if isinstance(result, list):
+                translated = ' '.join(r.text for r in result)
+                chunk_lang = result[0].detected_source_lang if result else None
+            else:
+                translated = result.text
+                chunk_lang = result.detected_source_lang
         except (deepl.QuotaExceededException, deepl.AuthorizationException) as exc:
             _deepl_disabled_reason = f'{type(exc).__name__}: {exc}'
             logger.error('DeepL: %s — дальше в этом прогоне DeepL не используется', _deepl_disabled_reason)
@@ -187,7 +254,9 @@ def _deepl(chunks: list[str], api_key: str) -> str:
             parts.append(_google([chunk]))  # _google уже валидирует и бросает при браке
             continue
         parts.append(_validate_chunk(chunk, translated))
-    return ' '.join(parts)
+        if detected_lang is None and chunk_lang:
+            detected_lang = chunk_lang.lower()
+    return ' '.join(parts), detected_lang
 
 
 def _split(text: str, max_len: int) -> list[str]:

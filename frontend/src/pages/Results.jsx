@@ -47,10 +47,14 @@ const COLS = [
     cell: (r, { showTr }) => {
       const ru = showTr && r.caption_ru
       const txt = ru ? r.caption_ru : r.caption
+      const lang = (r.caption_lang || '').toUpperCase()
+      const foreign = lang && lang !== 'RU'
       return (
         <div className="capcol" title={txt || ''}>
           {r.has_note && <span className="noteic" title="есть заметка">📝 </span>}
-          {ru && <span className="trbadge">RU</span>}
+          {ru
+            ? <span className="trbadge" title={foreign ? `переведено с ${lang}` : 'перевод'}>{foreign ? `${lang}→RU` : 'RU'}</span>
+            : (foreign && <span className="trbadge lang" title={`язык оригинала: ${lang}`}>{lang}</span>)}
           {txt || <span style={{ color: 'var(--faint)' }}>—</span>}
         </div>
       )
