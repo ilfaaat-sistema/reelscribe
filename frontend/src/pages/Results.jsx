@@ -262,6 +262,27 @@ export default function Results() {
   const [progress, setProgress] = useState(null)
   const searchTimer = useRef(null)
   const abortRef = useRef(null)
+  const rwrapRef = useRef(null)
+  const lastScrollY = useRef(0)
+  const [compact, setCompact] = useState(false)
+
+  // Шапка уезжает вверх при прокрутке таблицы вниз и возвращается при обратном движении —
+  // на экран влезает на три строки больше. Слушаем .rwrap, а не окно: таблица скроллится внутри.
+  useEffect(() => {
+    const el = rwrapRef.current
+    if (!el || mode !== 'table') { setCompact(false); return }
+    lastScrollY.current = el.scrollTop
+    const onScroll = () => {
+      const y = el.scrollTop
+      const dy = y - lastScrollY.current
+      if (y < 60) setCompact(false)
+      else if (dy > 4) setCompact(true)
+      else if (dy < -4) setCompact(false)
+      lastScrollY.current = y
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [mode])
 
   useEffect(() => {
     getSources().then(r => setSources(r?.items || [])).catch(() => {})
@@ -405,7 +426,7 @@ export default function Results() {
     .sort((a, b) => cols.indexOf(a.key) - cols.indexOf(b.key))
 
   return (
-    <div className="resview wide">
+    <div className={`resview wide ${compact ? 'compact' : ''}`}>
       <div className="rtop">
         <span className="ti">
           Расшифровки <span className="rcount">
@@ -572,7 +593,7 @@ export default function Results() {
       )}
 
       {!loading && !error && mode === 'table' && (
-        <div className="rwrap">
+        <div className="rwrap" ref={rwrapRef}>
           <table>
             <thead>
               <tr>
