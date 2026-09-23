@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 import random
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -186,13 +187,17 @@ async def download_audio(url: str, dest_dir: Path) -> tuple[Path, dict[str, Any]
 def _download_sync(url: str, dest_dir: Path) -> tuple[Path, dict[str, Any]]:
     ffmpeg_exe = _get_ffmpeg()
     ffmpeg_dir = os.path.dirname(ffmpeg_exe)
+    # yt-dlp ищет в ffmpeg_location файлы ровно с именами ffmpeg и ffprobe. imageio-ffmpeg даёт
+    # бинарник под именем вида ffmpeg-linux64-v4.2.2 и ffprobe не даёт вовсе, поэтому указание
+    # его папки не помогает, а мешает: yt-dlp смотрит только туда и не видит системный пакет.
+    # Если настоящие ffmpeg и ffprobe есть в PATH (в CI ставятся apt-пакетом) — отдаём их.
+    system_pair = shutil.which('ffmpeg') and shutil.which('ffprobe')
 
     ydl_opts: dict[str, Any] = {
         'format': 'bestaudio/best',
         'outtmpl': str(dest_dir / '%(id)s.%(ext)s'),
         'quiet': True,
         'no_warnings': True,
-        'ffmpeg_location': ffmpeg_dir,
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'wav',
@@ -202,6 +207,9 @@ def _download_sync(url: str, dest_dir: Path) -> tuple[Path, dict[str, Any]]:
         'ignoreerrors': False,
         'retries': 3,
     }
+
+    if not system_pair:
+        ydl_opts['ffmpeg_location'] = ffmpeg_dir
 
     if settings.instagram_cookies_file:
         ydl_opts['cookiefile'] = settings.instagram_cookies_file
