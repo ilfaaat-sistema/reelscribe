@@ -405,7 +405,7 @@ export default function Results() {
     .sort((a, b) => cols.indexOf(a.key) - cols.indexOf(b.key))
 
   return (
-    <div className="resview">
+    <div className="resview wide">
       <div className="rtop">
         <span className="ti">
           Расшифровки <span className="rcount">
@@ -583,6 +583,7 @@ export default function Results() {
                     onChange={e => setSelected(e.target.checked ? reels.map(r => r.id) : [])}
                   />
                 </th>
+                <th className="nos rownum" title="Порядковый номер строки в текущей выборке">№</th>
                 {visibleCols.map(col => (
                   <th
                     key={col.key}
@@ -603,11 +604,12 @@ export default function Results() {
               </tr>
             </thead>
             <tbody>
-              {reels.map(r => (
+              {reels.map((r, i) => (
                 <tr key={r.id} className="main" onClick={() => setDrawerReelId(r.id)}>
                   <td style={{ textAlign: 'center' }} onClick={e => { e.stopPropagation(); toggleSelect(r.id) }}>
                     <input type="checkbox" checked={selected.includes(r.id)} onChange={() => toggleSelect(r.id)} />
                   </td>
+                  <td className="rownum">{i + 1}</td>
                   {visibleCols.map(col => (
                     <td key={col.key} className={col.cls}>{col.cell(r, { showTr })}</td>
                   ))}
@@ -615,7 +617,7 @@ export default function Results() {
               ))}
               {!reels.length && (
                 <tr>
-                  <td colSpan={visibleCols.length + 1} style={{ textAlign: 'center', padding: 40, color: 'var(--faint)' }}>
+                  <td colSpan={visibleCols.length + 2} style={{ textAlign: 'center', padding: 40, color: 'var(--faint)' }}>
                     Ничего не найдено
                   </td>
                 </tr>
