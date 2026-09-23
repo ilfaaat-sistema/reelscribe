@@ -240,7 +240,7 @@ export default function Results() {
   const { sessionId } = useParams()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const [mode, setMode] = useState('analytics')
+  const [mode, setMode] = useState('table')   // таблица — основной режим работы
   const [chip, setChip] = useState('all')
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState('views')
