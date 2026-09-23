@@ -214,8 +214,18 @@ def _download_sync(url: str, dest_dir: Path) -> tuple[Path, dict[str, Any]]:
     if settings.instagram_cookies_file:
         ydl_opts['cookiefile'] = settings.instagram_cookies_file
 
+    from app.pipeline.apify_profile_downloader import NoAudioError
+
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=True)
+        try:
+            info = ydl.extract_info(url, download=True)
+        except yt_dlp.utils.DownloadError as e:
+            # «unable to obtain file audio codec with ffprobe» у Instagram означает не поломку
+            # окружения, а пост-картинку или карусель: дорожки нет, доставать нечего. Остальные
+            # источники каскада узнают это по media_type, yt-dlp — только по ответу ffprobe.
+            if 'audio codec' in str(e):
+                raise NoAudioError(f'{url}: фото/карусель — нет аудио') from e
+            raise
         if info is None:
             raise RuntimeError(f'yt-dlp вернул None для {url}')
 
