@@ -43,9 +43,13 @@ const COLS = [
       if (r.transcript_status === 'failed') return <span className="failtx">— ошибка —</span>
       const ru = showTr && r.transcript_text_ru
       const txt = ru ? r.transcript_text_ru : r.transcript_text
+      const lang = (r.transcript_language || '').toUpperCase()
+      const foreign = lang && lang !== 'RU'
       return (
         <div className="txcell" title={txt || ''}>
-          {ru && <span className="trbadge">RU</span>}
+          {ru
+            ? <span className="trbadge" title={foreign ? `переведено с ${lang}` : 'перевод'}>{foreign ? `${lang}→RU` : 'RU'}</span>
+            : (foreign && <span className="trbadge lang" title={`язык оригинала: ${lang}`}>{lang}</span>)}
           {txt || <span style={{ color: 'var(--faint)' }}>—</span>}
         </div>
       )

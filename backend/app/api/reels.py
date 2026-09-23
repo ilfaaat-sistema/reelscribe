@@ -65,6 +65,7 @@ def _build_row(r: dict, note_ids: set[str]) -> ReelRow:
         transcript_status=t.get('status'),
         transcript_text=t.get('text'),
         transcript_text_ru=t.get('text_ru'),
+        transcript_language=t.get('language'),
         has_note=r['id'] in note_ids,
         accounts=accounts,
         folders=folders,
@@ -119,9 +120,9 @@ async def list_reels(
     # done/failed фильтруем на стороне БД: !inner превращает вложенный select в JOIN,
     # и .eq по transcripts.status отсекает родительские строки (а не только вложенные).
     if filter in ('done', 'failed'):
-        transcripts_part = 'transcripts!inner(status, text, text_ru)'
+        transcripts_part = 'transcripts!inner(status, text, text_ru, language)'
     else:
-        transcripts_part = 'transcripts(status, text, text_ru)'
+        transcripts_part = 'transcripts(status, text, text_ru, language)'
     # account/folder — тот же приём: !inner на reel_sources, чтобы отфильтровать
     # родительские строки прямо на стороне PostgREST (без ID-lookup, id тысячи).
     if account or folder:

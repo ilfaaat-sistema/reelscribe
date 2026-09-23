@@ -157,6 +157,7 @@ th.grp-reach{color:var(--amber)}th.grp-auth{color:var(--mut)}
 .mono{font-family:var(--mono);font-size:11.5px;color:var(--faint)}
 .txcell{max-width:380px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .trbadge{font-family:var(--mono);font-size:9px;color:var(--teal);border:1px solid color-mix(in srgb,var(--teal) 45%,transparent);padding:1px 5px;border-radius:5px;margin-right:6px;text-transform:uppercase}
+.trbadge.lang{color:var(--mut);border-color:var(--line)}
 .views{font-family:var(--mono);font-weight:600;color:var(--tx)}
 .er{font-family:var(--mono);font-weight:700;font-size:12px;padding:3px 8px;border-radius:7px;display:inline-block}
 .er.x3{color:var(--mut);background:color-mix(in srgb,var(--mut) 14%,transparent)}

@@ -75,6 +75,7 @@ class ReelRow(BaseModel):
     transcript_status: Optional[str]
     transcript_text: Optional[str]   # расшифровка речи (НЕ caption)
     transcript_text_ru: Optional[str]
+    transcript_language: Optional[str] = None   # язык оригинала речи: en, tr, hi…
     has_note: bool = False
     accounts: list[str] = []
     folders: list[str] = []
@@ -82,7 +83,6 @@ class ReelRow(BaseModel):
 
 
 class ReelDetail(ReelRow):
-    transcript_language: Optional[str]
     transcript_duration_sec: Optional[int]
     summary: Optional[str]
     tags: Optional[list[str]]

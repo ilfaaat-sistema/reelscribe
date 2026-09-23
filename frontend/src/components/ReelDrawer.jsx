@@ -193,7 +193,14 @@ export default function ReelDrawer({ reelId, onClose }) {
               {hasTr ? (
                 <>
                   <div className="seclabel" style={{justifyContent:'space-between'}}>
-                    <span>🎙 Расшифровка</span>
+                    <span>
+                      🎙 Расшифровка
+                      {reel.transcript_language && reel.transcript_language !== 'ru' && (
+                        <span className="trbadge lang" style={{marginLeft:8}} title="язык оригинала">
+                          {reel.transcript_language}
+                        </span>
+                      )}
+                    </span>
                     {txRu && (
                       <div style={{display:'flex',gap:6}}>
                         <button
