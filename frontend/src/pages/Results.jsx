@@ -245,7 +245,7 @@ export default function Results() {
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState('views')
   const [sortDesc, setSortDesc] = useState(true)
-  const [showTr, setShowTr] = useState(false)
+  const [showTr, setShowTr] = useState(true)   // по умолчанию русский; оригинал — одним кликом
   const [reels, setReels] = useState([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -282,11 +282,10 @@ export default function Results() {
     if (!el || mode !== 'table') { setCompact(false); return }
     lastScrollY.current = el.scrollTop
     const onScroll = () => {
+      // Разворачиваем шапку только у самого верха списка. Реакция на каждое движение колеса
+      // вверх мешала: шапка выскакивала посреди чтения и сдвигала строки под курсором.
       const y = el.scrollTop
-      const dy = y - lastScrollY.current
-      if (y < 60) setCompact(false)
-      else if (dy > 4) setCompact(true)
-      else if (dy < -4) setCompact(false)
+      setCompact(y > 140)
       lastScrollY.current = y
     }
     el.addEventListener('scroll', onScroll, { passive: true })
