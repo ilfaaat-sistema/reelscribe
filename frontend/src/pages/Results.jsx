@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { getReels, getSession, retryJobs, getProgress, getSources } from '../api/client'
+import { getReels, getSession, retryJobs, getProgress, getSources, thumbUrl } from '../api/client'
 import { fmtV, fmtPct, erClass } from '../lib/utils'
 import ReelDrawer from '../components/ReelDrawer'
 import ExportModal from '../components/ExportModal'
@@ -19,8 +19,26 @@ function StatusPill({ status }) {
   return <span style={{ color: 'var(--faint)', fontSize: 11 }}>⏳ очередь</span>
 }
 
+// Маленькая обложка ячейки таблицы. Своё состояние на строку — при 404/ошибке загрузки
+// показываем заглушку (тот же градиент, что и в .vprev карточки), а не сломанную иконку.
+function ThumbCell({ shortcode }) {
+  const [failed, setFailed] = useState(false)
+  if (failed) return <div className="thumbcell thumbcell-empty" />
+  return (
+    <img
+      className="thumbcell"
+      src={thumbUrl(shortcode, 't')}
+      alt=""
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  )
+}
+
 // Колонки таблицы — порядок/тултипы/цвет-группы как в reelscribe_v12.html (COLMETA).
 const COLS = [
+  { key: 'thumb', th: '🖼', title: 'Обложка', cls: 'nos c-thumb',
+    cell: r => <ThumbCell shortcode={r.shortcode} /> },
   { key: 'type', th: 'Тип', cls: 'nos c-type',
     cell: r => <span className={`tag ${r.type === 'reel' ? 't-reel' : r.type === 'tv' ? 't-tv' : 't-post'}`}>{r.type}</span> },
   { key: 'date', th: 'Дата', title: 'Дата публикации', sortKey: 'posted_at', cls: 'c-date mono',

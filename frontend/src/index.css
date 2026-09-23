@@ -167,6 +167,9 @@ th.grp-reach{color:var(--amber)}th.grp-auth{color:var(--mut)}
 .p-done{color:var(--green);background:color-mix(in srgb,var(--green) 16%,transparent)}
 .p-fail{color:var(--rose);background:color-mix(in srgb,var(--rose) 16%,transparent)}
 .capcol{color:var(--mut);max-width:220px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;font-size:12.5px}
+.c-thumb{width:54px}
+.thumbcell,.thumbcell-empty{display:block;width:44px;height:62px;border-radius:6px;object-fit:cover}
+.thumbcell-empty{background:radial-gradient(120% 80% at 50% 0%,#232838 0%,#181b24 60%,#14161d 100%);border:1px solid var(--line)}
 .colh{cursor:grab;user-select:none}.colh.dragging{opacity:.4}.colh.dragover{box-shadow:inset 2px 0 0 var(--iris)}
 /* DRAWER */
 .drawer-back{position:fixed;inset:0;background:rgba(8,9,12,.5);opacity:0;pointer-events:none;transition:.2s;z-index:30}
@@ -176,6 +179,9 @@ th.grp-reach{color:var(--amber)}th.grp-auth{color:var(--mut)}
 .dclose{position:absolute;top:12px;right:14px;background:rgba(0,0,0,.4);border:0;color:#fff;width:30px;height:30px;border-radius:50%;font-size:17px;z-index:2}
 .vprev{position:relative;width:100%;aspect-ratio:9/16;max-height:44vh;background:radial-gradient(120% 80% at 50% 0%,#232838 0%,#181b24 60%,#14161d 100%);display:flex;align-items:center;justify-content:center;overflow:hidden;border-bottom:1px solid var(--line);text-decoration:none;display:block}
 .vprev::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(255,255,255,.015) 0 2px,transparent 2px 9px)}
+/* Обложка поверх градиента-заглушки .vprev; при 404/ошибке компонент саму <img> не рендерит,
+   поэтому градиент остаётся виден без "моргания" пустотой. */
+.vprev-thumb{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 /* Проигрыватель Instagram в карточке. Высота под вертикальное видео плюс шапка автора
    самого встраивания; ниже — скролл внутри карточки, как и у остального содержимого. */
 .vembed-wrap{position:relative;width:100%;border-bottom:1px solid var(--line);background:#000}

@@ -120,3 +120,8 @@ export const getErrors = (session) =>
 
 export const errorsExportUrl = (params = {}) =>
   `${BASE}/errors/export?${new URLSearchParams(params)}`
+
+// Обложка рилса — прямой <img src>, не через req() (это картинка, не JSON).
+// size: 't' (маленькая, для узкой колонки таблицы) | 'm' (по умолчанию, для карточки).
+export const thumbUrl = (shortcode, size = 'm') =>
+  `${BASE}/thumb/${shortcode}?size=${size}`

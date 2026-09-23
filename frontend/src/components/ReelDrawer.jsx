@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { getReel, updateNote } from '../api/client'
+import { getReel, updateNote, thumbUrl } from '../api/client'
 import { fmtV, fmtPct, erClass } from '../lib/utils'
 
 function Avatar({ handle }) {
@@ -15,6 +15,7 @@ export default function ReelDrawer({ reelId, onClose }) {
   const [playing, setPlaying] = useState(false)
   const [note, setNote] = useState('')
   const [loadError, setLoadError] = useState(null)
+  const [thumbFailed, setThumbFailed] = useState(false)
   const noteRef = useRef(null)
   const saveTimer = useRef(null)
 
@@ -24,6 +25,7 @@ export default function ReelDrawer({ reelId, onClose }) {
     setNote('')
     setLoadError(null)
     setPlaying(false)
+    setThumbFailed(false)
     getReel(reelId).then(r => {
       setReel(r)
       setNote(r.note || '')
@@ -86,6 +88,14 @@ export default function ReelDrawer({ reelId, onClose }) {
               </div>
             ) : (
               <button className="vprev" type="button" onClick={() => setPlaying(true)} title="Смотреть здесь">
+                {!thumbFailed && (
+                  <img
+                    className="vprev-thumb"
+                    src={thumbUrl(reel.shortcode)}
+                    alt=""
+                    onError={() => setThumbFailed(true)}
+                  />
+                )}
                 <span className="vtag">
                   <span className={`tag ${reel.type === 'reel' ? 't-reel' : reel.type === 'tv' ? 't-tv' : 't-post'}`}>{reel.type}</span>
                 </span>
