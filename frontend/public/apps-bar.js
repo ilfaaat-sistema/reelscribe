@@ -86,6 +86,16 @@
     if (!cs) return null;
     var c = parseRgba(cs.backgroundColor);
     if (c && c.a > 0.5) return c;
+    // Фон градиентом (например, Чертоги: background: var(--bg-grad)) — цвета нет в
+    // background-color, берём средний из непрозрачных цветов градиента
+    var img = cs.backgroundImage || '';
+    if (img.indexOf('gradient') !== -1) {
+      var found = (img.match(/rgba?\([^)]+\)/g) || []).map(parseRgba).filter(function (x) { return x && x.a > 0.5; });
+      if (found.length) {
+        var sum = found.reduce(function (acc, x) { return { r: acc.r + x.r, g: acc.g + x.g, b: acc.b + x.b }; }, { r: 0, g: 0, b: 0 });
+        return { r: sum.r / found.length, g: sum.g / found.length, b: sum.b / found.length, a: 1 };
+      }
+    }
     return null;
   }
 
@@ -211,7 +221,8 @@
     window.addEventListener('popstate', recalcSoon);
 
     // Смена темы/классов страницы (class, data-theme, inline style на html/body).
-    var mo = new MutationObserver(function () { applyColors(); });
+    // recalcSoon, а не сразу: новые значения темы (переменные, переходы) дорисовываются не мгновенно
+    var mo = new MutationObserver(function () { recalcSoon(); });
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme', 'style'] });
     if (document.body) {
       mo.observe(document.body, { attributes: true, attributeFilter: ['class', 'data-theme', 'style'] });
