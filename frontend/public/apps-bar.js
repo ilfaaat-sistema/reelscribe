@@ -99,20 +99,32 @@
     return null;
   }
 
+  // Фон страницы, а не отдельного элемента: 9 точек по экрану, у каждой поднимаемся по
+  // родителям до первого непрозрачного фона у КРУПНОГО элемента (шире 60% окна) — так
+  // тёмная кнопка или карточка посередине не перекрашивает полосу. Берём самый частый цвет.
   function findPageBg(hostEl) {
-    var chain = [];
-    try {
-      var els = document.elementsFromPoint(window.innerWidth / 2, window.innerHeight / 2) || [];
-      for (var i = 0; i < els.length; i++) {
-        if (els[i] !== hostEl) chain.push(els[i]);
+    var W = window.innerWidth, H = window.innerHeight, votes = {}, best = null;
+    var xs = [0.2, 0.5, 0.8], ys = [0.35, 0.6, 0.85];
+    for (var xi = 0; xi < xs.length; xi++) {
+      for (var yi = 0; yi < ys.length; yi++) {
+        var els = [];
+        try { els = document.elementsFromPoint(W * xs[xi], H * ys[yi]) || []; } catch (e) { els = []; }
+        var el = null;
+        for (var k = 0; k < els.length; k++) { if (els[k] !== hostEl && !hostEl.contains(els[k])) { el = els[k]; break; } }
+        while (el) {
+          var r = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+          var c = r && r.width >= W * 0.6 ? opaqueBg(el) : null;
+          if (c) {
+            var key = Math.round(c.r) + ',' + Math.round(c.g) + ',' + Math.round(c.b);
+            votes[key] = (votes[key] || 0) + 1;
+            if (!best || votes[key] > votes[best.key]) best = { key: key, c: c };
+            break;
+          }
+          el = el.parentElement;
+        }
       }
-    } catch (e) { /* окружение без elementsFromPoint — уходим на фолбэк ниже */ }
-    var el = chain[0] || null;
-    while (el) {
-      var c = opaqueBg(el);
-      if (c) return c;
-      el = el.parentElement;
     }
+    if (best) return best.c;
     var b = opaqueBg(document.body);
     if (b) return b;
     var h = opaqueBg(document.documentElement);
