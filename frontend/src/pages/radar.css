@@ -1,0 +1,410 @@
+/* Стили раздела «Радар» — перенос Радар/frontend/src/index.css.
+   Каждое правило скопировано под .radar, чтобы не задевать глобальные классы
+   ReelScribe с такими же именами (.btn, .chip, .grid, .hint и др.) и не
+   получать их стили сквозь каскад. Цвета и шрифты — только через переменные
+   ReelScribe из frontend/src/index.css (--bg, --panel, --panel2, --tx, --mut,
+   --line, --iris, --teal, --green, --rose, --mono, --sans). Оригинал был
+   светлым — здесь адаптирован под тёмную тему ReelScribe.
+   Никаких правил для :root, звёздочки-селектора или body — они общие для
+   всего приложения и здесь не переопределяются. */
+
+/* .app (index.css) — display:flex;flex-direction:column;height:100vh.
+   Радар — обычная прокручиваемая страница, как .resview/.imp у других
+   разделов: занимает остаток высоты и скроллится сам, а не раздувает .app. */
+.radar {
+  font-size: 15px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.radar .num { font-family: var(--mono); }
+.radar h2, .radar h3 { font-family: var(--sans); letter-spacing: -0.01em; }
+.radar h2 { font-size: 1.02rem; margin-bottom: 14px; font-weight: 700; }
+
+.radar .wrap { max-width: 1180px; margin: 0 auto; padding: 16px 16px 140px; }
+
+.radar .card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 20px;
+  margin-top: 16px;
+}
+
+.radar .step-tag {
+  display: inline-block;
+  font-size: .7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--iris);
+  margin-bottom: 8px;
+}
+
+.radar .field { margin-top: 16px; }
+.radar .field label { display: block; font-size: .78rem; font-weight: 600; color: var(--mut); margin-bottom: 6px; }
+
+.radar .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel2);
+}
+.radar .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  padding: 5px 12px;
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--tx);
+}
+.radar .chip .x { color: var(--mut); cursor: pointer; font-weight: 400; }
+.radar .chips input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font: inherit;
+  color: var(--tx);
+  min-width: 150px;
+  flex: 1;
+}
+
+.radar .slider-row { display: flex; align-items: center; gap: 16px; }
+.radar .slider-row input[type=range] { flex: 1; accent-color: var(--iris); height: 6px; }
+.radar .slider-val {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 1.05rem;
+  min-width: 86px;
+  text-align: center;
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 4px;
+  color: var(--tx);
+}
+
+.radar .seg {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--panel);
+  flex-wrap: wrap;
+}
+.radar .seg button {
+  border: none;
+  background: transparent;
+  padding: 9px 16px;
+  font: inherit;
+  font-weight: 600;
+  font-size: .85rem;
+  cursor: pointer;
+  color: var(--mut);
+}
+.radar .seg button.on { background: var(--iris); color: #fff; }
+
+.radar .btn {
+  border: none;
+  border-radius: 10px;
+  padding: 11px 22px;
+  font: inherit;
+  font-weight: 700;
+  font-size: .9rem;
+  cursor: pointer;
+}
+.radar .btn-primary { background: linear-gradient(135deg, var(--iris) 0%, var(--teal) 100%); color: #fff; }
+.radar .btn-ghost { background: var(--panel); border: 1px solid var(--line); color: var(--tx); }
+.radar .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+.radar .hint { font-size: .78rem; color: var(--mut); margin-top: 12px; }
+.radar .hint .num { color: var(--tx); }
+
+.radar .progress { margin-top: 12px; }
+.radar .p-track { height: 10px; background: var(--panel2); border-radius: 6px; overflow: hidden; }
+.radar .p-fill { height: 100%; background: linear-gradient(135deg, var(--iris) 0%, var(--teal) 100%); width: 0%; transition: width .3s; border-radius: 6px; }
+.radar .p-text { font-size: .8rem; color: var(--mut); margin-top: 8px; }
+
+@keyframes radar-p-shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+.radar .p-fill-running {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, var(--iris) 0%, var(--teal) 100%);
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
+  opacity: .75;
+}
+.radar .p-fill-running::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.5) 50%, transparent 100%);
+  width: 30%;
+  animation: radar-p-shimmer 1.4s ease-in-out infinite;
+}
+
+/* корзины по просмотрам */
+.radar .bucket {
+  display: grid;
+  grid-template-columns: 104px 1fr 84px;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background .15s;
+}
+.radar .bucket:hover { background: var(--panel2); }
+.radar .bucket.on { background: color-mix(in srgb, var(--iris) 16%, var(--panel)); }
+.radar .bucket .range { font-size: .78rem; font-weight: 600; text-align: right; color: var(--mut); }
+.radar .bucket.on .range { color: var(--iris); }
+.radar .bar-track { height: 24px; background: var(--panel2); border-radius: 7px; overflow: hidden; }
+.radar .bar-fill {
+  height: 100%;
+  background: linear-gradient(135deg, var(--iris) 0%, var(--teal) 100%);
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 7px;
+  color: #fff;
+  font-size: .7rem;
+  font-weight: 600;
+  min-width: 30px;
+}
+.radar .bucket .count { font-size: .76rem; color: var(--mut); }
+.radar .bucket .count b { color: var(--tx); font-size: .92rem; }
+
+.radar .legend {
+  display: flex;
+  gap: 16px;
+  font-size: .76rem;
+  color: var(--mut);
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.radar .legend .num { color: var(--tx); font-weight: 600; }
+
+/* тулбар ленты рилсов */
+.radar .toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.radar .toolbar-r { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* сетка рилсов */
+.radar .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+
+.radar .reel {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--panel);
+  position: relative;
+  transition: border-color .15s, box-shadow .15s;
+}
+.radar .reel.sel { border-color: var(--iris); box-shadow: 0 0 0 2px color-mix(in srgb, var(--iris) 25%, transparent); }
+
+.radar .thumb {
+  aspect-ratio: 9/16;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  padding: 8px;
+  color: #fff;
+  background: radial-gradient(120% 80% at 50% 0%, #232838 0%, #181b24 60%, #14161d 100%);
+  overflow: hidden;
+}
+.radar .thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+}
+.radar .thumb .views {
+  font-size: .78rem;
+  font-weight: 700;
+  text-shadow: 0 1px 4px rgba(0,0,0,.5);
+  position: relative;
+  z-index: 1;
+}
+.radar .thumb .dur {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0,0,0,.55);
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: .66rem;
+  z-index: 1;
+}
+
+.radar .reel-meta { padding: 10px; }
+.radar .reel-meta .acc { font-size: .72rem; color: var(--mut); font-weight: 600; }
+.radar .reel-stats { display: flex; gap: 9px; font-size: .72rem; margin-top: 3px; }
+.radar .reel-stats span { color: var(--mut); }
+.radar .reel-stats .num { color: var(--tx); font-weight: 600; }
+.radar .reel-meta a {
+  display: inline-block;
+  margin: 7px 0;
+  font-size: .72rem;
+  color: var(--iris);
+  text-decoration: none;
+  font-weight: 700;
+}
+.radar .modes { display: flex; gap: 5px; }
+.radar .modes button {
+  flex: 1;
+  border: 1px solid var(--line);
+  background: var(--panel2);
+  border-radius: 8px;
+  padding: 6px 2px;
+  font: inherit;
+  font-size: .68rem;
+  font-weight: 700;
+  cursor: pointer;
+  color: var(--mut);
+}
+.radar .modes button.on { background: var(--iris); color: #fff; border-color: var(--iris); }
+
+/* нижняя панель выбора и запуска разбора */
+.radar .selbar {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 12px;
+  width: min(1140px, calc(100% - 24px));
+  background: var(--panel2);
+  color: var(--tx);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 13px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  z-index: 50;
+  box-shadow: 0 8px 30px rgba(0,0,0,.45);
+}
+.radar .selbar .info { font-size: .85rem; }
+.radar .selbar .cost { font-size: .72rem; color: var(--mut); }
+.radar .selbar .actions { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; }
+
+@media (max-width: 640px) {
+  .radar .bucket { grid-template-columns: 80px 1fr 64px; }
+}
+
+/* баннеры ошибок и уведомлений */
+.radar .banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-top: 12px;
+  font-size: .85rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.radar .banner-error {
+  background: color-mix(in srgb, var(--rose) 16%, var(--panel));
+  color: var(--rose);
+  border: 1px solid color-mix(in srgb, var(--rose) 45%, transparent);
+}
+.radar .banner-notice {
+  background: color-mix(in srgb, var(--iris) 14%, var(--panel));
+  color: var(--iris);
+  border: 1px solid color-mix(in srgb, var(--iris) 40%, transparent);
+}
+.radar .banner-close {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 2px 7px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.radar .banner-close:hover { background: rgba(255,255,255,.08); }
+
+/* бейдж статуса разбора на карточке */
+.radar .done-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: var(--green);
+  color: #0c1411;
+  font-size: .64rem;
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 3px 7px;
+  z-index: 1;
+}
+.radar .done-badge-err { background: var(--rose); color: #fff; }
+.radar .reel-done { border-color: var(--green); }
+
+/* отчёт по рилсу (Шаг 4) */
+.radar .report {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 20px;
+  margin-top: 4px;
+}
+.radar .report-thumb { width: 180px; }
+.radar .report-thumb .thumb { aspect-ratio: 9/16; }
+
+.radar .r-block { margin-bottom: 16px; }
+.radar .r-block h3 {
+  font-size: .76rem;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--mut);
+  margin-bottom: 6px;
+  font-family: var(--sans);
+  font-weight: 700;
+}
+
+.radar .badge {
+  display: inline-block;
+  background: var(--panel2);
+  color: var(--mut);
+  font-size: .72rem;
+  font-weight: 700;
+  border-radius: 7px;
+  padding: 3px 9px;
+  margin: 0 6px 6px 0;
+  border: 1px solid var(--line);
+}
+.radar .badge-ok {
+  background: color-mix(in srgb, var(--green) 18%, var(--panel2));
+  color: var(--green);
+  border-color: color-mix(in srgb, var(--green) 45%, transparent);
+}
+
+@media (max-width: 640px) {
+  .radar .report { grid-template-columns: 1fr; }
+  .radar .report-thumb { width: 100%; max-width: 200px; }
+}

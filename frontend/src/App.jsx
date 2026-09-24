@@ -4,9 +4,7 @@ import Processing from './pages/Processing'
 import Results from './pages/Results'
 import History from './pages/History'
 import Errors from './pages/Errors'
-
-// Адрес соседнего инструмента (Рилс радар); пусто — ссылка в шапке скрыта
-const RADAR_URL = import.meta.env.VITE_RADAR_URL || ''
+import Radar from './pages/Radar'
 
 function Header() {
   const navigate = useNavigate()
@@ -15,7 +13,9 @@ function Header() {
     ? 'results'
     : pathname.startsWith('/processing')
       ? 'processing'
-      : 'import'
+      : pathname.startsWith('/radar')
+        ? 'radar'
+        : 'import'
 
   return (
     <header>
@@ -24,7 +24,7 @@ function Header() {
       </div>
       <h1 style={{ cursor: 'pointer' }} onClick={() => navigate('/')}>ReelScribe</h1>
       <div className="spacer" />
-      {view !== 'results' && (
+      {view !== 'results' && view !== 'radar' && (
         <div className="stepper">
           <div className={`step ${view === 'import' ? 'on' : 'done'}`}>
             <b>{view === 'import' ? '1' : '✓'}</b>Импорт
@@ -42,7 +42,9 @@ function Header() {
           ← Новый импорт
         </button>
       )}
-      {RADAR_URL && <a className="btn ghost sm" href={RADAR_URL}>Reels Радар ↗</a>}
+      <button className="btn ghost sm" onClick={() => navigate('/radar')}>
+        Радар
+      </button>
       <button className="btn ghost sm" onClick={() => navigate('/history')}>
         История
       </button>
@@ -65,6 +67,7 @@ export default function App() {
         <Route path="/processing/:sessionId" element={<Processing />} />
         <Route path="/results" element={<Results />} />
         <Route path="/results/:sessionId" element={<Results />} />
+        <Route path="/radar" element={<Radar />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>
