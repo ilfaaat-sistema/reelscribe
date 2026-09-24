@@ -33,11 +33,14 @@ const STATUS_LABELS = {
   queued: 'В очереди',
   downloading: '⬇ Скачиваю…',
   analyzing: '🎬 Анализирую…',
-  rate_limited: '⏳ Ждём снятия лимита Gemini',
+  rate_limited: '⏳ Ждём снятия лимита Gemini, повторим автоматически',
   done: '✓ Готово',
   error: '✗ Ошибка',
   cancelled: '⏹ Отменено',
 }
+
+// Терминальные статусы задания разбора — дальше поллинг для этого id не нужен.
+const TERMINAL_STATUSES = ['done', 'error', 'cancelled']
 
 const fmt = n => {
   if (n === null || n === undefined) return '0'
@@ -115,8 +118,6 @@ export default function Radar() {
   const [analyzeErrorMsg, setAnalyzeErrorMsg] = useState(null)
   const [notice, setNotice] = useState(null)
 
-  const pollRef = useRef(null)
-  const analysisRef = useRef(null)
   const cancelRef = useRef(false)
   const mountedLoadRef = useRef(false)
 
@@ -235,27 +236,41 @@ export default function Radar() {
     }
   }
 
+  // Цепочка setTimeout вместо setInterval: следующий запрос планируется только
+  // после ответа на предыдущий — запросы не перекрываются. Одна ошибка опроса
+  // не останавливает его навсегда — до 3 подряд, потом показываем ошибку.
   useEffect(() => {
     if (!runId) return
+    let stopped = false
+    let timeoutId = null
+    let errorStreak = 0
     const poll = async () => {
+      if (stopped) return
       try {
         const data = await getScrapeStatus(runId)
+        errorStreak = 0
+        if (stopped) return
         setRunStatus(data)
         if (data.status === 'done' || data.status === 'error') {
-          clearInterval(pollRef.current)
           setScraping(false)
           if (data.status === 'done') loadData(accounts, metric)
           if (data.status === 'error') setScrapeErrorMsg(data.error || 'Сбор не удался')
+          return
         }
       } catch (e) {
-        clearInterval(pollRef.current)
-        setScraping(false)
-        setScrapeErrorMsg(e.message)
+        errorStreak += 1
+        if (errorStreak >= 3) {
+          if (!stopped) {
+            setScraping(false)
+            setScrapeErrorMsg(e.message)
+          }
+          return
+        }
       }
+      if (!stopped) timeoutId = setTimeout(poll, 2000)
     }
     poll()
-    pollRef.current = setInterval(poll, 2000)
-    return () => clearInterval(pollRef.current)
+    return () => { stopped = true; clearTimeout(timeoutId) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runId])
 
@@ -264,6 +279,10 @@ export default function Radar() {
   // Строго последовательный прогон очереди: один POST /jobs/{id}/run за раз
   // (может идти до ~90 с). Ошибка одного задания не останавливает остальные —
   // актуальный статус в любом случае подтянет поллинг /analyze/status.
+  // Окончание ЭТОГО цикла не означает, что задания завершились на сервере —
+  // runJob мог вернуться мгновенно (rate_limited, или задание уже забрала
+  // серверная страховка pg_cron). setAnalyzing(false) выставляет только
+  // поллинг статусов, когда увидит, что все id дошли до терминального статуса.
   const runQueue = async ids => {
     for (const id of ids) {
       if (cancelRef.current) break
@@ -273,7 +292,6 @@ export default function Radar() {
         // статус ошибки покажет ближайший тик поллинга
       }
     }
-    setAnalyzing(false)
   }
 
   const startAnalysis = async () => {
@@ -308,27 +326,40 @@ export default function Radar() {
     }
   }
 
-  // Поллинг статусов — только отображение, цикл разбора им не управляется
+  // Поллинг статусов — цепочка setTimeout: следующий запрос планируется только
+  // после ответа на предыдущий. Ошибка не останавливает опрос — следующий тик
+  // попробует снова (сам поллинг живёт, пока analyzing===true).
   useEffect(() => {
     if (!analyzing || !analyzingIds.length) return
     let stopped = false
+    let timeoutId = null
     const poll = async () => {
+      if (stopped) return
       try {
         const data = await getAnalyzeStatus(analyzingIds)
         if (!stopped) setAnalysisStatuses(prev => ({ ...prev, ...data }))
       } catch (e) {
         if (!stopped) setAnalyzeErrorMsg(e.message)
       }
+      if (!stopped) timeoutId = setTimeout(poll, 2000)
     }
     poll()
-    analysisRef.current = setInterval(poll, 2000)
-    return () => { stopped = true; clearInterval(analysisRef.current) }
+    return () => { stopped = true; clearTimeout(timeoutId) }
   }, [analyzing, analyzingIds])
+
+  // Опрос — единственное место, останавливающее разбор: как только ВСЕ
+  // отслеживаемые reel_id дошли до терминального статуса (done/error/cancelled),
+  // выключаем analyzing и тем самым сам поллинг (эффект выше зависит от analyzing).
+  useEffect(() => {
+    if (!analyzing || !analyzingIds.length) return
+    const allTerminal = analyzingIds.every(id => TERMINAL_STATUSES.includes(analysisStatuses[id]?.status))
+    if (allTerminal) setAnalyzing(false)
+  }, [analyzing, analyzingIds, analysisStatuses])
 
   const cancelAnalysis = async () => {
     const idsInProgress = analyzingIds.filter(id => {
       const s = analysisStatuses[id]?.status
-      return s && s !== 'done' && s !== 'error' && s !== 'cancelled'
+      return s && !TERMINAL_STATUSES.includes(s)
     })
     cancelRef.current = true
     if (!idsInProgress.length) { setAnalyzing(false); return }
@@ -403,10 +434,7 @@ export default function Radar() {
     .filter(r => selections[r.id] !== 't')
     .reduce((s, r) => s + (r.duration_sec || 0), 0) * GEMINI_COST_PER_SEC
 
-  const nAnalyzingDone = analyzingIds.filter(id => {
-    const s = analysisStatuses[id]?.status
-    return s === 'done' || s === 'error' || s === 'cancelled'
-  }).length
+  const nAnalyzingDone = analyzingIds.filter(id => TERMINAL_STATUSES.includes(analysisStatuses[id]?.status)).length
 
   const activeStatusLabel = analyzingIds
     .map(id => analysisStatuses[id]?.status)

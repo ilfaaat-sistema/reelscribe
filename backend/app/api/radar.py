@@ -1,7 +1,7 @@
 """Роутер /api/radar/* — раздел разведки по конкурентам (docs/specs/08-radar.md).
 
-Тонкий роутер: валидация запроса + делегирование в app/radar/{scrape_service,analytics,report,
-repo}.py. Разбор (`/analyze`, `/jobs/*`) вызывает функции агента B из app.radar.pipeline —
+Тонкий роутер: валидация запроса + делегирование в app/radar/{scrape_service,analyze_service,
+analytics,report,repo}.py. Разбор (`/jobs/*`) вызывает функции агента B из app.radar.pipeline —
 импорт лениво, внутри обработчиков: тесты подменяют app.radar.pipeline в sys.modules.
 
 Сверено с реализацией B (app/radar/pipeline.py, 2026-09-24): claim_job и claim_stale_job —
@@ -10,7 +10,6 @@ process_radar_job и refresh_expired_links — корутины (внутри с
 """
 from __future__ import annotations
 
-import logging
 from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -22,10 +21,7 @@ from app.models.radar_schemas import (
     RefreshFollowersRequest,
     ScrapeRequest,
 )
-from app.radar import analytics, repo, report, scrape_service
-from app.radar import settings as radar_settings
-
-logger = logging.getLogger(__name__)
+from app.radar import analytics, analyze_service, repo, report, scrape_service
 
 router = APIRouter(prefix="/radar", tags=["radar"])
 
@@ -119,47 +115,12 @@ async def start_analyze(req: AnalyzeRequest) -> dict[str, Any]:
     if not req.items:
         raise HTTPException(400, "items required")
 
-    reel_ids = [item.reel_id for item in req.items]
-    existing_reels = repo.get_reels_by_ids(reel_ids)
-    existing_analyses = repo.get_analyses_by_ids(reel_ids)
-
-    to_queue = []
-    skipped: list[str] = []
-    for item in req.items:
-        if item.reel_id not in existing_reels:
-            raise HTTPException(404, f"Рилс {item.reel_id} не найден")
-
-        an = existing_analyses.get(item.reel_id)
-        if not req.force and an is not None:
-            has_t = bool(an.get("transcript_segments"))
-            has_v = bool(an.get("visual_timeline"))
-            closed = (
-                (item.mode == "t" and has_t)
-                or (item.mode == "v" and has_v)
-                or (item.mode == "tv" and has_t and has_v)
-            )
-            if closed:
-                skipped.append(item.reel_id)
-                continue
-        to_queue.append(item)
-
-    if repo.count_jobs_created_today() + len(to_queue) > radar_settings.ANALYSES_PER_DAY:
-        raise HTTPException(429, "Суточный лимит разбора исчерпан, попробуйте завтра")
-
-    queued: list[str] = []
-    for item in to_queue:
-        repo.upsert_analysis_queued(item.reel_id, item.mode)
-        repo.create_job(item.reel_id, item.mode)
-        queued.append(item.reel_id)
-
-    if queued:
-        try:
-            from app.radar.pipeline import refresh_expired_links
-            await refresh_expired_links(queued)
-        except Exception:
-            logger.warning("refresh_expired_links не удался для %s", queued, exc_info=True)
-
-    return {"queued": queued, "skipped": skipped}
+    try:
+        return await analyze_service.enqueue_analysis(req.items, req.force)
+    except analyze_service.RadarReelNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except analyze_service.RadarAnalysisDailyLimitError as exc:
+        raise HTTPException(429, str(exc)) from exc
 
 
 @router.post("/jobs/{reel_id}/run")

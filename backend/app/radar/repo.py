@@ -35,21 +35,24 @@ def list_competitors() -> list[dict[str, Any]]:
 
 
 def ensure_competitors(usernames: list[str]) -> None:
-    """Заводит строки конкурентов, которых ещё нет (без followers) — INSERT только новых,
-    чтобы не затирать уже собранных followers пустым upsert'ом."""
+    """Заводит строки конкурентов, которых ещё нет (без followers).
+
+    Upsert с игнорированием конфликта (`on_conflict="username", ignore_duplicates=True`),
+    а не check-then-insert: два параллельных приёма датасета (см. try_claim_scrape_finish —
+    он защищает от гонки на уровне run'а, но не от двух РАЗНЫХ прогонов с общим конкурентом)
+    иначе оба видят пустой existing и оба шлют insert с одинаковым username → конфликт PK.
+    Не затирает уже собранные followers — ignore_duplicates не трогает существующую строку."""
     if not usernames:
         return
     db = get_db()
     names = sorted({u for u in usernames if u})
     if not names:
         return
-    existing = {
-        r["username"]
-        for r in db.table("radar_competitors").select("username").in_("username", names).execute().data
-    }
-    to_add = [u for u in names if u not in existing]
-    if to_add:
-        db.table("radar_competitors").insert([{"username": u} for u in to_add]).execute()
+    db.table("radar_competitors").upsert(
+        [{"username": u} for u in names],
+        on_conflict="username",
+        ignore_duplicates=True,
+    ).execute()
 
 
 def upsert_competitor_followers(username: str, followers: Optional[int]) -> None:
@@ -121,6 +124,32 @@ def finish_scrape_run_done(run_id: int, results_count: int, cost_estimate_usd: f
         .execute()
     )
     return rows.data[0] if rows.data else None
+
+
+def try_claim_scrape_finish(run_id: int) -> bool:
+    """«Захват приёма» датасета при status='running': условный update `finished_at=now()`
+    WHERE status='running' AND finished_at IS NULL. Параллельные GET /scrape/{id} (фронт
+    поллит раз в 2 с) оба видят SUCCEEDED в Apify — без этой мьютекс-строки оба примут
+    один и тот же датасет и оба вызовут bulk_upsert_reels, что даёт дубль PK и 500.
+    Возвращает True только вызывающему, который реально захватил строку — остальные
+    получают False и просто отдают текущее состояние."""
+    db = get_db()
+    rows = (
+        db.table("radar_scrape_runs")
+        .update({"finished_at": _now_iso()})
+        .eq("id", run_id)
+        .eq("status", "running")
+        .is_("finished_at", "null")
+        .execute()
+    )
+    return bool(rows.data)
+
+
+def release_scrape_finish_claim(run_id: int) -> None:
+    """Откат захвата (try_claim_scrape_finish), если приём датасета упал на середине —
+    сбрасывает finished_at в NULL, чтобы следующий опрос смог повторить попытку."""
+    db = get_db()
+    db.table("radar_scrape_runs").update({"finished_at": None}).eq("id", run_id).execute()
 
 
 def finish_scrape_run_error(run_id: int, error: str) -> None:
@@ -310,6 +339,27 @@ def count_jobs_created_today() -> int:
     since = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
     rows = db.table("radar_jobs").select("id", count="exact").gte("created_at", since).execute()
     return rows.count or 0
+
+
+def get_active_job_reel_ids(reel_ids: list[str]) -> set[str]:
+    """Рилсы из списка, у которых уже есть незавершённое задание (`queued`/`in_progress`).
+    Используется в /analyze, чтобы не поставить один и тот же рилс в очередь второй раз,
+    пока прежнее задание не завершится, не упадёт или не будет отменено."""
+    if not reel_ids:
+        return set()
+    db = get_db()
+    out: set[str] = set()
+    for i in range(0, len(reel_ids), 200):
+        chunk = reel_ids[i:i + 200]
+        rows = (
+            db.table("radar_jobs")
+            .select("reel_id")
+            .in_("reel_id", chunk)
+            .in_("state", ["queued", "in_progress"])
+            .execute()
+        )
+        out.update(r["reel_id"] for r in rows.data)
+    return out
 
 
 def cancel_jobs(reel_ids: list[str]) -> list[str]:

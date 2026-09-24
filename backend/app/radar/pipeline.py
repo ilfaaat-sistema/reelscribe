@@ -137,7 +137,19 @@ def claim_stale_job() -> dict | None:
 
 
 def _try_claim_queued(db, cand: dict, now_iso: str) -> dict | None:
-    attempts = (cand.get("attempts") or 0) + 1
+    """Захватывает `queued`-кандидата, если у него ещё остались попытки.
+
+    Задание, вернувшееся в `queued` после 429 (`_finish_rate_limited`), иначе повторялось бы
+    бесконечно — `MAX_ATTEMPTS` там раньше не проверялся (проверка была только для зависших
+    `in_progress`). Кандидат с уже исчерпанным лимитом сразу помечается `failed`, а не
+    захватывается, и вызывающий цикл (`claim_job`/`claim_stale_job`) переходит к следующему.
+    """
+    attempts = cand.get("attempts") or 0
+    if attempts >= settings.MAX_ATTEMPTS:
+        _fail_exhausted_queued(db, cand, now_iso)
+        return None
+
+    attempts += 1
     resp = (
         db.table("radar_jobs")
         .update({"state": "in_progress", "attempts": attempts, "updated_at": now_iso, "error": None})
@@ -147,6 +159,25 @@ def _try_claim_queued(db, cand: dict, now_iso: str) -> dict | None:
     )
     rows = resp.data or []
     return rows[0] if rows else None
+
+
+def _fail_exhausted_queued(db, cand: dict, now_iso: str) -> None:
+    message = "Превышено число попыток (лимит Gemini)"
+    resp = (
+        db.table("radar_jobs")
+        .update({"state": "failed", "updated_at": now_iso, "error": message})
+        .eq("id", cand["id"])
+        .eq("state", "queued")
+        .execute()
+    )
+    if resp.data:
+        _set_analysis_status(db, cand["reel_id"], cand.get("mode", "tv"), "error", error=message)
+        logger.warning(
+            "Задание %s (рилс %s) помечено failed — исчерпан лимит попыток (%s)",
+            cand["id"],
+            cand["reel_id"],
+            cand.get("attempts"),
+        )
 
 
 def _fail_stuck_job(db, cand: dict, attempts: int, running_threshold: str, now_iso: str) -> None:
@@ -242,61 +273,123 @@ def _get_reel(db, reel_id: str) -> dict | None:
     return rows[0] if rows else None
 
 
+def _get_analysis(db, reel_id: str) -> dict | None:
+    rows = (
+        db.table("radar_analyses").select("*").eq("reel_id", reel_id).limit(1).execute()
+    ).data or []
+    return rows[0] if rows else None
+
+
 def _set_analysis_status(db, reel_id: str, mode: str, status: str, error: str | None = None) -> None:
-    """Upsert по `reel_id` — не зависим от того, создал ли уже строку `radar_analyses`
-    агент A при постановке в очередь (ТЗ явно требует не полагаться на его `repo.py`)."""
-    db.table("radar_analyses").upsert(
-        {"reel_id": reel_id, "mode": mode, "status": status, "error": error, "updated_at": _now_iso()},
-        on_conflict="reel_id",
-    ).execute()
+    """Обновляет статус разбора по `reel_id`; если строки ещё нет — создаёт (не зависим от
+    того, успел ли её создать агент A при постановке в очередь, ТЗ явно требует не
+    полагаться на его `repo.py`).
+
+    `mode` существующей строки НЕ трогаем: он приходит сюда как режим текущего задания, а не
+    как состав уже готового разбора — перетирание стёрло бы информацию о том, что кроме
+    текущего запуска в строке уже есть, например, готовая расшифровка от предыдущего 't'.
+    Пишем `mode` только при создании новой строки, когда состав ещё не определён."""
+    now_iso = _now_iso()
+    existing = _get_analysis(db, reel_id)
+    if existing is not None:
+        db.table("radar_analyses").update(
+            {"status": status, "error": error, "updated_at": now_iso}
+        ).eq("reel_id", reel_id).execute()
+    else:
+        db.table("radar_analyses").insert(
+            {"reel_id": reel_id, "mode": mode, "status": status, "error": error, "updated_at": now_iso}
+        ).execute()
+
+
+def _finish_job(db, job_id: str, reel_id: str, mode: str, job_payload: dict, success_status: str) -> str:
+    """Финальный `update radar_jobs`, условный (`state != 'cancelled'`) — чтобы результат
+    задания (успех, ошибка или уход в rate-limit) не перетирал отмену, случившуюся, пока
+    выполнялся скачивание/Gemini (например, 429 вернул задание в `queued` уже ПОСЛЕ того,
+    как пользователь нажал «отменить»). Если update не задел ни одной строки — задание уже
+    `cancelled`: статус анализа доводим до `cancelled` тем же путём, что и `_finish_cancelled`,
+    саму строку `radar_jobs` второй раз не пишем."""
+    resp = (
+        db.table("radar_jobs")
+        .update(job_payload)
+        .eq("id", job_id)
+        .neq("state", "cancelled")
+        .execute()
+    )
+    if resp.data:
+        return success_status
+
+    _set_analysis_status(db, reel_id, mode, "cancelled", error=None)
+    return "cancelled"
 
 
 def _finish_done(db, job_id: str, reel_id: str, mode: str, result: dict) -> str:
+    """Пишет только поля режима, который реально выполнялся — иначе, например, запуск 'v'
+    после уже готового 't' затирает расшифровку None-ами (и наоборот).
+
+    Итоговый `mode` строки: `'tv'`, если после записи у неё есть и расшифровка, и
+    видеоанализ (в т.ч. от предыдущего запуска другого режима — читаем текущую строку перед
+    записью); иначе — режим текущего запуска."""
     now_iso = _now_iso()
-    payload = {
-        "reel_id": reel_id,
-        "mode": mode,
-        "status": "done",
-        "error": None,
-        "updated_at": now_iso,
-        "transcript_segments": result.get("transcript_segments"),
-        "transcript_language": result.get("transcript_language"),
-        "transcript_engine": "gemini" if mode in ("t", "tv") else None,
-        "visual_timeline": result.get("visual_timeline"),
-        "hook": result.get("hook"),
-        "structure": result.get("structure"),
-        "cta": result.get("cta"),
-        "format_idea": result.get("format_idea"),
-    }
-    db.table("radar_analyses").upsert(payload, on_conflict="reel_id").execute()
-    db.table("radar_jobs").update(
-        {"state": "done", "error": None, "updated_at": now_iso}
-    ).eq("id", job_id).execute()
-    return "done"
+    existing = _get_analysis(db, reel_id) or {}
+
+    payload: dict = {"status": "done", "error": None, "updated_at": now_iso}
+    if mode in ("t", "tv"):
+        payload["transcript_segments"] = result.get("transcript_segments")
+        payload["transcript_language"] = result.get("transcript_language")
+        payload["transcript_engine"] = "gemini"
+    if mode in ("v", "tv"):
+        payload["visual_timeline"] = result.get("visual_timeline")
+        payload["hook"] = result.get("hook")
+        payload["structure"] = result.get("structure")
+        payload["cta"] = result.get("cta")
+        payload["format_idea"] = result.get("format_idea")
+
+    has_transcript = (
+        payload["transcript_segments"] if mode in ("t", "tv") else existing.get("transcript_segments")
+    ) is not None
+    has_visual = (
+        payload["visual_timeline"] if mode in ("v", "tv") else existing.get("visual_timeline")
+    ) is not None
+    payload["mode"] = "tv" if (has_transcript and has_visual) else mode
+
+    if existing:
+        db.table("radar_analyses").update(payload).eq("reel_id", reel_id).execute()
+    else:
+        insert_payload = dict(payload)
+        insert_payload["reel_id"] = reel_id
+        db.table("radar_analyses").insert(insert_payload).execute()
+
+    return _finish_job(
+        db, job_id, reel_id, mode,
+        {"state": "done", "error": None, "updated_at": now_iso},
+        "done",
+    )
 
 
 def _finish_error(db, job_id: str, reel_id: str, mode: str, message: str) -> str:
     now_iso = _now_iso()
     _set_analysis_status(db, reel_id, mode, "error", error=message)
-    db.table("radar_jobs").update(
-        {"state": "failed", "error": message, "updated_at": now_iso}
-    ).eq("id", job_id).execute()
-    return "error"
+    return _finish_job(
+        db, job_id, reel_id, mode,
+        {"state": "failed", "error": message, "updated_at": now_iso},
+        "error",
+    )
 
 
 def _finish_rate_limited(db, job_id: str, reel_id: str, mode: str, message: str) -> str:
     now = _now()
     next_attempt = (now + timedelta(seconds=_RATE_LIMIT_RETRY_SEC)).isoformat()
     _set_analysis_status(db, reel_id, mode, "rate_limited", error=message)
-    db.table("radar_jobs").update(
+    return _finish_job(
+        db, job_id, reel_id, mode,
         {
             "state": "queued",
             "next_attempt_at": next_attempt,
             "error": message,
             "updated_at": now.isoformat(),
-        }
-    ).eq("id", job_id).execute()
-    return "rate_limited"
+        },
+        "rate_limited",
+    )
 
 
 def _finish_cancelled(db, job_id: str, reel_id: str, mode: str) -> str:

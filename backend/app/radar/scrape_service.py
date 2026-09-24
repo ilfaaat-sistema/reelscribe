@@ -52,14 +52,18 @@ def estimate_cost(usernames: list[str], period_months: int) -> dict[str, Any]:
     }
 
 
-def _cutoff_date_str(period_months: int) -> str:
+def _cutoff_datetime(period_months: int) -> datetime:
     now = datetime.now(timezone.utc)
     month = now.month - period_months
     year = now.year
     while month <= 0:
         month += 12
         year -= 1
-    return now.replace(year=year, month=month, day=min(now.day, 28)).strftime("%Y-%m-%d")
+    return now.replace(year=year, month=month, day=min(now.day, 28))
+
+
+def _cutoff_date_str(period_months: int) -> str:
+    return _cutoff_datetime(period_months).strftime("%Y-%m-%d")
 
 
 async def start_reel_scrape(usernames: list[str], period_months: int) -> int:
@@ -159,11 +163,57 @@ def _map_reel(item: dict[str, Any]) -> Optional[dict[str, Any]]:
     }
 
 
+def _dedupe_reels(reels: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Один shortCode может попасть в датасет дважды (коллаб-рилс двух конкурентов из
+    списка ников — Apify отдаёт его в выдаче каждого автора). Без дедупа bulk_upsert_reels
+    передаёт в один Postgres upsert две строки с одинаковым PK — «ON CONFLICT DO UPDATE
+    command cannot affect row a second time». Оставляем запись с бо́льшими просмотрами."""
+    best: dict[str, dict[str, Any]] = {}
+    for r in reels:
+        rid = r["id"]
+        cur = best.get(rid)
+        if cur is None or (r.get("views") or 0) > (cur.get("views") or 0):
+            best[rid] = r
+    return list(best.values())
+
+
+def _filter_by_cutoff(reels: list[dict[str, Any]], period_months: Optional[int]) -> list[dict[str, Any]]:
+    """Рилсы старше cutoff (now − period_months) не сохраняем и не считаем в results_count/
+    стоимости — сверено со старым Радаром (Радар/backend/services/apify_scraper.py::scrape).
+    Apify'шный onlyPostsNewerThan — мягкая подсказка актору, а не гарантия, поэтому фильтр
+    нужен ещё раз здесь. Рилсы без posted_at не фильтруются (сравнивать не с чем) — как и в
+    старом коде. Закреплённые рилсы (isPinned) исключения не получают: старый код на это
+    поле вообще не смотрит, режутся наравне с остальными."""
+    if not period_months:
+        return reels
+    cutoff = _cutoff_datetime(period_months)
+    kept: list[dict[str, Any]] = []
+    for r in reels:
+        posted = r.get("posted_at")
+        if posted:
+            try:
+                posted_dt = datetime.fromisoformat(posted.replace("Z", "+00:00"))
+                if posted_dt.tzinfo is None:
+                    posted_dt = posted_dt.replace(tzinfo=timezone.utc)
+                if posted_dt < cutoff:
+                    continue
+            except (ValueError, TypeError):
+                pass
+        kept.append(r)
+    return kept
+
+
 async def poll_scrape_run(run_id: int) -> Optional[dict[str, Any]]:
     """GET /scrape/{run_id}: опрашивает Apify (если прогон ещё running) и принимает датасет
     при SUCCEEDED. Идемпотентно — повторный вызов после done/error просто отдаёт текущую
-    строку, не трогая Apify и не пересчитывая results_count/cost (репо.finish_* — условный
-    update по status='running')."""
+    строку, не трогая Apify и не пересчитывая results_count/cost.
+
+    Приём датасета защищён от гонки параллельных опросов (фронт поллит раз в 2 с, могут
+    прийти два GET почти одновременно и оба увидеть SUCCEEDED): перед скачиванием items
+    захватываем приём условным update `finished_at` (repo.try_claim_scrape_finish). Кто не
+    захватил — просто отдаёт текущую строку, не трогая Apify и не запуская upsert повторно.
+    Если приём упал на середине — захват откатывается (repo.release_scrape_finish_claim),
+    следующий опрос повторит попытку."""
     run = repo.get_scrape_run(run_id)
     if run is None:
         return None
@@ -173,8 +223,11 @@ async def poll_scrape_run(run_id: int) -> Optional[dict[str, Any]]:
     try:
         status = await apify_runs.get_run(run["apify_run_id"], run["apify_token_ref"])
     except apify_runs.ApifyRunError as exc:
-        repo.finish_scrape_run_error(run_id, str(exc))
-        return repo.get_scrape_run(run_id)
+        # Сетевой сбой/5xx/токен временно в cooldown — сам прогон Apify идёт своим чередом
+        # и может завершиться успехом. Это НЕ терминальная ошибка: логируем и отдаём текущее
+        # состояние (running), следующий опрос (через 2 с) попробует снова.
+        logger.warning("poll_scrape_run(%s): опрос статуса Apify не удался: %s", run_id, exc)
+        return run
 
     apify_status = status.get("status")
     if apify_status in _TERMINAL_FAIL:
@@ -183,26 +236,37 @@ async def poll_scrape_run(run_id: int) -> Optional[dict[str, Any]]:
     if apify_status not in _TERMINAL_OK:
         return run  # ещё выполняется — статус в базе остаётся running
 
+    if not repo.try_claim_scrape_finish(run_id):
+        # Приём уже захвачен другим параллельным опросом (или к этому моменту завершён) —
+        # не трогаем Apify и не пересчитываем результат повторно.
+        return repo.get_scrape_run(run_id)
+
     try:
         items = await apify_runs.get_items(run["apify_dataset_id"], run["apify_token_ref"])
-    except apify_runs.ApifyRunError as exc:
-        repo.finish_scrape_run_error(run_id, str(exc))
-        return repo.get_scrape_run(run_id)
 
-    if run["kind"] == "followers":
-        saved = 0
-        for item in items:
-            username = item.get("username") or (item.get("inputUrl") or "").rstrip("/").split("/")[-1]
-            followers = item.get("followersCount")
-            if username and followers is not None:
-                repo.upsert_competitor_followers(username, followers)
-                saved += 1
-        repo.finish_scrape_run_done(run_id, saved, 0.0)
-        return repo.get_scrape_run(run_id)
+        if run["kind"] == "followers":
+            saved = 0
+            for item in items:
+                username = item.get("username") or (item.get("inputUrl") or "").rstrip("/").split("/")[-1]
+                followers = item.get("followersCount")
+                if username and followers is not None:
+                    repo.upsert_competitor_followers(username, followers)
+                    saved += 1
+            repo.finish_scrape_run_done(run_id, saved, 0.0)
+            return repo.get_scrape_run(run_id)
 
-    reels = [r for r in (_map_reel(item) for item in items) if r]
-    repo.ensure_competitors([r["username"] for r in reels if r.get("username")])
-    repo.bulk_upsert_reels(reels, scrape_run_id=run_id)
-    cost = round(len(reels) * radar_settings.APIFY_COST_PER_REEL, 4)
-    repo.finish_scrape_run_done(run_id, len(reels), cost)
-    return repo.get_scrape_run(run_id)
+        reels = [r for r in (_map_reel(item) for item in items) if r]
+        reels = _filter_by_cutoff(reels, run.get("period_months"))
+        reels = _dedupe_reels(reels)
+        repo.ensure_competitors([r["username"] for r in reels if r.get("username")])
+        repo.bulk_upsert_reels(reels, scrape_run_id=run_id)
+        cost = round(len(reels) * radar_settings.APIFY_COST_PER_REEL, 4)
+        repo.finish_scrape_run_done(run_id, len(reels), cost)
+        return repo.get_scrape_run(run_id)
+    except Exception as exc:  # приём датасета не удался — откатываем захват, залогировав причину
+        logger.warning(
+            "poll_scrape_run(%s): приём датасета не удался, повторим на следующем опросе: %s",
+            run_id, exc, exc_info=True,
+        )
+        repo.release_scrape_finish_claim(run_id)
+        return repo.get_scrape_run(run_id)

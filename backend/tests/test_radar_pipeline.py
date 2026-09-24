@@ -57,6 +57,10 @@ class _FakeQuery:
         self._filters.append(("in", col, vals))
         return self
 
+    def neq(self, col, val):
+        self._filters.append(("neq", col, val))
+        return self
+
     def order(self, col, **_kwargs):
         self._order = col
         return self
@@ -75,6 +79,8 @@ class _FakeQuery:
             return rv is not None and rv < val
         if op == "in":
             return rv in val
+        if op == "neq":
+            return rv != val
         raise ValueError(f"неизвестный оператор фильтра: {op}")
 
     def _match(self) -> list[dict]:
@@ -89,6 +95,11 @@ class _FakeQuery:
         return out
 
     def execute(self) -> _FakeResponse:
+        if self._op == "insert":
+            new_row = dict(self._payload)
+            self._table.rows.append(new_row)
+            return _FakeResponse([new_row])
+
         if self._op == "upsert":
             key = self._on_conflict
             existing = None
@@ -126,6 +137,9 @@ class _FakeTable:
 
     def update(self, payload: dict):
         return _FakeQuery(self, "update", payload)
+
+    def insert(self, payload: dict):
+        return _FakeQuery(self, "insert", payload)
 
     def upsert(self, payload: dict, on_conflict: str | None = None):
         q = _FakeQuery(self, "upsert", payload)
@@ -247,6 +261,23 @@ def test_claim_job_no_job_returns_none(fake_db):
     assert pipeline.claim_job("MISSING") is None
 
 
+def test_claim_job_exhausted_attempts_marks_failed_and_returns_none(fake_db):
+    from app.radar import settings
+
+    # 429 возвращал задание в queued без проверки MAX_ATTEMPTS — повторялось бесконечно.
+    seed_job(fake_db, attempts=settings.MAX_ATTEMPTS)
+    seed_reel(fake_db)
+
+    claimed = pipeline.claim_job("REEL1")
+
+    assert claimed is None  # задание с исчерпанным лимитом не отдаётся на обработку
+    job_row = fake_db.store["radar_jobs"][0]
+    assert job_row["state"] == "failed"
+    assert "попыт" in job_row["error"].lower()
+    analysis = fake_db.store["radar_analyses"][0]
+    assert analysis["status"] == "error"
+
+
 # ── Страховка pg_cron: claim_stale_job ──────────────────────────────────────────────────
 
 
@@ -355,6 +386,34 @@ def test_process_radar_job_rate_limited(fake_db, monkeypatch, tmp_path):
     assert analysis["status"] == "rate_limited"
 
 
+def test_process_radar_job_cancelled_during_rate_limit_stays_cancelled(fake_db, monkeypatch):
+    # Гонка: пользователь нажал «отменить», пока шёл вызов Gemini, который в итоге упал 429.
+    # Раньше _finish_rate_limited безусловно возвращал job в queued поверх отмены — задание
+    # оживало и tick снова платил за него.
+    job = seed_job(fake_db, state="in_progress", attempts=1)
+    seed_reel(fake_db)
+
+    async def fake_download_to(tmpdir, reel):
+        p = Path(tmpdir) / f"{reel['id']}.mp4"
+        p.write_bytes(b"fake-mp4")
+        return p
+
+    def fake_analyze(video_path, mode, duration_sec=None):
+        fake_db.store["radar_jobs"][0]["state"] = "cancelled"  # отмена подоспела во время вызова
+        raise gemini.RateLimitedError("429 RESOURCE_EXHAUSTED")
+
+    monkeypatch.setattr(pipeline.downloader, "download_to", fake_download_to)
+    monkeypatch.setattr(pipeline.gemini, "analyze", fake_analyze)
+
+    status = run_async(pipeline.process_radar_job(job))
+
+    assert status == "cancelled"
+    job_row = fake_db.store["radar_jobs"][0]
+    assert job_row["state"] == "cancelled"  # не перезаписано обратно в queued
+    analysis = fake_db.store["radar_analyses"][0]
+    assert analysis["status"] == "cancelled"
+
+
 # ── Успех и ошибка — временная папка не остаётся ────────────────────────────────────────
 
 
@@ -396,6 +455,58 @@ def test_process_radar_job_success_cleans_tmpdir(fake_db, monkeypatch):
     assert analysis["status"] == "done"
     assert analysis["transcript_engine"] == "gemini"
     assert analysis["hook"] == "яркая заставка"
+
+
+def test_process_radar_job_v_after_t_preserves_transcript_and_sets_mode_tv(fake_db, monkeypatch):
+    # Уже есть готовая расшифровка от предыдущего запуска mode='t'; следующим запускается
+    # mode='v' — не должен затирать её None-ами, а итоговый mode строки должен стать 'tv'.
+    fake_db.store["radar_analyses"] = [
+        {
+            "reel_id": "REEL1",
+            "mode": "t",
+            "status": "done",
+            "error": None,
+            "updated_at": _iso(_now()),
+            "transcript_segments": [{"start": 0.0, "end": 1.0, "text": "было"}],
+            "transcript_language": "ru",
+            "transcript_engine": "gemini",
+            "visual_timeline": None,
+            "hook": None,
+            "structure": None,
+            "cta": None,
+            "format_idea": None,
+        }
+    ]
+    job = seed_job(fake_db, mode="v")
+    seed_reel(fake_db)
+
+    async def fake_download_to(tmpdir, reel):
+        p = Path(tmpdir) / f"{reel['id']}.mp4"
+        p.write_bytes(b"fake-mp4")
+        return p
+
+    def fake_analyze(video_path, mode, duration_sec=None):
+        assert mode == "v"
+        return {
+            "visual_timeline": [{"t": "0:00-0:02", "text": "новое"}],
+            "hook": "хук",
+            "structure": "структура",
+            "cta": "подписывайся",
+            "format_idea": "идея",
+        }
+
+    monkeypatch.setattr(pipeline.downloader, "download_to", fake_download_to)
+    monkeypatch.setattr(pipeline.gemini, "analyze", fake_analyze)
+
+    status = run_async(pipeline.process_radar_job(job))
+
+    assert status == "done"
+    analysis = fake_db.store["radar_analyses"][0]
+    assert analysis["mode"] == "tv"
+    assert analysis["transcript_segments"] == [{"start": 0.0, "end": 1.0, "text": "было"}]  # не стёрлось
+    assert analysis["transcript_language"] == "ru"
+    assert analysis["visual_timeline"] == [{"t": "0:00-0:02", "text": "новое"}]
+    assert analysis["hook"] == "хук"
 
 
 def test_process_radar_job_error_cleans_tmpdir(fake_db, monkeypatch):

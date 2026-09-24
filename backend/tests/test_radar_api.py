@@ -8,6 +8,7 @@ app.radar.apify_runs, app.radar.scrape_service, app.radar.pipeline) — ни о�
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 
@@ -106,7 +107,7 @@ def test_poll_scrape_run_idempotent(monkeypatch):
     upserts: list[int] = []
     store = {
         1: {
-            "id": 1, "kind": "reels", "status": "running",
+            "id": 1, "kind": "reels", "status": "running", "period_months": None,
             "apify_run_id": "run1", "apify_dataset_id": "ds1", "apify_token_ref": "tok1",
         },
     }
@@ -135,9 +136,14 @@ def test_poll_scrape_run_idempotent(monkeypatch):
         store[run_id]["cost_estimate_usd"] = cost_estimate_usd
         return store[run_id]
 
+    def fail_release(run_id):
+        raise AssertionError("release_scrape_finish_claim не должен вызываться — приём не падал")
+
     monkeypatch.setattr(repo, "get_scrape_run", fake_get_scrape_run)
     monkeypatch.setattr(apify_runs, "get_run", fake_get_run)
     monkeypatch.setattr(apify_runs, "get_items", fake_get_items)
+    monkeypatch.setattr(repo, "try_claim_scrape_finish", lambda run_id: True)
+    monkeypatch.setattr(repo, "release_scrape_finish_claim", fail_release)
     monkeypatch.setattr(repo, "ensure_competitors", fake_ensure_competitors)
     monkeypatch.setattr(repo, "bulk_upsert_reels", fake_bulk_upsert)
     monkeypatch.setattr(repo, "finish_scrape_run_done", fake_finish_done)
@@ -153,6 +159,142 @@ def test_poll_scrape_run_idempotent(monkeypatch):
     assert result2["status"] == "done"
     assert calls == {"get_run": 1, "get_items": 1}
     assert upserts == [1]
+
+
+def test_poll_scrape_run_second_parallel_poll_does_not_double_accept(monkeypatch):
+    """Гонка двух параллельных GET /scrape/{id} (фронт поллит раз в 2 с): оба видят Apify
+    SUCCEEDED, но try_claim_scrape_finish отдаёт True только одному. Второй не должен ни
+    трогать get_items/bulk_upsert, ни падать — просто отдаёт текущее состояние."""
+    run = {
+        "id": 1, "kind": "reels", "status": "running", "period_months": None,
+        "apify_run_id": "run1", "apify_dataset_id": "ds1", "apify_token_ref": "tok1",
+    }
+    monkeypatch.setattr(repo, "get_scrape_run", lambda run_id: dict(run))
+
+    async def fake_get_run(run_id, token_ref):
+        return {"status": "SUCCEEDED", "dataset_id": "ds1"}
+
+    monkeypatch.setattr(apify_runs, "get_run", fake_get_run)
+    monkeypatch.setattr(repo, "try_claim_scrape_finish", lambda run_id: False)
+
+    def fail(*a, **kw):
+        raise AssertionError("не должно вызываться — приём уже захвачен другим опросом")
+
+    monkeypatch.setattr(apify_runs, "get_items", fail)
+    monkeypatch.setattr(repo, "bulk_upsert_reels", fail)
+    monkeypatch.setattr(repo, "finish_scrape_run_done", fail)
+    monkeypatch.setattr(repo, "finish_scrape_run_error", fail)
+
+    result = asyncio.run(scrape_service.poll_scrape_run(1))
+    assert result["status"] == "running"
+
+
+def test_poll_scrape_run_apify_network_error_keeps_running_no_error(monkeypatch):
+    """Сетевой сбой/5xx/токен в cooldown при опросе статуса — НЕ терминальная ошибка Apify:
+    сам прогон продолжается и может завершиться успехом. error не пишется, статус остаётся
+    running, следующий опрос (через 2 с) попробует снова."""
+    run = {
+        "id": 1, "kind": "reels", "status": "running", "period_months": None,
+        "apify_run_id": "run1", "apify_dataset_id": "ds1", "apify_token_ref": "tok1",
+    }
+    monkeypatch.setattr(repo, "get_scrape_run", lambda run_id: dict(run))
+
+    async def fake_get_run(run_id, token_ref):
+        raise apify_runs.ApifyRunError("Apify: опрос прогона run1 HTTP 503 upstream timeout")
+
+    monkeypatch.setattr(apify_runs, "get_run", fake_get_run)
+
+    def fail(*a, **kw):
+        raise AssertionError("error писаться не должен — сбой не терминальный")
+
+    monkeypatch.setattr(repo, "finish_scrape_run_error", fail)
+
+    result = asyncio.run(scrape_service.poll_scrape_run(1))
+    assert result["status"] == "running"
+    assert result.get("error") is None
+
+
+def test_poll_scrape_run_dedupes_duplicate_shortcode_keeps_higher_views(monkeypatch):
+    """Коллаб-рилс двух конкурентов из списка ников попадает в датасет дважды с одинаковым
+    shortCode. Без дедупа bulk_upsert_reels получил бы два UPDATE на один PK в одной пачке —
+    Postgres «ON CONFLICT DO UPDATE command cannot affect row a second time»."""
+    run = {
+        "id": 1, "kind": "reels", "status": "running", "period_months": None,
+        "apify_run_id": "run1", "apify_dataset_id": "ds1", "apify_token_ref": "tok1",
+    }
+    monkeypatch.setattr(repo, "get_scrape_run", lambda run_id: dict(run))
+
+    async def fake_get_run(run_id, token_ref):
+        return {"status": "SUCCEEDED", "dataset_id": "ds1"}
+
+    async def fake_get_items(dataset_id, token_ref):
+        return [
+            {"shortCode": "DUP1", "ownerUsername": "acc1", "url": "u", "videoViewCount": 100},
+            {"shortCode": "DUP1", "ownerUsername": "acc2", "url": "u", "videoViewCount": 250},
+        ]
+
+    monkeypatch.setattr(apify_runs, "get_run", fake_get_run)
+    monkeypatch.setattr(apify_runs, "get_items", fake_get_items)
+    monkeypatch.setattr(repo, "try_claim_scrape_finish", lambda run_id: True)
+    monkeypatch.setattr(repo, "ensure_competitors", lambda usernames: None)
+
+    captured: list[dict] = []
+    monkeypatch.setattr(
+        repo, "bulk_upsert_reels",
+        lambda reels, scrape_run_id: (captured.extend(reels), len(reels))[1],
+    )
+    monkeypatch.setattr(repo, "finish_scrape_run_done", lambda *a: None)
+
+    asyncio.run(scrape_service.poll_scrape_run(1))
+
+    assert len(captured) == 1
+    assert captured[0]["id"] == "DUP1"
+    assert captured[0]["views"] == 250  # оставили запись с бо́льшими просмотрами
+
+
+def test_poll_scrape_run_filters_reels_older_than_cutoff(monkeypatch):
+    """Рилсы старше cutoff (now − period_months) не сохраняются и не считаются в
+    results_count/стоимости — поведение сверено со старым Радаром (apify_scraper.py::scrape)."""
+    run = {
+        "id": 1, "kind": "reels", "status": "running", "period_months": 1,
+        "apify_run_id": "run1", "apify_dataset_id": "ds1", "apify_token_ref": "tok1",
+    }
+    monkeypatch.setattr(repo, "get_scrape_run", lambda run_id: dict(run))
+
+    old_ts = (datetime.now(timezone.utc) - timedelta(days=200)).isoformat()
+    fresh_ts = datetime.now(timezone.utc).isoformat()
+
+    async def fake_get_run(run_id, token_ref):
+        return {"status": "SUCCEEDED", "dataset_id": "ds1"}
+
+    async def fake_get_items(dataset_id, token_ref):
+        return [
+            {"shortCode": "OLD1", "ownerUsername": "acc1", "url": "u", "videoViewCount": 1, "timestamp": old_ts},
+            {"shortCode": "NEW1", "ownerUsername": "acc1", "url": "u", "videoViewCount": 1, "timestamp": fresh_ts},
+        ]
+
+    monkeypatch.setattr(apify_runs, "get_run", fake_get_run)
+    monkeypatch.setattr(apify_runs, "get_items", fake_get_items)
+    monkeypatch.setattr(repo, "try_claim_scrape_finish", lambda run_id: True)
+    monkeypatch.setattr(repo, "ensure_competitors", lambda usernames: None)
+
+    captured: list[dict] = []
+    monkeypatch.setattr(
+        repo, "bulk_upsert_reels",
+        lambda reels, scrape_run_id: (captured.extend(reels), len(reels))[1],
+    )
+    finished: dict = {}
+    monkeypatch.setattr(
+        repo, "finish_scrape_run_done",
+        lambda run_id, results_count, cost_estimate_usd: finished.update(
+            results_count=results_count, cost=cost_estimate_usd,
+        ),
+    )
+
+    asyncio.run(scrape_service.poll_scrape_run(1))
+
+    assert [r["id"] for r in captured] == ["NEW1"]
+    assert finished["results_count"] == 1
 
 
 # ── /competitors ──────────────────────────────────────────────────────────
@@ -227,6 +369,7 @@ def test_get_reels_merges_analysis_status(monkeypatch):
 def test_analyze_reel_not_found(monkeypatch):
     monkeypatch.setattr(repo, "get_reels_by_ids", lambda ids: {})
     monkeypatch.setattr(repo, "get_analyses_by_ids", lambda ids: {})
+    monkeypatch.setattr(repo, "get_active_job_reel_ids", lambda ids: set())
     resp = client.post("/api/radar/analyze", json={"items": [{"reel_id": "MISSING", "mode": "t"}]})
     assert resp.status_code == 404
 
@@ -234,6 +377,7 @@ def test_analyze_reel_not_found(monkeypatch):
 def test_analyze_daily_limit(monkeypatch):
     monkeypatch.setattr(repo, "get_reels_by_ids", lambda ids: {i: {"id": i} for i in ids})
     monkeypatch.setattr(repo, "get_analyses_by_ids", lambda ids: {})
+    monkeypatch.setattr(repo, "get_active_job_reel_ids", lambda ids: set())
     monkeypatch.setattr(repo, "count_jobs_created_today", lambda: radar_settings.ANALYSES_PER_DAY)
     resp = client.post("/api/radar/analyze", json={"items": [{"reel_id": "R1", "mode": "tv"}]})
     assert resp.status_code == 429
@@ -248,6 +392,7 @@ def test_analyze_skip_already_done_without_force(monkeypatch):
             "visual_timeline": [{"t": "0:00", "text": "y"}],
         },
     })
+    monkeypatch.setattr(repo, "get_active_job_reel_ids", lambda ids: set())
     monkeypatch.setattr(repo, "count_jobs_created_today", lambda: 0)
     calls: list[tuple] = []
     monkeypatch.setattr(repo, "upsert_analysis_queued", lambda *a: calls.append(a))
@@ -259,9 +404,55 @@ def test_analyze_skip_already_done_without_force(monkeypatch):
     assert calls == []
 
 
+def test_analyze_mode_v_not_skipped_when_only_transcript_done(monkeypatch):
+    """Готов только транскрипт (has_t), запрошен режим 'v' — это НЕ закрытая задача для 'v',
+    рилс ставится в очередь заново, а не в skipped."""
+    monkeypatch.setattr(repo, "get_reels_by_ids", lambda ids: {"R1": {"id": "R1"}})
+    monkeypatch.setattr(repo, "get_analyses_by_ids", lambda ids: {
+        "R1": {
+            "status": "done",
+            "transcript_segments": [{"start": 0, "text": "x"}],
+            "visual_timeline": None,
+        },
+    })
+    monkeypatch.setattr(repo, "get_active_job_reel_ids", lambda ids: set())
+    monkeypatch.setattr(repo, "count_jobs_created_today", lambda: 0)
+    calls: list[tuple] = []
+    monkeypatch.setattr(repo, "upsert_analysis_queued", lambda reel_id, mode: calls.append((reel_id, mode)))
+    monkeypatch.setattr(repo, "create_job", lambda reel_id, mode: calls.append((reel_id, mode)))
+
+    async def fake_refresh(reel_ids):
+        pass
+
+    monkeypatch.setattr(pipeline, "refresh_expired_links", fake_refresh)
+
+    resp = client.post("/api/radar/analyze", json={"items": [{"reel_id": "R1", "mode": "v"}], "force": False})
+    assert resp.status_code == 200
+    assert resp.json() == {"queued": ["R1"], "skipped": []}
+    assert ("R1", "v") in calls
+
+
+def test_analyze_skip_reel_with_active_job_even_with_force(monkeypatch):
+    """У рилса уже есть незавершённое задание (queued/in_progress) — повторная постановка
+    идёт в skipped, force это правило не отменяет: иначе задание разбиралось бы дважды."""
+    monkeypatch.setattr(repo, "get_reels_by_ids", lambda ids: {"R1": {"id": "R1"}})
+    monkeypatch.setattr(repo, "get_analyses_by_ids", lambda ids: {})
+    monkeypatch.setattr(repo, "get_active_job_reel_ids", lambda ids: {"R1"})
+    monkeypatch.setattr(repo, "count_jobs_created_today", lambda: 0)
+    calls: list[tuple] = []
+    monkeypatch.setattr(repo, "upsert_analysis_queued", lambda *a: calls.append(a))
+    monkeypatch.setattr(repo, "create_job", lambda *a: calls.append(a))
+
+    resp = client.post("/api/radar/analyze", json={"items": [{"reel_id": "R1", "mode": "tv"}], "force": True})
+    assert resp.status_code == 200
+    assert resp.json() == {"queued": [], "skipped": ["R1"]}
+    assert calls == []
+
+
 def test_analyze_queues_new_job_and_refreshes_links(monkeypatch):
     monkeypatch.setattr(repo, "get_reels_by_ids", lambda ids: {"R2": {"id": "R2"}})
     monkeypatch.setattr(repo, "get_analyses_by_ids", lambda ids: {})
+    monkeypatch.setattr(repo, "get_active_job_reel_ids", lambda ids: set())
     monkeypatch.setattr(repo, "count_jobs_created_today", lambda: 0)
 
     calls: list[tuple] = []
