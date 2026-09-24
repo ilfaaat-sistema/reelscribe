@@ -250,6 +250,8 @@ th.grp-reach{color:var(--amber)}th.grp-auth{color:var(--mut)}
 .appswitch button{background:none;border:0;color:var(--mut);padding:6px 12px;border-radius:7px;font-size:12.5px;font-weight:500;font-family:var(--sans);white-space:nowrap;transition:.12s}
 .appswitch button:hover{color:var(--tx)}
 .appswitch button.on{background:var(--iris);color:#fff}
+/* кольцо фокуса браузера после клика мышью не нужно — активная вкладка и так подсвечена */
+.appswitch button:focus{outline:none}
 @media(max-width:640px){
   header{flex-wrap:wrap;row-gap:8px;gap:6px}
   header .btn{padding:6px 9px}

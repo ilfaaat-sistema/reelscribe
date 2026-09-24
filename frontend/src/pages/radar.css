@@ -482,3 +482,13 @@
   .radar .report { grid-template-columns: 1fr; }
   .radar .report-thumb { width: 100%; max-width: 200px; }
 }
+
+/* Светлая область Радара — на всю ширину окна. Общий .app ReelScribe ограничен 1280px и
+   центрирован; без этого на широком экране по бокам виден тёмный фон сайта («рамка»).
+   Контент по-прежнему центрирован: .wrap и .topbar держат свою max-width. */
+.app > .radar {
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+}
+/* нижняя граница общей шапки шириной 1280px обрывалась бы на светлом фоне — на Радаре не нужна */
+.app:has(> .radar) > header { border-bottom-color: transparent; }
