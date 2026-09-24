@@ -22,8 +22,16 @@ from app.models.radar_schemas import (
     ScrapeRequest,
 )
 from app.radar import analytics, analyze_service, repo, report, scrape_service
+from app.radar import settings as radar_settings
 
 router = APIRouter(prefix="/radar", tags=["radar"])
+
+
+# ── Конфигурация фронта ──────────────────────────────────────────────────
+
+@router.get("/config")
+async def get_config() -> dict[str, Any]:
+    return {"whisper_available": bool(radar_settings.OPENAI_API_KEY)}
 
 
 # ── Конкуренты ─────────────────────────────────────────────────────────────
@@ -116,11 +124,13 @@ async def start_analyze(req: AnalyzeRequest) -> dict[str, Any]:
         raise HTTPException(400, "items required")
 
     try:
-        return await analyze_service.enqueue_analysis(req.items, req.force)
+        return await analyze_service.enqueue_analysis(req.items, req.force, req.transcriber)
     except analyze_service.RadarReelNotFoundError as exc:
         raise HTTPException(404, str(exc)) from exc
     except analyze_service.RadarAnalysisDailyLimitError as exc:
         raise HTTPException(429, str(exc)) from exc
+    except analyze_service.RadarWhisperUnavailableError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @router.post("/jobs/{reel_id}/run")

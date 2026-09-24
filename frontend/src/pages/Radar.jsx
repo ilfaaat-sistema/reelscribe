@@ -5,6 +5,7 @@ import {
   getSummary,
   getReels,
   getCostEstimate,
+  getConfig,
   startScrape as apiStartScrape,
   getScrapeStatus,
   startAnalyze as apiStartAnalyze,
@@ -18,14 +19,12 @@ import {
 import './radar.css'
 
 // Перенос Радар/frontend/src/App.jsx разделом /radar (см. docs/specs/08-radar.md).
-// Убрано относительно оригинала: переключатель Whisper (whisperMode/whisperOpenaiAvailable,
-// бэкенд теперь всегда делает один вызов Gemini), /api/config, /api/thumbs (заменён на
-// thumbUrl из api/client.js — общий прокси превью ReelScribe), PARSER_URL/топбар со
-// своим лого (шапка теперь общая, из App.jsx ReelScribe), локальная оценка стоимости
-// сбора (заменена вызовом GET /scrape/cost-estimate).
+// Итерация 2 вернула своя шапку, период до 24 мес. и переключатель Gemini/Whisper —
+// см. блоки «Своя шапка» и «transcriber» ниже. thumbUrl из api/client.js — общий прокси
+// превью ReelScribe вместо /api/thumbs оригинала.
 
 const MAX_USERNAMES = 5
-const MAX_PERIOD = 12
+const MAX_PERIOD = 24
 const GEMINI_COST_PER_SEC = 0.01 / 60
 const SORT_METRICS = ['views', 'comments', 'likes']
 
@@ -106,6 +105,10 @@ export default function Radar() {
 
   const [selections, setSelections] = useState({})
 
+  // ── Движок расшифровки: Gemini (по умолчанию) или Whisper (OpenAI) ──
+  const [transcriber, setTranscriber] = useState('gemini')
+  const [whisperAvailable, setWhisperAvailable] = useState(false)
+
   const [analyzing, setAnalyzing] = useState(false)
   const [analyzingIds, setAnalyzingIds] = useState([])
   const [analysisStatuses, setAnalysisStatuses] = useState({})
@@ -168,6 +171,13 @@ export default function Radar() {
     mountedLoadRef.current = true
     if (accounts.length) loadData(accounts, sortKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // ── Конфиг бэкенда: доступен ли Whisper (настроен ли OPENAI_API_KEY) ──
+  useEffect(() => {
+    getConfig()
+      .then(data => setWhisperAvailable(!!data.whisper_available))
+      .catch(() => setWhisperAvailable(false))
   }, [])
 
   // ── Отчёт открывается/закрывается по параметру reel в адресе ──
@@ -300,7 +310,7 @@ export default function Radar() {
     setAnalyzeErrorMsg(null)
     setNotice(null)
     try {
-      const data = await apiStartAnalyze(items)
+      const data = await apiStartAnalyze(items, transcriber)
       const queued = data.queued || []
       const skipped = data.skipped || []
 
@@ -469,6 +479,16 @@ export default function Radar() {
   // ── Render ───────────────────────────────────────────────────
   return (
     <div className="radar">
+      <div className="topbar">
+        <div className="logo">Reels <b>Радар</b></div>
+        <div className="meta">
+          {summary
+            ? <span>Рилсов в БД: <span className="num">{summary.total_reels}</span></span>
+            : <span>Аналитик рилсов конкурентов</span>
+          }
+        </div>
+      </div>
+
       <div className="wrap">
 
         {/* ШАГ 1 */}
@@ -695,6 +715,21 @@ export default function Radar() {
             )}
           </div>
           <div className="actions">
+            {!analyzing && (
+              <div className="toggle">
+                <button className={transcriber === 'gemini' ? 'on' : ''} onClick={() => setTranscriber('gemini')}>
+                  Gemini
+                </button>
+                <button
+                  className={transcriber === 'whisper' ? 'on' : ''}
+                  disabled={!whisperAvailable}
+                  title={whisperAvailable ? undefined : 'нет ключа OpenAI'}
+                  onClick={() => whisperAvailable && setTranscriber('whisper')}
+                >
+                  Whisper (OpenAI){!whisperAvailable && <span style={{ opacity: .6, fontWeight: 400 }}> — нет ключа OpenAI</span>}
+                </button>
+              </div>
+            )}
             {analyzing && (
               <button className="btn btn-ghost" onClick={cancelAnalysis}>
                 Отменить
@@ -988,6 +1023,7 @@ function ReportPanel({ reel, analysis, allSelectedIds, onClose }) {
 
   const singleUrl = reportUrl(reel.id)
   const bulkUrl = allSelectedIds.length > 1 ? exportUrl(allSelectedIds) : null
+  const engineLabel = analysis?.transcript_engine === 'openai-whisper' ? 'Whisper' : 'Gemini'
 
   return (
     <section className="card" ref={panelRef}>
@@ -1031,7 +1067,7 @@ function ReportPanel({ reel, analysis, allSelectedIds, onClose }) {
           {/* Транскрипт */}
           {segments && segments.length > 0 && (
             <div className="r-block">
-              <h3>Транскрипт дословно (с таймкодами)</h3>
+              <h3>Транскрипт дословно ({engineLabel}, с таймкодами)</h3>
               <div style={{ fontSize: '.84rem', lineHeight: 1.8 }}>
                 {segments.map((seg, i) => (
                   <div key={i}>

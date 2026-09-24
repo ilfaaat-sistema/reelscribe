@@ -169,3 +169,22 @@ INLINE_MAX_BYTES        = 20 * 1024 * 1024
 - **Боевой сбор:** фактический импорт аккаунта `directoreels` за 1 месяц — 20 рилсов, $0.052 на Apify.
 - **Перенос данных:** из локального `radar.db` в Supabase успешно перенесены 1 конкурент, 4 прогона, 58 рилсов, 1 разбор. Структура не изменилась, таблицы взяли те же имена.
 - **Код-ревью:** 10 замечаний при `code-review high`, все исправлены до мёржа.
+
+## Итерация 2 (24.09.2026): оригинальный вид и механика локального Радара
+
+Решение владельца: вернуть светлый дизайн и механику локального Радара внутри `/radar`.
+
+**Контракт:**
+- **Дизайн** (`frontend/src/pages/radar.css`): оригинальные стили `../../Радар/frontend/src/index.css` + `App.css` 1:1, каждое правило под `.radar`.
+  - переменные из `:root` переходят в `.radar { … }`, правила `body` — тоже в `.radar`;
+  - шрифты Unbounded, Manrope и JetBrains Mono подключаются `@import` Google Fonts в начале файла;
+  - визуальный эталон — `../../Радар/reels-radar-prototype-v2.html`;
+  - остальные страницы ReelScribe не меняются.
+- **Своя шапка** (`Radar.jsx`): сразу под общей шапкой ReelScribe, разметка как в оригинале. `<div className="topbar"><div className="logo">Reels <b>Радар</b></div><div className="meta">…</div></div>`: в `meta` показывается «Рилсов в БД: N» из `summary.total_reels`, до загрузки — «Локальный аналитик рилсов конкурентов» (текст из оригинала, адаптировать: «Аналитик рилсов конкурентов»).
+- **Период до 24 месяцев:** `MAX_PERIOD_MONTHS = 24` в `settings.py`, слайдер 1..24.
+- **Выбор расшифровки** Gemini / Whisper — переключатель как в оригинале (сегменты «Gemini» | «Whisper (OpenAI)»):
+  - `GET /api/radar/config` → `{whisper_available: bool}` (есть ли `OPENAI_API_KEY`). Без ключа Whisper недоступен и подписан «нет ключа OpenAI»;
+  - `POST /api/radar/analyze` принимает `transcriber: 'gemini'|'whisper'` (по умолчанию gemini) и сохраняет его в `radar_jobs.transcriber` (миграция `0010_radar_transcriber.sql`, уже применена). `whisper` без ключа — 400;
+  - в разборе при `transcriber='whisper'` для режимов t/tv расшифровку делает OpenAI `whisper-1` (`POST https://api.openai.com/v1/audio/transcriptions`, `response_format=verbose_json`, mp4 отправляется как есть, лимит 25 МБ — иначе понятная ошибка) через новый `backend/app/radar/whisper.py`: `transcribe(video_path) -> (segments, language)`;
+  - для tv видеоанализ по-прежнему делает Gemini, но в режиме `v` (без расшифровки), для t Gemini не вызывается вовсе;
+  - `transcript_engine = 'openai-whisper'`; 429 OpenAI — тот же путь отложенного повтора, что у Gemini.

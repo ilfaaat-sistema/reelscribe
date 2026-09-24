@@ -33,8 +33,25 @@ def test_scrape_too_many_usernames():
 
 
 def test_scrape_period_out_of_range():
-    resp = client.post("/api/radar/scrape", json={"usernames": ["acc1"], "period_months": 13})
+    # Итерация 2 (24.09.2026): слайдер расширен до 24 месяцев (оригинал локального Радара).
+    resp = client.post("/api/radar/scrape", json={"usernames": ["acc1"], "period_months": 25})
     assert resp.status_code == 400
+
+
+def test_scrape_period_24_months_passes_validation(monkeypatch):
+    # 24 — верхняя граница нового диапазона, должна проходить валидацию (а не падать 400
+    # раньше запуска Apify — сам запуск замокан).
+    monkeypatch.setattr(repo, "count_runs_last_hour", lambda: 0)
+    monkeypatch.setattr(repo, "create_scrape_run", lambda **kw: {"id": 1})
+    monkeypatch.setattr(repo, "set_run_started", lambda *a: None)
+
+    async def fake_start_run(actor, run_input):
+        return {"run_id": "r", "dataset_id": "d", "token_ref": "t"}
+
+    monkeypatch.setattr(apify_runs, "start_run", fake_start_run)
+
+    resp = client.post("/api/radar/scrape", json={"usernames": ["acc1"], "period_months": 24})
+    assert resp.status_code == 200
 
 
 def test_scrape_hourly_limit(monkeypatch):
@@ -364,6 +381,55 @@ def test_get_reels_merges_analysis_status(monkeypatch):
     assert data[0]["analysis_mode"] == "tv"
 
 
+# ── /config, transcriber='whisper' (итерация 2) ──────────────────────────
+
+def test_config_whisper_unavailable_without_key(monkeypatch):
+    monkeypatch.setattr(radar_settings, "OPENAI_API_KEY", "")
+    resp = client.get("/api/radar/config")
+    assert resp.status_code == 200
+    assert resp.json() == {"whisper_available": False}
+
+
+def test_config_whisper_available_with_key(monkeypatch):
+    monkeypatch.setattr(radar_settings, "OPENAI_API_KEY", "sk-test")
+    resp = client.get("/api/radar/config")
+    assert resp.status_code == 200
+    assert resp.json() == {"whisper_available": True}
+
+
+def test_analyze_whisper_without_key_returns_400(monkeypatch):
+    monkeypatch.setattr(radar_settings, "OPENAI_API_KEY", "")
+    resp = client.post(
+        "/api/radar/analyze",
+        json={"items": [{"reel_id": "R1", "mode": "t"}], "transcriber": "whisper"},
+    )
+    assert resp.status_code == 400
+    assert "OpenAI" in resp.json()["detail"]
+
+
+def test_analyze_whisper_with_key_saves_transcriber(monkeypatch):
+    monkeypatch.setattr(radar_settings, "OPENAI_API_KEY", "sk-test")
+    monkeypatch.setattr(repo, "get_reels_by_ids", lambda ids: {"R1": {"id": "R1"}})
+    monkeypatch.setattr(repo, "get_analyses_by_ids", lambda ids: {})
+    monkeypatch.setattr(repo, "get_active_job_reel_ids", lambda ids: set())
+    monkeypatch.setattr(repo, "count_jobs_created_today", lambda: 0)
+    monkeypatch.setattr(repo, "upsert_analysis_queued", lambda *a: None)
+    calls: list[tuple] = []
+    monkeypatch.setattr(repo, "create_job", lambda reel_id, mode, transcriber: calls.append(transcriber))
+
+    async def fake_refresh(reel_ids):
+        pass
+
+    monkeypatch.setattr(pipeline, "refresh_expired_links", fake_refresh)
+
+    resp = client.post(
+        "/api/radar/analyze",
+        json={"items": [{"reel_id": "R1", "mode": "t"}], "transcriber": "whisper"},
+    )
+    assert resp.status_code == 200
+    assert calls == ["whisper"]
+
+
 # ── /analyze ─────────────────────────────────────────────────────────────
 
 def test_analyze_reel_not_found(monkeypatch):
@@ -419,7 +485,10 @@ def test_analyze_mode_v_not_skipped_when_only_transcript_done(monkeypatch):
     monkeypatch.setattr(repo, "count_jobs_created_today", lambda: 0)
     calls: list[tuple] = []
     monkeypatch.setattr(repo, "upsert_analysis_queued", lambda reel_id, mode: calls.append((reel_id, mode)))
-    monkeypatch.setattr(repo, "create_job", lambda reel_id, mode: calls.append((reel_id, mode)))
+    monkeypatch.setattr(
+        repo, "create_job",
+        lambda reel_id, mode, transcriber="gemini": calls.append((reel_id, mode)),
+    )
 
     async def fake_refresh(reel_ids):
         pass
@@ -457,7 +526,10 @@ def test_analyze_queues_new_job_and_refreshes_links(monkeypatch):
 
     calls: list[tuple] = []
     monkeypatch.setattr(repo, "upsert_analysis_queued", lambda reel_id, mode: calls.append(("analysis", reel_id, mode)))
-    monkeypatch.setattr(repo, "create_job", lambda reel_id, mode: calls.append(("job", reel_id, mode)))
+    monkeypatch.setattr(
+        repo, "create_job",
+        lambda reel_id, mode, transcriber="gemini": calls.append(("job", reel_id, mode)),
+    )
 
     refreshed = []
 

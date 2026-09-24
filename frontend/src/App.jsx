@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import Import from './pages/Import'
 import Processing from './pages/Processing'
@@ -6,9 +7,34 @@ import History from './pages/History'
 import Errors from './pages/Errors'
 import Radar from './pages/Radar'
 
+// Память последней позиции в каждом разделе. Основное хранилище — sessionStorage
+// (ключи rs:last:parser / rs:last:radar), резерв на случай недоступности (приватный
+// режим, заблокированный доступ к хранилищу) — переменная модуля.
+const SECTION_KEYS = { parser: 'rs:last:parser', radar: 'rs:last:radar' }
+const SECTION_DEFAULTS = { parser: '/', radar: '/radar' }
+const memFallback = {}
+
+function saveLastPath(section, path) {
+  try {
+    sessionStorage.setItem(SECTION_KEYS[section], path)
+  } catch {
+    memFallback[section] = path
+  }
+}
+
+function loadLastPath(section) {
+  try {
+    return sessionStorage.getItem(SECTION_KEYS[section]) || memFallback[section] || SECTION_DEFAULTS[section]
+  } catch {
+    return memFallback[section] || SECTION_DEFAULTS[section]
+  }
+}
+
 function Header() {
   const navigate = useNavigate()
-  const { pathname } = useLocation()
+  const location = useLocation()
+  const { pathname } = location
+  const section = pathname.startsWith('/radar') ? 'radar' : 'parser'
   const view = pathname.startsWith('/results')
     ? 'results'
     : pathname.startsWith('/processing')
@@ -17,12 +43,39 @@ function Header() {
         ? 'radar'
         : 'import'
 
+  useEffect(() => {
+    saveLastPath(section, pathname + location.search)
+  }, [section, pathname, location.search])
+
+  const goToSection = (target) => {
+    if (target === section) return
+    navigate(loadLastPath(target))
+  }
+
   return (
     <header>
       <div className="logo">
         <i/><i/><i/><i/><i/>
       </div>
       <h1 style={{ cursor: 'pointer' }} onClick={() => navigate('/')}>ReelScribe</h1>
+      <nav className="appswitch">
+        <button
+          type="button"
+          className={section === 'parser' ? 'on' : ''}
+          aria-current={section === 'parser' ? 'page' : undefined}
+          onClick={() => goToSection('parser')}
+        >
+          Парсер
+        </button>
+        <button
+          type="button"
+          className={section === 'radar' ? 'on' : ''}
+          aria-current={section === 'radar' ? 'page' : undefined}
+          onClick={() => goToSection('radar')}
+        >
+          Радар
+        </button>
+      </nav>
       <div className="spacer" />
       {view !== 'results' && view !== 'radar' && (
         <div className="stepper">
@@ -42,15 +95,16 @@ function Header() {
           ← Новый импорт
         </button>
       )}
-      <button className="btn ghost sm" onClick={() => navigate('/radar')}>
-        Радар
-      </button>
-      <button className="btn ghost sm" onClick={() => navigate('/history')}>
-        История
-      </button>
-      <button className="btn ghost sm" onClick={() => navigate('/errors')}>
-        Ошибки
-      </button>
+      {section === 'parser' && (
+        <>
+          <button className="btn ghost sm" onClick={() => navigate('/history')}>
+            История
+          </button>
+          <button className="btn ghost sm" onClick={() => navigate('/errors')}>
+            Ошибки
+          </button>
+        </>
+      )}
     </header>
   )
 }

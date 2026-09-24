@@ -15,9 +15,10 @@ import asyncio
 import logging
 import tempfile
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from app.core.db import get_db
-from app.radar import downloader, gemini, settings
+from app.radar import downloader, gemini, settings, whisper
 
 logger = logging.getLogger(__name__)
 
@@ -201,9 +202,9 @@ def _fail_stuck_job(db, cand: dict, attempts: int, running_threshold: str, now_i
 async def process_radar_job(job: dict) -> str:
     """Выполняет одно захваченное задание. Возвращает итоговый статус `radar_analyses`.
 
-    Шаги: `downloading` → скачивание → `analyzing` → `gemini.analyze` → запись результата.
-    Отмена (`radar_jobs.state='cancelled'`) проверяется между шагами. Любая ошибка
-    записывается человеческим текстом в `radar_analyses.error` и `radar_jobs.error`.
+    Шаги: `downloading` → скачивание → `analyzing` → разбор (см. `_run_analysis`) → запись
+    результата. Отмена (`radar_jobs.state='cancelled'`) проверяется между шагами. Любая
+    ошибка записывается человеческим текстом в `radar_analyses.error` и `radar_jobs.error`.
     Временная папка с mp4 удаляется всегда (контекстный менеджер `TemporaryDirectory`),
     даже при ошибке или отмене.
     """
@@ -211,6 +212,7 @@ async def process_radar_job(job: dict) -> str:
     job_id = job["id"]
     reel_id = job["reel_id"]
     mode = job.get("mode") or "tv"
+    transcriber = job.get("transcriber") or "gemini"
 
     if _job_cancelled(db, job_id):
         return _finish_cancelled(db, job_id, reel_id, mode)
@@ -234,11 +236,9 @@ async def process_radar_job(job: dict) -> str:
             _set_analysis_status(db, reel_id, mode, "analyzing")
 
             try:
-                # Вызов Gemini синхронный и длится 30–60 с — уводим из цикла событий, иначе
-                # на том же экземпляре Vercel зависнут опросы /analyze/status
-                result = await asyncio.to_thread(
-                    gemini.analyze, video_path, mode, reel.get("duration_sec")
-                )
+                # Вызов Gemini/Whisper синхронный и длится 30–60 с — уводим из цикла событий,
+                # иначе на том же экземпляре Vercel зависнут опросы /analyze/status
+                result = await _run_analysis(video_path, mode, transcriber, reel.get("duration_sec"))
             except gemini.RateLimitedError as e:
                 return _finish_rate_limited(db, job_id, reel_id, mode, str(e))
             except Exception as e:  # noqa: BLE001 — любая другая ошибка Gemini/валидации таймкодов
@@ -251,6 +251,45 @@ async def process_radar_job(job: dict) -> str:
         return _finish_cancelled(db, job_id, reel_id, mode)
 
     return _finish_done(db, job_id, reel_id, mode, result)
+
+
+async def _run_analysis(video_path: Path, mode: str, transcriber: str, duration_sec: float | None) -> dict:
+    """Расшифровка и/или видеоанализ согласно `mode` и выбранному `transcriber`.
+
+    `transcriber='gemini'` (по умолчанию) или `mode='v'` — поведение как раньше, один
+    вызов `gemini.analyze` на оба (или один) аспекта разбора.
+
+    `transcriber='whisper'` для `mode in ('t', 'tv')` — расшифровку делает OpenAI
+    `whisper.transcribe` (синхронный вызов в потоке, как и Gemini), Gemini для расшифровки
+    НЕ вызывается вовсе (ТЗ 08, итерация 2). Для `mode='tv'` видеоанализ (визуал) всё равно
+    делает Gemini, но в режиме `'v'` — без расшифровки речи, чтобы не платить за неё дважды;
+    результаты сливаются в один словарь контракта `radar_analyses`.
+    """
+    if transcriber == "whisper" and mode in ("t", "tv"):
+        segments, language = await asyncio.to_thread(whisper.transcribe, video_path)
+        result: dict = {
+            "transcript_segments": segments,
+            "transcript_language": language,
+            "transcript_engine": "openai-whisper",
+            "visual_timeline": None,
+            "hook": None,
+            "structure": None,
+            "cta": None,
+            "format_idea": None,
+        }
+        if mode == "tv":
+            visual = await asyncio.to_thread(gemini.analyze, video_path, "v", duration_sec)
+            # Только визуальные поля: gemini.analyze(mode='v') намеренно отдаёт
+            # transcript_segments/transcript_language=None (не его аспект) — слепой
+            # result.update(visual) стёр бы уже готовую расшифровку Whisper этими None.
+            for key in ("visual_timeline", "hook", "structure", "cta", "format_idea"):
+                result[key] = visual.get(key)
+        return result
+
+    result = await asyncio.to_thread(gemini.analyze, video_path, mode, duration_sec)
+    if mode in ("t", "tv"):
+        result["transcript_engine"] = "gemini"
+    return result
 
 
 def _human_error(e: Exception) -> str:
@@ -336,7 +375,9 @@ def _finish_done(db, job_id: str, reel_id: str, mode: str, result: dict) -> str:
     if mode in ("t", "tv"):
         payload["transcript_segments"] = result.get("transcript_segments")
         payload["transcript_language"] = result.get("transcript_language")
-        payload["transcript_engine"] = "gemini"
+        # 'gemini' — дефолт для веток, где результат пришёл без этого поля (не должно
+        # случаться при обычном ходе, но безопаснее явного KeyError на будущее изменение).
+        payload["transcript_engine"] = result.get("transcript_engine") or "gemini"
     if mode in ("v", "tv"):
         payload["visual_timeline"] = result.get("visual_timeline")
         payload["hook"] = result.get("hook")

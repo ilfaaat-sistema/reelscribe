@@ -324,12 +324,13 @@ def upsert_analysis_queued(reel_id: str, mode: str) -> None:
     }).execute()
 
 
-def create_job(reel_id: str, mode: str) -> dict[str, Any]:
+def create_job(reel_id: str, mode: str, transcriber: str = "gemini") -> dict[str, Any]:
     db = get_db()
     row = db.table("radar_jobs").insert({
         "reel_id": reel_id,
         "mode": mode,
         "state": "queued",
+        "transcriber": transcriber,
     }).execute()
     return row.data[0]
 

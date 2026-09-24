@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from app.radar import downloader, gemini, pipeline
+from app.radar import downloader, gemini, pipeline, whisper
 
 
 def run_async(coro):
@@ -553,6 +553,248 @@ def test_process_radar_job_download_error(fake_db, monkeypatch):
     assert status == "error"
     analysis = fake_db.store["radar_analyses"][0]
     assert "недействительна" in analysis["error"]
+
+
+# ── Transcriber='whisper' (ТЗ 08, итерация 2) ────────────────────────────────────────────
+
+
+def test_process_radar_job_whisper_mode_t_gemini_not_called(fake_db, monkeypatch):
+    job = seed_job(fake_db, mode="t", transcriber="whisper")
+    seed_reel(fake_db)
+
+    async def fake_download_to(tmpdir, reel):
+        p = Path(tmpdir) / f"{reel['id']}.mp4"
+        p.write_bytes(b"fake-mp4")
+        return p
+
+    def fake_whisper_transcribe(video_path):
+        assert os.path.exists(video_path)
+        return [{"start": 0.0, "end": 1.2, "text": "привет"}], "ru"
+
+    def fail_gemini_analyze(*a, **kw):
+        raise AssertionError("Gemini не должен вызываться для transcriber='whisper', mode='t'")
+
+    monkeypatch.setattr(pipeline.downloader, "download_to", fake_download_to)
+    monkeypatch.setattr(pipeline.whisper, "transcribe", fake_whisper_transcribe)
+    monkeypatch.setattr(pipeline.gemini, "analyze", fail_gemini_analyze)
+
+    status = run_async(pipeline.process_radar_job(job))
+
+    assert status == "done"
+    analysis = fake_db.store["radar_analyses"][0]
+    assert analysis["transcript_engine"] == "openai-whisper"
+    assert analysis["transcript_segments"] == [{"start": 0.0, "end": 1.2, "text": "привет"}]
+    assert analysis["transcript_language"] == "ru"
+    assert analysis.get("visual_timeline") is None  # mode='t' — визуальные поля не пишутся вовсе
+    assert analysis["mode"] == "t"
+
+
+def test_process_radar_job_whisper_mode_tv_merges_whisper_and_gemini_visual(fake_db, monkeypatch):
+    # tv + whisper: расшифровку делает Whisper, видеоряд — отдельным вызовом Gemini в mode='v'
+    # (без повторной расшифровки речи Gemini-ем), результаты сливаются в одну строку.
+    job = seed_job(fake_db, mode="tv", transcriber="whisper")
+    seed_reel(fake_db)
+
+    async def fake_download_to(tmpdir, reel):
+        p = Path(tmpdir) / f"{reel['id']}.mp4"
+        p.write_bytes(b"fake-mp4")
+        return p
+
+    def fake_whisper_transcribe(video_path):
+        return [{"start": 0.0, "end": 1.2, "text": "привет"}], "ru"
+
+    def fake_gemini_analyze(video_path, mode, duration_sec=None):
+        assert mode == "v"
+        return {
+            "transcript_segments": None,
+            "transcript_language": None,
+            "visual_timeline": [{"t": "0:00-0:02", "text": "человек говорит"}],
+            "hook": "хук",
+            "structure": "структура",
+            "cta": "подписывайся",
+            "format_idea": "идея",
+        }
+
+    monkeypatch.setattr(pipeline.downloader, "download_to", fake_download_to)
+    monkeypatch.setattr(pipeline.whisper, "transcribe", fake_whisper_transcribe)
+    monkeypatch.setattr(pipeline.gemini, "analyze", fake_gemini_analyze)
+
+    status = run_async(pipeline.process_radar_job(job))
+
+    assert status == "done"
+    analysis = fake_db.store["radar_analyses"][0]
+    assert analysis["mode"] == "tv"
+    assert analysis["transcript_engine"] == "openai-whisper"
+    assert analysis["transcript_segments"] == [{"start": 0.0, "end": 1.2, "text": "привет"}]
+    assert analysis["transcript_language"] == "ru"
+    assert analysis["visual_timeline"] == [{"t": "0:00-0:02", "text": "человек говорит"}]
+    assert analysis["hook"] == "хук"
+
+
+def test_process_radar_job_whisper_rate_limited_returns_to_queue(fake_db, monkeypatch):
+    job = seed_job(fake_db, mode="t", transcriber="whisper")
+    seed_reel(fake_db)
+
+    async def fake_download_to(tmpdir, reel):
+        p = Path(tmpdir) / f"{reel['id']}.mp4"
+        p.write_bytes(b"fake-mp4")
+        return p
+
+    def fake_whisper_transcribe(video_path):
+        raise gemini.RateLimitedError("OpenAI Whisper: 429")
+
+    monkeypatch.setattr(pipeline.downloader, "download_to", fake_download_to)
+    monkeypatch.setattr(pipeline.whisper, "transcribe", fake_whisper_transcribe)
+
+    status = run_async(pipeline.process_radar_job(job))
+
+    assert status == "rate_limited"
+    job_row = fake_db.store["radar_jobs"][0]
+    assert job_row["state"] == "queued"
+    analysis = fake_db.store["radar_analyses"][0]
+    assert analysis["status"] == "rate_limited"
+
+
+def test_process_radar_job_default_transcriber_is_gemini(fake_db, monkeypatch):
+    # Задание без поля transcriber (старые строки/страховка pg_cron) — ведёт себя как раньше.
+    job = seed_job(fake_db, mode="t")
+    job.pop("transcriber", None)
+    seed_reel(fake_db)
+
+    async def fake_download_to(tmpdir, reel):
+        p = Path(tmpdir) / f"{reel['id']}.mp4"
+        p.write_bytes(b"fake-mp4")
+        return p
+
+    def fail_whisper_transcribe(video_path):
+        raise AssertionError("Whisper не должен вызываться, если transcriber не 'whisper'")
+
+    def fake_gemini_analyze(video_path, mode, duration_sec=None):
+        assert mode == "t"
+        return {
+            "transcript_segments": [{"start": 0.0, "end": 1.0, "text": "текст"}],
+            "transcript_language": "ru",
+            "visual_timeline": None, "hook": None, "structure": None, "cta": None, "format_idea": None,
+        }
+
+    monkeypatch.setattr(pipeline.downloader, "download_to", fake_download_to)
+    monkeypatch.setattr(pipeline.whisper, "transcribe", fail_whisper_transcribe)
+    monkeypatch.setattr(pipeline.gemini, "analyze", fake_gemini_analyze)
+
+    status = run_async(pipeline.process_radar_job(job))
+
+    assert status == "done"
+    analysis = fake_db.store["radar_analyses"][0]
+    assert analysis["transcript_engine"] == "gemini"
+
+
+# ── whisper.py: вызов OpenAI напрямую (без сети — httpx.post замокан) ───────────────────
+
+
+class _FakeHttpResponse:
+    def __init__(self, status_code: int, json_data: dict | None = None, text: str = ""):
+        self.status_code = status_code
+        self._json = json_data or {}
+        self.text = text or str(json_data)
+
+    def json(self):
+        return self._json
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            import httpx
+            raise httpx.HTTPStatusError("error", request=None, response=self)
+
+
+def test_whisper_transcribe_no_key_raises(monkeypatch, tmp_path):
+    from app.radar import settings as radar_settings
+
+    monkeypatch.setattr(radar_settings, "OPENAI_API_KEY", "")
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"fake")
+
+    with pytest.raises(whisper.WhisperUnavailableError):
+        whisper.transcribe(video)
+
+
+def test_whisper_transcribe_file_too_large_raises(monkeypatch, tmp_path):
+    from app.radar import settings as radar_settings
+
+    monkeypatch.setattr(radar_settings, "OPENAI_API_KEY", "sk-test")
+    monkeypatch.setattr(radar_settings, "WHISPER_MAX_BYTES", 10)
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"x" * 20)
+
+    with pytest.raises(whisper.WhisperFileTooLargeError):
+        whisper.transcribe(video)
+
+
+def test_whisper_transcribe_parses_verbose_json(monkeypatch, tmp_path):
+    from app.radar import settings as radar_settings
+
+    monkeypatch.setattr(radar_settings, "OPENAI_API_KEY", "sk-test")
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"fake-mp4")
+
+    captured = {}
+
+    def fake_post(url, headers=None, files=None, data=None, timeout=None):
+        captured.update(url=url, headers=headers, data=data)
+        return _FakeHttpResponse(200, {
+            "task": "transcribe",
+            "language": "russian",
+            "duration": 3.2,
+            "text": "привет мир",
+            "segments": [
+                {"id": 0, "start": 0.0, "end": 1.5, "text": " привет ", "seek": 0, "tokens": [], "temperature": 0.0, "avg_logprob": -0.1, "compression_ratio": 1.0, "no_speech_prob": 0.01},
+                {"id": 1, "start": 1.5, "end": 3.2, "text": " мир ", "seek": 0, "tokens": [], "temperature": 0.0, "avg_logprob": -0.1, "compression_ratio": 1.0, "no_speech_prob": 0.01},
+            ],
+        })
+
+    monkeypatch.setattr(whisper.httpx, "post", fake_post)
+
+    segments, language = whisper.transcribe(video)
+
+    assert segments == [
+        {"start": 0.0, "end": 1.5, "text": "привет"},
+        {"start": 1.5, "end": 3.2, "text": "мир"},
+    ]
+    assert language == "russian"
+    assert captured["data"]["model"] == radar_settings.WHISPER_MODEL
+    assert captured["data"]["response_format"] == "verbose_json"
+    assert captured["headers"]["Authorization"] == "Bearer sk-test"
+
+
+def test_whisper_transcribe_429_raises_rate_limited(monkeypatch, tmp_path):
+    from app.radar import settings as radar_settings
+
+    monkeypatch.setattr(radar_settings, "OPENAI_API_KEY", "sk-test")
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"fake-mp4")
+
+    def fake_post(url, headers=None, files=None, data=None, timeout=None):
+        return _FakeHttpResponse(429, text="rate limited")
+
+    monkeypatch.setattr(whisper.httpx, "post", fake_post)
+
+    with pytest.raises(gemini.RateLimitedError):
+        whisper.transcribe(video)
+
+
+def test_whisper_transcribe_other_http_error_raises_whisper_error(monkeypatch, tmp_path):
+    from app.radar import settings as radar_settings
+
+    monkeypatch.setattr(radar_settings, "OPENAI_API_KEY", "sk-test")
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"fake-mp4")
+
+    def fake_post(url, headers=None, files=None, data=None, timeout=None):
+        return _FakeHttpResponse(500, text="server error")
+
+    monkeypatch.setattr(whisper.httpx, "post", fake_post)
+
+    with pytest.raises(whisper.WhisperError):
+        whisper.transcribe(video)
 
 
 # ── Валидация сегментов расшифровки (gemini.py) ──────────────────────────────────────────

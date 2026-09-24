@@ -245,3 +245,16 @@ th.grp-reach{color:var(--amber)}th.grp-auth{color:var(--mut)}
 .scope{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--mut);margin-top:14px;flex-wrap:wrap}
 .dlrow{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap;align-items:center}
 @media(max-width:860px){.grid{grid-template-columns:1fr}.cards2{grid-template-columns:1fr}.fmts{grid-template-columns:1fr}.hero{font-size:23px}}
+/* APPSWITCH — переключатель разделов «Парсер / Радар» в шапке */
+.appswitch{display:flex;align-items:center;gap:2px;margin-left:14px;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:3px;flex-shrink:0}
+.appswitch button{background:none;border:0;color:var(--mut);padding:6px 12px;border-radius:7px;font-size:12.5px;font-weight:500;font-family:var(--sans);white-space:nowrap;transition:.12s}
+.appswitch button:hover{color:var(--tx)}
+.appswitch button.on{background:var(--iris);color:#fff}
+@media(max-width:640px){
+  header{flex-wrap:wrap;row-gap:8px;gap:6px}
+  header .btn{padding:6px 9px}
+  .appswitch{margin-left:6px}
+  .appswitch button{padding:6px 9px}
+  header h1{display:none}
+  header .stepper{display:none}
+}

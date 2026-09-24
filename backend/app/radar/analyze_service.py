@@ -29,7 +29,13 @@ class RadarAnalysisDailyLimitError(Exception):
     """429 — превышен суточный лимит новых заданий (ANALYSES_PER_DAY)."""
 
 
-async def enqueue_analysis(items: list[AnalyzeItem], force: bool) -> dict[str, list[str]]:
+class RadarWhisperUnavailableError(Exception):
+    """400 — запрошен transcriber='whisper', но не задан ключ OpenAI (settings.OPENAI_API_KEY)."""
+
+
+async def enqueue_analysis(
+    items: list[AnalyzeItem], force: bool, transcriber: str = "gemini"
+) -> dict[str, list[str]]:
     """Валидирует items, решает, что поставить в очередь, а что скипнуть, и создаёт задания.
 
     Правила skip (без force):
@@ -41,10 +47,17 @@ async def enqueue_analysis(items: list[AnalyzeItem], force: bool) -> dict[str, l
     С force=True второе правило не действует — рилс переставится в очередь, но первое
     (активное задание) действует всегда, повторный /analyze не плодит гонку заданий.
 
+    `transcriber` — движок расшифровки на весь запрос (`'gemini'` | `'whisper'`), сохраняется
+    в `radar_jobs.transcriber` для каждого поставленного задания. `'whisper'` без ключа
+    OpenAI кидает `RadarWhisperUnavailableError` ДО постановки чего-либо в очередь.
+
     Возвращает {"queued": [...], "skipped": [...]}. Кидает RadarReelNotFoundError, если
     среди items есть id, которого нет в radar_reels, и RadarAnalysisDailyLimitError при
     превышении суточного лимита.
     """
+    if transcriber == "whisper" and not radar_settings.OPENAI_API_KEY:
+        raise RadarWhisperUnavailableError("Whisper недоступен: не задан ключ OpenAI")
+
     reel_ids = [item.reel_id for item in items]
     existing_reels = repo.get_reels_by_ids(reel_ids)
     existing_analyses = repo.get_analyses_by_ids(reel_ids)
@@ -80,7 +93,7 @@ async def enqueue_analysis(items: list[AnalyzeItem], force: bool) -> dict[str, l
     queued: list[str] = []
     for item in to_queue:
         repo.upsert_analysis_queued(item.reel_id, item.mode)
-        repo.create_job(item.reel_id, item.mode)
+        repo.create_job(item.reel_id, item.mode, transcriber)
         queued.append(item.reel_id)
 
     if queued:

@@ -8,16 +8,20 @@ from __future__ import annotations
 
 import os
 
-from app.core.config import (
-    settings as core,  # noqa: F401 — реэкспорт для модулей Радара
-)
+from app.core.config import settings as core
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("RADAR_GEMINI_MODEL", "gemini-2.5-flash")
 
+# Whisper (OpenAI) — ключ общий с остальным ReelScribe (app/pipeline/transcribe.py читает тот
+# же OPENAI_API_KEY через core.openai_api_key), не заводим отдельную переменную окружения.
+OPENAI_API_KEY = core.openai_api_key
+WHISPER_MODEL = os.getenv("RADAR_WHISPER_MODEL", "whisper-1")
+WHISPER_MAX_BYTES = 25 * 1024 * 1024  # лимит OpenAI на файл транскрибации
+
 # Лимиты — защита кошелька: эндпоинты публичные, auth в проекте нет. Считаются по базе.
 MAX_USERNAMES = 5
-MAX_PERIOD_MONTHS = 12
+MAX_PERIOD_MONTHS = 24  # итерация 2 (24.09.2026): оригинальный слайдер локального Радара 1..24
 SCRAPES_PER_HOUR = 6
 ANALYSES_PER_DAY = 100
 

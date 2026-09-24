@@ -66,6 +66,9 @@ const postJson = body => ({
 // GET /competitors — список ранее собранных конкурентов с подписчиками
 export const getCompetitors = () => req('/competitors')
 
+// GET /config — доступность Whisper (настроен ли на сервере OPENAI_API_KEY)
+export const getConfig = () => req('/config')
+
 // GET /scrape/cost-estimate — оценка стоимости сбора на Apify до запуска
 export const getCostEstimate = (usernames, periodMonths) =>
   req(`/scrape/cost-estimate?usernames=${encodeURIComponent(usernames.join(','))}&period_months=${periodMonths}`)
@@ -97,9 +100,10 @@ export const getReels = (usernames, sort = 'views', opts = {}) => {
   return req(`/reels?${qs}`)
 }
 
-// POST /analyze — постановка рилсов в очередь на разбор (t|v|tv)
-export const startAnalyze = (items, force = false) =>
-  req('/analyze', postJson(force ? { items, force } : { items }))
+// POST /analyze — постановка рилсов в очередь на разбор (t|v|tv);
+// transcriber — 'gemini' (по умолчанию) | 'whisper' — движок расшифровки для режимов t/tv
+export const startAnalyze = (items, transcriber = 'gemini', force = false) =>
+  req('/analyze', postJson(force ? { items, transcriber, force } : { items, transcriber }))
 
 // POST /jobs/{reel_id}/run — синхронный прогон одного задания (до ~90 с);
 // таймаут fetch намеренно не ставим короче 120 с — тут его просто нет.

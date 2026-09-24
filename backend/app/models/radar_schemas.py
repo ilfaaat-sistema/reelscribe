@@ -28,6 +28,7 @@ class AnalyzeItem(BaseModel):
 class AnalyzeRequest(BaseModel):
     items: list[AnalyzeItem]
     force: bool = False
+    transcriber: Literal["gemini", "whisper"] = "gemini"
 
 
 class AnalyzeCancelRequest(BaseModel):
