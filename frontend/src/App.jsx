@@ -14,6 +14,29 @@ const SECTION_KEYS = { parser: 'rs:last:parser', radar: 'rs:last:radar' }
 const SECTION_DEFAULTS = { parser: '/', radar: '/radar' }
 const memFallback = {}
 
+// Соседний проект YouTube Радар. Адреса — только из окружения: постоянного домена пока нет.
+// Не задан адрес — ссылка не показывается. Парсер каналов работает только на Mac владельца,
+// поэтому его адрес отдельный: в публичной сборке его просто не задают.
+const YT_RADAR_URL = import.meta.env.VITE_YT_RADAR_URL || ''
+const YT_PARSER_URL = import.meta.env.VITE_YT_PARSER_URL || ''
+
+// Соседние проекты владельца для ссылок в шапке. Пункт без адреса не показывается.
+const SERVICES = [
+  { title: 'YouTube Радар', href: YT_RADAR_URL },
+  { title: 'YouTube Парсер', href: YT_PARSER_URL },
+  { title: 'Чертоги', href: 'https://chertogi.vercel.app' },
+  { title: 'Telegram-бот', note: '@moy_parser_razvitie_bot', href: 'https://t.me/moy_parser_razvitie_bot' },
+].filter((s) => s.href)
+
+// Ссылки на соседние сервисы — прямо в шапке, чтобы переходить в один клик
+function ServiceLinks() {
+  return SERVICES.map((s) => (
+    <a key={s.title} className="btn ghost sm" href={s.href} target="_blank" rel="noopener noreferrer" title={s.note || s.href}>
+      {s.title} ↗
+    </a>
+  ))
+}
+
 function saveLastPath(section, path) {
   try {
     sessionStorage.setItem(SECTION_KEYS[section], path)
@@ -105,6 +128,7 @@ function Header() {
           </button>
         </>
       )}
+      <ServiceLinks />
     </header>
   )
 }
