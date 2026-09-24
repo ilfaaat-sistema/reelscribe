@@ -9,8 +9,13 @@
 }
 *{box-sizing:border-box}html,body,#root{margin:0;height:100%}
 body{background:var(--bg);color:var(--tx);font-family:var(--sans);font-size:13.5px;line-height:1.5;-webkit-font-smoothing:antialiased}
+/* #root держит height:100% от всей высоты вьюпорта (правило выше), а единственный ребёнок #root — .app —
+   теперь ниже на apps-bar-h. Без этой строки #root оставался бы жёстко во весь вьюпорт и вместе с
+   панелью apps-bar.js (в потоке перед #root) давал переполнение документа ровно на высоту панели.
+   height:auto — #root просто облегает реальную высоту .app, переполнения не возникает. */
+#root{height:auto}
 button{font-family:inherit;cursor:pointer}a{color:inherit}
-.app{display:flex;flex-direction:column;height:100vh;max-width:1280px;margin:0 auto}
+.app{display:flex;flex-direction:column;height:calc(100vh - var(--apps-bar-h, 0px));max-width:1280px;margin:0 auto}
 /* Таблице расшифровок 1280px мало: её колонки требуют ~1400px и справа обрезались.
    Растягиваем только страницу результатов, остальные экраны остаются прежней ширины. */
 .app:has(.resview.wide){max-width:none}
