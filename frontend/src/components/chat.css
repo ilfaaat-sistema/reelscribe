@@ -1,0 +1,245 @@
+/* ИИ-чат по базе (ТЗ 09). Только переменные из :root в index.css.
+   z-index ниже, чем у .drawer (31) / .drawer-back (30) из index.css — карточка рилса,
+   открытая из чата, должна лечь поверх панели чата, а не под ней. */
+
+.chat-fab {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--iris);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  z-index: 27;
+  transition: transform 0.15s ease, background-color 0.15s ease, filter 0.15s ease;
+}
+.chat-fab:hover {
+  filter: brightness(1.08);
+}
+.chat-fab.is-open {
+  /* у открытой панели есть свой крестик в шапке, а облачко перекрывало кнопку отправки */
+  display: none;
+}
+
+/* Панель начинается ниже полосы «Мои сервисы» (--apps-bar-h, вставляется в поток документа
+   перед #root, см. apps-bar.js) — иначе position:fixed;top:0 перекрывал бы её на время
+   открытого чата. Без панели переменная не определена — calc(...- 0px) не ломается. */
+.chat-panel {
+  position: fixed;
+  top: var(--apps-bar-h, 0px);
+  right: 0;
+  height: calc(100vh - var(--apps-bar-h, 0px));
+  width: 420px;
+  max-width: 100vw;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.22s ease;
+  z-index: 26;
+  box-shadow: -8px 0 28px rgba(0, 0, 0, 0.35);
+}
+.chat-panel.is-open {
+  transform: none;
+}
+
+@media (max-width: 480px) {
+  .chat-panel {
+    width: 100vw;
+  }
+}
+
+.chat-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  font-weight: 650;
+  font-size: 13.5px;
+}
+.chat-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.chat-clear {
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--mut);
+  border-radius: 7px;
+  padding: 5px 10px;
+  font-size: 11.5px;
+}
+.chat-clear:hover {
+  color: var(--tx);
+  border-color: var(--mut);
+}
+.chat-close {
+  background: none;
+  border: 0;
+  color: var(--mut);
+  font-size: 15px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.chat-close:hover {
+  color: var(--tx);
+  background: var(--panel2);
+}
+
+.chat-log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chat-empty {
+  color: var(--faint);
+  font-size: 12.5px;
+  line-height: 1.6;
+  padding: 8px 2px;
+}
+
+.chat-msg {
+  max-width: 92%;
+  padding: 10px 13px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.chat-msg.user {
+  align-self: flex-end;
+  background: var(--iris);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+.chat-msg.assistant {
+  align-self: flex-start;
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  color: var(--tx);
+  border-bottom-left-radius: 4px;
+}
+.chat-msg.assistant.error {
+  border-color: var(--rose);
+  color: var(--rose);
+  background: color-mix(in srgb, var(--rose) 10%, var(--panel2));
+}
+
+.chat-cards {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.chat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 8px 10px;
+  color: var(--tx);
+  font-size: 12px;
+}
+.chat-card:hover {
+  border-color: var(--iris);
+  background: color-mix(in srgb, var(--iris) 6%, var(--panel));
+}
+.chat-card-author {
+  font-weight: 650;
+  color: var(--iris);
+}
+.chat-msg.user .chat-card-author {
+  color: var(--tx);
+}
+.chat-card-meta {
+  color: var(--mut);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.chat-card-snippet {
+  color: var(--faint);
+  font-size: 11.5px;
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
+.chat-cost {
+  margin-top: 8px;
+  font-size: 10.5px;
+  color: var(--faint);
+  font-family: var(--mono);
+}
+
+.chat-typing {
+  align-self: flex-start;
+  color: var(--faint);
+  font-size: 12px;
+  padding: 4px 4px;
+}
+
+.chat-form {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid var(--line);
+}
+.chat-input {
+  flex: 1;
+  resize: none;
+  min-height: 38px;
+  max-height: 120px;
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  color: var(--tx);
+  border-radius: 10px;
+  padding: 9px 11px;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+}
+.chat-input:focus {
+  border-color: var(--iris);
+}
+.chat-send {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  border: 0;
+  background: var(--iris);
+  color: #fff;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.chat-send:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

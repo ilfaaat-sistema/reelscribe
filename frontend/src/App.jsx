@@ -6,6 +6,7 @@ import Results from './pages/Results'
 import History from './pages/History'
 import Errors from './pages/Errors'
 import Radar from './pages/Radar'
+import ChatBubble from './components/ChatBubble'
 
 // Память последней позиции в каждом разделе. Основное хранилище — sessionStorage
 // (ключи rs:last:parser / rs:last:radar), резерв на случай недоступности (приватный
@@ -124,6 +125,7 @@ export default function App() {
         <Route path="/radar" element={<Radar />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <ChatBubble />
     </div>
   )
 }

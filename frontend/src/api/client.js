@@ -121,6 +121,13 @@ export const getErrors = (session) =>
 export const errorsExportUrl = (params = {}) =>
   `${BASE}/errors/export?${new URLSearchParams(params)}`
 
+export const sendChat = (body) =>
+  req('/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+
 // Обложка рилса — прямой <img src>, не через req() (это картинка, не JSON).
 // size: 't' (маленькая, для узкой колонки таблицы) | 'm' (по умолчанию, для карточки).
 export const thumbUrl = (shortcode, size = 'm') =>
