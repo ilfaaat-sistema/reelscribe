@@ -7,6 +7,15 @@ regex, `column=imatch.pattern`) — строки в Python НЕ выкачива
 09-2026: `postgrest._sync.request_builder.SyncFilterRequestBuilder.filter` кладёт
 `f"{operator}.{criteria}"` как есть — оператор PostgREST может быть любым, включая `imatch`).
 
+`search_text` умеет ещё и фильтровать по дате/просмотрам/залётности и сортировать (доработка
+после живого прогона: модель отказывалась совмещать текстовый поиск с фильтром по дате).
+Для полей `transcripts.*` фильтр по данным рилса (`posted_at`/`views`/`er`) идёт через embed
+`reels!inner(...)` — обычный `reels(...)` только обнуляет вложенный объект у несовпавших строк,
+а `!inner` превращает embed в JOIN и реально отсекает строки на стороне Postgres (проверено
+09-2026 на живой базе: без `!inner` фильтр по `posted_at` не менял число строк, с `!inner` —
+менял). У `radar_reels` нет подписчиков и, соответственно, залётности — при `min_er` радар
+целиком исключается из поиска, а не просто не подходит под фильтр.
+
 Каждая функция возвращает список компактных dict — без полных расшифровок (кроме `get_reel`).
 """
 from __future__ import annotations
@@ -23,7 +32,7 @@ from app.core.db import get_db
 # "transcripts" (поле transcripts, метаданные рилса тянутся через embed reels(...)) или
 # "radar" (radar_reels — свои поля, без залётности: там нет author_followers).
 
-_REELS_META_COLS = "id,shortcode,url,author_handle,views,er,posted_at"
+_REELS_META_COLS = "id,shortcode,url,author_handle,views,likes,er,posted_at"
 
 _FIELD_SPECS: dict[str, dict[str, str]] = {
     "reels.caption": {"table": "reels", "column": "caption", "kind": "reels"},
@@ -55,32 +64,153 @@ def _resolve_field(name: str) -> str | None:
     return _FIELD_ALIASES.get(name)
 
 
+SNIPPET_WORD_SNAP_MAX = 60  # не откатываемся к границе слова дальше, чем на столько символов
+
+
+def _word_boundary_start(text: str, idx: int) -> int:
+    """Сдвигает левую границу сниппета назад, чтобы не резать слово посередине."""
+    if idx <= 0:
+        return 0
+    if idx >= len(text) or text[idx - 1].isspace():
+        return idx
+    limit = max(0, idx - SNIPPET_WORD_SNAP_MAX)
+    j = idx
+    while j > limit and not text[j - 1].isspace():
+        j -= 1
+    return j
+
+
+def _word_boundary_end(text: str, idx: int) -> int:
+    """Сдвигает правую границу сниппета вперёд, чтобы не резать слово посередине."""
+    n = len(text)
+    if idx >= n:
+        return n
+    if idx <= 0 or text[idx].isspace():
+        return idx
+    limit = min(n, idx + SNIPPET_WORD_SNAP_MAX)
+    j = idx
+    while j < limit and not text[j].isspace():
+        j += 1
+    return j
+
+
 def _make_snippet(text: str | None, pattern: str) -> str | None:
+    """Вырезка вокруг совпадения, обрезанная по границам слов, с «…» по краям при обрезке."""
     if not text:
         return None
     try:
         m = re.search(pattern, text, re.IGNORECASE)
     except re.error:
         m = None
-    if not m:
+    if m:
+        raw_start = max(0, m.start() - SNIPPET_RADIUS)
+        raw_end = min(len(text), m.end() + SNIPPET_RADIUS)
+    else:
         # Регекс на стороне Postgres мог найти совпадение (иной диалект regex), а Python re —
         # нет. В этом случае просто отдаём начало текста, лишь бы не падать.
-        return text[: SNIPPET_RADIUS * 2].strip()
-    start = max(0, m.start() - SNIPPET_RADIUS)
-    end = min(len(text), m.end() + SNIPPET_RADIUS)
-    snippet = text[start:end].strip()
-    return snippet
+        raw_start = 0
+        raw_end = min(len(text), SNIPPET_RADIUS * 2)
+
+    start = _word_boundary_start(text, raw_start)
+    end = _word_boundary_end(text, raw_end)
+    fragment = text[start:end].strip()
+    if not fragment:
+        return None
+    if start > 0:
+        fragment = "…" + fragment
+    if end < len(text):
+        fragment = fragment + "…"
+    return fragment
+
+
+_SORT_FIELDS = ("views", "er", "posted_at", "likes")
+
+
+def _apply_reels_range_filters(
+    q: Any,
+    prefix: str,
+    date_from: str | None,
+    date_to: str | None,
+    min_views: int | None,
+    min_er: float | None,
+) -> Any:
+    """Фильтры по дате/просмотрам/залётности. `prefix` — "" для таблицы reels напрямую,
+
+    "reels." — для embed-фильтра поверх `reels!inner(...)` (нужен PostgREST embed-синтаксис
+    `<embed>.<column>=<op>.<value>`, а не обычное имя колонки).
+    """
+    if date_from:
+        q = q.gte(f"{prefix}posted_at", date_from)
+    if date_to:
+        q = q.lte(f"{prefix}posted_at", date_to)
+    if min_views is not None:
+        q = q.gte(f"{prefix}views", min_views)
+    if min_er is not None:
+        q = q.gte(f"{prefix}er", min_er)
+    return q
+
+
+def _dedup_by_source_id(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Один рилс, найденный через несколько полей, — одна запись (сниппет из первого поля).
+
+    Записи-ошибки (`{"error": ...}`, без source/id) дедупу не подлежат — проходят все как есть.
+    """
+    seen: set[tuple[Any, Any]] = set()
+    out: list[dict[str, Any]] = []
+    for item in items:
+        if item.get("source") is None or item.get("id") is None:
+            out.append(item)  # ошибка отдельного field — не карточка рилса
+            continue
+        key = (item["source"], item["id"])
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(item)
+    return out
+
+
+def _sort_results(items: list[dict[str, Any]], sort_by: str | None) -> list[dict[str, Any]]:
+    """Сортировка по убыванию после объединения и дедупа. Без sort_by — порядок как пришёл.
+
+    Записи без значения нужного поля (например `er=None` у радара) уходят в конец, а не роняют
+    сортировку сравнением `None` с числом. Записи-ошибки — в самый конец, их не сортируем.
+    """
+    if not sort_by:
+        return items
+    errors, plain = [], []
+    for item in items:
+        if item.get("source") is None or item.get("id") is None:
+            errors.append(item)
+        else:
+            plain.append(item)
+    with_value = [it for it in plain if it.get(sort_by) is not None]
+    without_value = [it for it in plain if it.get(sort_by) is None]
+    with_value.sort(key=lambda it: it[sort_by], reverse=True)
+    return with_value + without_value + errors
 
 
 def search_text(
-    pattern: str, fields: list[str] | None = None, limit: int = 20,
+    pattern: str,
+    fields: list[str] | None = None,
+    limit: int = 20,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    min_views: int | None = None,
+    min_er: float | None = None,
+    sort_by: str | None = None,
 ) -> list[dict[str, Any]]:
     """Регулярное выражение POSIX без учёта регистра по полям reels/transcripts/radar_reels.
 
-    Поиск целиком на стороне Postgres (PostgREST `imatch`), в Python — только вырезка сниппета.
+    Поиск целиком на стороне Postgres (PostgREST `imatch`), фильтры по дате/просмотрам/залётности
+    — тоже в PostgREST (embed `reels!inner(...)` для полей transcripts). В Python — только
+    вырезка сниппета, дедуп одного рилса, найденного через несколько полей, и сортировка (её
+    Postgres сделать не может, т.к. итог собирается из нескольких независимых запросов).
+    `min_er` исключает `radar_reels` целиком — у радара нет подписчиков, значит и залётности.
     """
     db = get_db()
     limit = max(1, min(limit, 50))
+    if sort_by not in (None, *_SORT_FIELDS):
+        sort_by = None
 
     field_names = list(_FIELD_SPECS.keys())
     if fields:
@@ -89,18 +219,20 @@ def search_text(
         if not field_names:
             field_names = list(_FIELD_SPECS.keys())
 
+    has_reels_filter = bool(date_from or date_to or min_views is not None or min_er is not None)
+
     results: list[dict[str, Any]] = []
     for field_name in field_names:
         spec = _FIELD_SPECS[field_name]
         try:
             if spec["kind"] == "reels":
-                resp = (
+                q = (
                     db.table("reels")
                     .select(f"{_REELS_META_COLS},{spec['column']}")
                     .filter(spec["column"], "imatch", pattern)
-                    .limit(limit)
-                    .execute()
                 )
+                q = _apply_reels_range_filters(q, "", date_from, date_to, min_views, min_er)
+                resp = q.limit(limit).execute()
                 for row in resp.data or []:
                     results.append(
                         {
@@ -110,6 +242,7 @@ def search_text(
                             "url": row.get("url"),
                             "author": row.get("author_handle"),
                             "views": row.get("views"),
+                            "likes": row.get("likes"),
                             "er": row.get("er"),
                             "posted_at": row.get("posted_at"),
                             "field": field_name,
@@ -117,13 +250,22 @@ def search_text(
                         }
                     )
             elif spec["kind"] == "transcripts":
-                resp = (
-                    db.table("transcripts")
-                    .select(f"reel_id,{spec['column']},reels({_REELS_META_COLS})")
-                    .filter(spec["column"], "imatch", pattern)
-                    .limit(limit)
-                    .execute()
+                # !inner только когда реально нужен фильтр по полям рилса — обычный embed
+                # (без !inner) лишь обнуляет вложенный reels у несовпавших строк, а не убирает
+                # их: строка transcripts всё равно осталась бы в ответе с пустым reels.
+                reels_part = (
+                    f"reels!inner({_REELS_META_COLS})" if has_reels_filter
+                    else f"reels({_REELS_META_COLS})"
                 )
+                q = (
+                    db.table("transcripts")
+                    .select(f"reel_id,{spec['column']},{reels_part}")
+                    .filter(spec["column"], "imatch", pattern)
+                )
+                q = _apply_reels_range_filters(
+                    q, "reels.", date_from, date_to, min_views, min_er
+                )
+                resp = q.limit(limit).execute()
                 for row in resp.data or []:
                     reel = row.get("reels") or {}
                     results.append(
@@ -134,20 +276,28 @@ def search_text(
                             "url": reel.get("url"),
                             "author": reel.get("author_handle"),
                             "views": reel.get("views"),
+                            "likes": reel.get("likes"),
                             "er": reel.get("er"),
                             "posted_at": reel.get("posted_at"),
                             "field": field_name,
                             "snippet": _make_snippet(row.get(spec["column"]), pattern),
                         }
                     )
-            else:  # radar
-                resp = (
+            else:  # radar — своей залётности нет; при min_er исключаем весь источник
+                if min_er is not None:
+                    continue
+                q = (
                     db.table("radar_reels")
-                    .select("id,username,url,views,posted_at,caption")
+                    .select("id,username,url,views,likes,posted_at,caption")
                     .filter(spec["column"], "imatch", pattern)
-                    .limit(limit)
-                    .execute()
                 )
+                if date_from:
+                    q = q.gte("posted_at", date_from)
+                if date_to:
+                    q = q.lte("posted_at", date_to)
+                if min_views is not None:
+                    q = q.gte("views", min_views)
+                resp = q.limit(limit).execute()
                 for row in resp.data or []:
                     results.append(
                         {
@@ -157,6 +307,7 @@ def search_text(
                             "url": row.get("url"),
                             "author": row.get("username"),
                             "views": row.get("views"),
+                            "likes": row.get("likes"),
                             "er": None,
                             "posted_at": row.get("posted_at"),
                             "field": field_name,
@@ -166,7 +317,9 @@ def search_text(
         except Exception as exc:  # noqa: BLE001 — один сбойный field не должен ронять весь поиск
             results.append({"error": f"поиск по {field_name} не удался: {exc}"})
 
-    return results[:limit]
+    deduped = _dedup_by_source_id(results)
+    ordered = _sort_results(deduped, sort_by)
+    return ordered[:limit]
 
 
 def filter_reels(
@@ -346,7 +499,9 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "description": (
             "Полнотекстовый поиск по всей базе (регулярное выражение POSIX без учёта "
             "регистра). Сразу расширяй запрос вариантами написания и языками, например "
-            "herm[eè]s|гермес|эрмес|хермес."
+            "herm[eè]s|гермес|эрмес|хермес. Умеет ОДНОВРЕМЕННО с текстовым поиском фильтровать "
+            "по дате/просмотрам/залётности и сортировать — не нужно звать отдельный инструмент "
+            "и не нужно отказываться, если в вопросе есть и тема, и период, и «топ по залётности»."
         ),
         "parameters": {
             "type": "object",
@@ -363,6 +518,33 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                         "reels.caption_ru, transcripts.text, transcripts.text_ru, "
                         "transcripts.summary, transcripts.ocr_text, radar_reels.caption. "
                         "Без указания — ищет по всем."
+                    ),
+                },
+                "date_from": {
+                    "type": "string",
+                    "description": "Дата ГГГГ-ММ-ДД, от (по дате публикации рилса).",
+                },
+                "date_to": {
+                    "type": "string",
+                    "description": "Дата ГГГГ-ММ-ДД, до (по дате публикации рилса).",
+                },
+                "min_views": {
+                    "type": "integer",
+                    "description": "Минимум просмотров.",
+                },
+                "min_er": {
+                    "type": "number",
+                    "description": (
+                        "Минимальная залётность (просмотры ÷ подписчики). У рилсов Радара "
+                        "залётность не считается — при этом фильтре они не попадают в выдачу."
+                    ),
+                },
+                "sort_by": {
+                    "type": "string",
+                    "enum": ["views", "er", "posted_at", "likes"],
+                    "description": (
+                        "По чему сортировать результат по убыванию. Без указания — порядок как "
+                        "нашлось, без сортировки."
                     ),
                 },
                 "limit": {"type": "integer", "description": "Максимум результатов (default 20)."},

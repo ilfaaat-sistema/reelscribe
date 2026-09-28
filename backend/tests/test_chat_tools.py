@@ -43,6 +43,129 @@ def test_search_text_empty_pattern_no_match_is_safe():
     assert results == []
 
 
+def test_search_text_date_filter_and_sort_by_er():
+    """Живой прогон вскрыл отказ модели («не могу искать и фильтровать по дате одновременно»).
+
+    search_text должен уметь текстовый поиск + фильтр по дате + сортировку ОДНИМ вызовом:
+    embed-фильтр `reels!inner(...)` реально отсекает строки transcripts вне периода (не просто
+    обнуляет вложенный reels), а сортировка по залётности идёт по убыванию после объединения
+    источников.
+    """
+    results = tools.search_text(
+        "claude|клод", date_from="2026-08-01", date_to="2026-08-31", sort_by="er", limit=50,
+    )
+    assert results, "по паттерну claude|клод в августе 2026 ничего не нашлось на живой базе"
+
+    for r in results:
+        if r.get("error"):
+            continue
+        posted_at = r.get("posted_at")
+        assert posted_at and posted_at[:7] == "2026-08", f"embed-фильтр пропустил рилс вне августа: {r}"
+
+    ers = [r["er"] for r in results if not r.get("error") and r.get("er") is not None]
+    assert ers == sorted(ers, reverse=True), "результат не отсортирован по залётности по убыванию"
+
+
+# ── Дедуп: один рилс, найденный через несколько полей, — одна запись ────────────────────────
+# Юнит-тест на моке db (не на живой базе): нужен детерминированный случай, когда один и тот же
+# id реально приходит от нескольких полей сразу, а живые данные такого совпадения сейчас не дают
+# (проверено вручную — ни один рилс не совпадает по «гермес» больше чем в одном поле).
+
+class _FakeQueryResp:
+    def __init__(self, data: list[dict[str, Any]]):
+        self.data = data
+
+
+class _FakeQuery:
+    """Заглушка чейна postgrest-py: игнорирует аргументы фильтров, отдаёт фиксированный список."""
+
+    def __init__(self, data: list[dict[str, Any]]):
+        self._data = data
+
+    def select(self, *a, **k):
+        return self
+
+    def filter(self, *a, **k):
+        return self
+
+    def gte(self, *a, **k):
+        return self
+
+    def lte(self, *a, **k):
+        return self
+
+    def limit(self, *a, **k):
+        return self
+
+    def execute(self):
+        return _FakeQueryResp(self._data)
+
+
+class _FakeDB:
+    def __init__(self, table_data: dict[str, list[dict[str, Any]]]):
+        self._table_data = table_data
+
+    def table(self, name: str):
+        return _FakeQuery(self._table_data.get(name, []))
+
+
+def test_search_text_dedup_same_reel_across_fields(monkeypatch):
+    """Один и тот же рилс, совпавший сразу в нескольких полях, возвращается одной записью."""
+    reel_row = {
+        "id": 555, "shortcode": "DEDUP1", "url": "https://www.instagram.com/reel/DEDUP1/",
+        "author_handle": "author1", "views": 1000, "likes": 50, "er": 3.0,
+        "posted_at": "2026-05-01", "caption": "рассказ про Гермес", "caption_ru": "рассказ про Гермес",
+    }
+    transcript_row = {
+        "reel_id": 555,
+        "text": "рассказ про Гермес", "text_ru": "рассказ про Гермес",
+        "summary": "рассказ про Гермес", "ocr_text": "рассказ про Гермес",
+        "reels": reel_row,
+    }
+    fake_db = _FakeDB({"reels": [reel_row], "transcripts": [transcript_row], "radar_reels": []})
+    monkeypatch.setattr(tools, "get_db", lambda: fake_db)
+
+    results = tools.search_text("гермес", limit=50)
+
+    matches = [r for r in results if r.get("shortcode") == "DEDUP1"]
+    assert len(matches) == 1, f"один рилс вернулся несколько раз вместо одной записи: {matches}"
+    # Побеждает первое поле по порядку _FIELD_SPECS (reels.caption раньше transcripts.*).
+    assert matches[0]["field"] == "reels.caption"
+
+
+# ── Сниппет: обрезка по границам слов, не с середины ─────────────────────────────────────────
+
+def test_word_boundary_start_snaps_back_to_space():
+    text = "привет мир как дела"
+    idx = text.index("мир") + 1  # внутри слова «мир»
+    assert tools._word_boundary_start(text, idx) == text.index("мир")
+
+
+def test_word_boundary_end_snaps_forward_to_space():
+    text = "привет мир как дела"
+    idx = text.index("мир") + 1  # внутри слова «мир»
+    assert tools._word_boundary_end(text, idx) == text.index("мир") + len("мир")
+
+
+def test_make_snippet_no_mid_word_cut_and_has_ellipsis():
+    """Баг живого прогона: сниппет начинался с середины слова («логии» вместо «технологии»)."""
+    left = "слово " * 40  # заведомо длиннее SNIPPET_RADIUS (120 символов) слева от совпадения
+    right = " слово" * 40
+    text = f"{left}технологиями{right}"
+
+    snippet = tools._make_snippet(text, "технологиями")
+
+    assert snippet is not None
+    assert snippet.startswith("…") and snippet.endswith("…"), snippet
+    core = snippet[1:-1]
+    assert "технологиями" in snippet  # ключевое слово вошло в сниппет целиком, не обрублено
+
+    start_idx = text.index(core)
+    end_idx = start_idx + len(core)
+    assert start_idx == 0 or text[start_idx - 1].isspace(), f"левый край режет слово: {snippet!r}"
+    assert end_idx == len(text) or text[end_idx].isspace(), f"правый край режет слово: {snippet!r}"
+
+
 # ── Цикл агента на моке Gemini ───────────────────────────────────────────────
 
 class _FakeFunctionCall:
