@@ -51,7 +51,9 @@ async function req(path, opts = {}) {
     } catch (_) {
       // не удалось прочитать тело — оставляем сообщение по статусу
     }
-    throw new Error(message)
+    const err = new Error(message)
+    err.status = r.status
+    throw err
   }
   const ct = r.headers.get('content-type') || ''
   return ct.includes('json') ? r.json() : r.blob()
@@ -128,3 +130,41 @@ export const reportUrl = id => `${BASE}/reels/${id}/report.md`
 
 // GET /export.md?reel_ids= — сводный отчёт по пачке рилсов (используется как href)
 export const exportUrl = reelIds => `${BASE}/export.md?reel_ids=${encodeURIComponent(reelIds.join(','))}`
+
+// ── Разведка (ТЗ 10): источники, лента, обновление кнопкой ──────────────
+
+// GET /feed — лента рилсов источников с залётностью; usernames — массив
+export const getFeed = ({ period, usernames, onlyViral, sort, order, limit, offset } = {}) => {
+  const qs = new URLSearchParams()
+  if (period != null) qs.set('period', period)
+  if (usernames?.length) qs.set('usernames', usernames.join(','))
+  if (onlyViral) qs.set('only_viral', 1)
+  if (sort) qs.set('sort', sort)
+  if (order) qs.set('order', order)
+  if (limit != null) qs.set('limit', limit)
+  if (offset != null) qs.set('offset', offset)
+  return req(`/feed?${qs}`)
+}
+
+// GET /sources — активные и исключённые источники
+export const getSources = () => req('/sources')
+
+// POST /sources — добавить источники одной строкой («@ник, ссылка на профиль»)
+export const addSources = input => req('/sources', postJson({ input }))
+
+// DELETE /sources/{username} — убрать источник в исключённые
+export const removeSource = username =>
+  req(`/sources/${encodeURIComponent(username)}`, { method: 'DELETE' })
+
+// POST /sources/{username}/restore — вернуть исключённый источник
+export const restoreSource = username =>
+  req(`/sources/${encodeURIComponent(username)}/restore`, { method: 'POST' })
+
+// GET /refresh/estimate — цена и состав обновления до запуска
+export const getRefreshEstimate = () => req('/refresh/estimate')
+
+// POST /refresh — запуск обновления источников (платный Apify)
+export const startRefresh = (force = false) => req('/refresh', postJson({ force }))
+
+// GET /refresh/current — состояние обновления; каждый вызов двигает конвейер на бэке
+export const getRefreshCurrent = () => req('/refresh/current')
