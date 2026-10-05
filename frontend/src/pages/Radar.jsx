@@ -41,7 +41,7 @@ export default function Radar() {
   const onSourcesChanged = useCallback(() => setSourcesKey(k => k + 1), [])
 
   return (
-    <div className="radar">
+    <div className={tab === 'oneoff' ? 'radar' : 'radar rs-wide-page'}>
       <div className="topbar">
         <div className="logo">Reels <b>Радар</b></div>
         <div className="meta">

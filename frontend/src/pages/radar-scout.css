@@ -19,7 +19,13 @@
 }
 
 /* ---------- ширина ---------- */
-.radar .wrap.rs-wide { max-width: 1400px; }
+.radar .wrap.rs-wide { max-width: 1400px; padding-bottom: 16px; }
+/* базовый .wrap держит 140px снизу под плавающую панель разового сбора — здесь её нет */
+.radar .wrap.rs-wide:last-child { padding-bottom: 48px; }
+/* шапка и вкладки держат ту же ширину, что и содержимое активной вкладки:
+   1400px на «Ленте» и «Источниках», 1180px (как .wrap) на «Разовом сборе» */
+.radar.rs-wide-page .topbar { max-width: 1400px; }
+.radar:not(.rs-wide-page) .rs-tabs { max-width: 1180px; }
 
 /* ---------- вкладки ---------- */
 .radar .rs-tabs {
@@ -183,7 +189,7 @@
   letter-spacing: .05em;
   text-align: right;
   white-space: nowrap;
-  padding: 10px 12px;
+  padding: 10px 8px;
   border-bottom: 1px solid var(--line);
 }
 .radar .rs-th:first-child { padding-left: 20px; }
@@ -222,7 +228,7 @@
 
 .radar .rs-row td {
   border-bottom: 1px solid var(--line);
-  padding: 8px 12px;
+  padding: 8px 8px;
   vertical-align: middle;
   background: var(--surface);
   transition: background .12s;
@@ -262,7 +268,7 @@
   line-height: 1.4;
 }
 
-.radar .rs-td-acc { min-width: 200px; max-width: 320px; }
+.radar .rs-td-acc { min-width: 160px; max-width: 320px; }
 .radar .rs-acc {
   font-weight: 700;
   color: var(--ink);
