@@ -163,6 +163,7 @@ def test_poll_scrape_run_idempotent(monkeypatch):
     monkeypatch.setattr(repo, "release_scrape_finish_claim", fail_release)
     monkeypatch.setattr(repo, "ensure_competitors", fake_ensure_competitors)
     monkeypatch.setattr(repo, "bulk_upsert_reels", fake_bulk_upsert)
+    monkeypatch.setattr(repo, "insert_reel_snapshots", lambda reels, scrape_run_id: len(reels))
     monkeypatch.setattr(repo, "finish_scrape_run_done", fake_finish_done)
 
     result1 = asyncio.run(scrape_service.poll_scrape_run(1))
@@ -260,6 +261,7 @@ def test_poll_scrape_run_dedupes_duplicate_shortcode_keeps_higher_views(monkeypa
         repo, "bulk_upsert_reels",
         lambda reels, scrape_run_id: (captured.extend(reels), len(reels))[1],
     )
+    monkeypatch.setattr(repo, "insert_reel_snapshots", lambda reels, scrape_run_id: len(reels))
     monkeypatch.setattr(repo, "finish_scrape_run_done", lambda *a: None)
 
     asyncio.run(scrape_service.poll_scrape_run(1))
@@ -300,6 +302,7 @@ def test_poll_scrape_run_filters_reels_older_than_cutoff(monkeypatch):
         repo, "bulk_upsert_reels",
         lambda reels, scrape_run_id: (captured.extend(reels), len(reels))[1],
     )
+    monkeypatch.setattr(repo, "insert_reel_snapshots", lambda reels, scrape_run_id: len(reels))
     finished: dict = {}
     monkeypatch.setattr(
         repo, "finish_scrape_run_done",

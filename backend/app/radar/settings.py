@@ -29,6 +29,23 @@ ANALYSES_PER_DAY = 100
 REELS_PER_MONTH_ESTIMATE = 20
 APIFY_COST_PER_REEL = 0.0026
 
+# ── Обновление источников кнопкой (ТЗ 10, docs/specs/10-radar-intel.md) ──
+DEEP_LIMIT = 60            # глубокий проход: рилсов на ник
+DEEP_DAYS = 90             # ... за сколько дней
+INCR_LIMIT = 15            # лёгкий проход
+INCR_DAYS = 14
+DEEP_STALE_DAYS = 14       # источник без обновления дольше — снова глубоким проходом
+BATCH_DEEP = 5             # ников в одной глубокой пачке
+BATCH_INCR = 10
+BATCH_FOLLOWERS = 25
+FOLLOWERS_TTL_DAYS = 3     # подписчики моложе — не перезапрашиваем
+MIN_REFRESH_INTERVAL_H = 6  # источник моложе — пропускается (если не force)
+REFRESHES_PER_HOUR = 2
+REFRESH_STALE_MIN = 180    # страховка в start(): running старше — закрывается как error
+START_CLAIM_STALE_SEC = 90  # захват старта без перехода в running → пачка в error
+USD_RUB = 80
+APIFY_COST_PER_PROFILE = 0.0023  # непроверенная оценка, уточняется платным прогоном
+
 REEL_ACTOR = "apify~instagram-reel-scraper"
 PROFILE_ACTOR = "apify~instagram-profile-scraper"
 

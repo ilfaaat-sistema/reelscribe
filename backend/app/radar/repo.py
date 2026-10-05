@@ -55,39 +55,64 @@ def ensure_competitors(usernames: list[str]) -> None:
     ).execute()
 
 
-def upsert_competitor_followers(username: str, followers: Optional[int]) -> None:
+def upsert_competitor_followers(
+    username: str, followers: Optional[int], full_name: Optional[str] = None,
+) -> None:
+    """full_name пишется только если передан (не None) — старые вызовы не затирают имя."""
     db = get_db()
-    db.table("radar_competitors").upsert({
+    row: dict[str, Any] = {
         "username": username,
         "followers": followers,
         "followers_updated_at": _now_iso(),
-    }).execute()
+    }
+    if full_name is not None:
+        row["full_name"] = full_name
+    db.table("radar_competitors").upsert(row).execute()
 
 
 # ── scrape_runs ──────────────────────────────────────────────────────────────
 
 def count_runs_last_hour() -> int:
     """Считаем прогоны ОБОИХ kind (reels и followers) одним счётчиком — лимит в ТЗ describан
-    как общая защита кошелька от Apify-вызовов, а не отдельно на каждый вид прогона."""
+    как общая защита кошелька от Apify-вызовов, а не отдельно на каждый вид прогона.
+    Дочерние прогоны обновления (refresh_id не NULL) не считаются: у них свой лимит
+    REFRESHES_PER_HOUR по radar_refreshes (ТЗ 10)."""
     db = get_db()
     since = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
     rows = (
         db.table("radar_scrape_runs")
         .select("id", count="exact")
         .gte("created_at", since)
+        .is_("refresh_id", "null")
         .execute()
     )
     return rows.count or 0
 
 
-def create_scrape_run(kind: str, usernames: list[str], period_months: Optional[int]) -> dict[str, Any]:
+def create_scrape_run(
+    kind: str,
+    usernames: list[str],
+    period_months: Optional[int],
+    refresh_id: Optional[int] = None,
+    batch_idx: Optional[int] = None,
+    params: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """refresh_id/batch_idx/params — только для пачек обновления; без них строка такая же,
+    как раньше (старые вызовы не ломаются)."""
     db = get_db()
-    row = db.table("radar_scrape_runs").insert({
+    payload: dict[str, Any] = {
         "kind": kind,
         "usernames": usernames,
         "period_months": period_months,
         "status": "pending",
-    }).execute()
+    }
+    if refresh_id is not None:
+        payload["refresh_id"] = refresh_id
+    if batch_idx is not None:
+        payload["batch_idx"] = batch_idx
+    if params is not None:
+        payload["params"] = params
+    row = db.table("radar_scrape_runs").insert(payload).execute()
     return row.data[0]
 
 
@@ -195,6 +220,48 @@ def bulk_upsert_reels(reels: list[dict[str, Any]], scrape_run_id: Optional[int])
     if existing_rows:
         db.table("radar_reels").upsert(existing_rows, on_conflict="id").execute()
     return len(reels)
+
+
+def insert_reel_snapshots(reels: list[dict[str, Any]], scrape_run_id: int) -> int:
+    """Снимки метрик рилсов за прогон (radar_reel_snapshots). Идемпотентно по (reel_id,
+    scrape_run_id): уже записанные для этого прогона пропускаются.
+
+    Сделано «select + insert», а не upsert(on_conflict=...): уникальный индекс uq_radar_snap_run
+    частичный (where scrape_run_id is not null), а PostgREST не умеет передавать предикат
+    индекса в ON CONFLICT — upsert упал бы с «no unique constraint matching». Рилсы должны уже
+    лежать в radar_reels (FK) — вызывать после bulk_upsert_reels."""
+    if not reels:
+        return 0
+    db = get_db()
+    ids = [r["id"] for r in reels]
+    existing: set[str] = set()
+    for i in range(0, len(ids), 200):
+        chunk = ids[i:i + 200]
+        existing |= {
+            row["reel_id"]
+            for row in db.table("radar_reel_snapshots")
+            .select("reel_id")
+            .eq("scrape_run_id", scrape_run_id)
+            .in_("reel_id", chunk)
+            .execute()
+            .data
+        }
+    now = _now_iso()
+    rows = [
+        {
+            "reel_id": r["id"],
+            "views": r.get("views"),
+            "likes": r.get("likes"),
+            "comments": r.get("comments"),
+            "taken_at": now,
+            "scrape_run_id": scrape_run_id,
+        }
+        for r in reels
+        if r["id"] not in existing
+    ]
+    for i in range(0, len(rows), 500):
+        db.table("radar_reel_snapshots").insert(rows[i:i + 500]).execute()
+    return len(rows)
 
 
 def get_reel(reel_id: str) -> Optional[dict[str, Any]]:
@@ -386,3 +453,129 @@ def cancel_jobs(reel_ids: list[str]) -> list[str]:
             "status", ["queued", "downloading", "analyzing", "rate_limited"]
         ).execute()
     return cancelled_ids
+
+
+
+# ── обновление источников (ТЗ 10) ────────────────────────────────────────────
+
+def list_active_sources() -> list[dict[str, Any]]:
+    db = get_db()
+    return (
+        db.table("radar_competitors")
+        .select("username, followers, followers_updated_at, last_scraped_at")
+        .eq("is_source", True)
+        .order("username")
+        .execute()
+        .data
+    )
+
+
+def set_last_scraped(usernames: list[str]) -> None:
+    if not usernames:
+        return
+    db = get_db()
+    db.table("radar_competitors").update({"last_scraped_at": _now_iso()}).in_(
+        "username", usernames
+    ).execute()
+
+
+def create_refresh(total_batches: int, estimate_usd: Optional[float]) -> dict[str, Any]:
+    """Вставка строки radar_refreshes(status='running'). При уже идущем обновлении БД
+    бросит нарушение уникального индекса uq_radar_refresh_one_running — это замок."""
+    db = get_db()
+    row = db.table("radar_refreshes").insert({
+        "status": "running",
+        "total_batches": total_batches,
+        "estimate_usd": estimate_usd,
+    }).execute()
+    return row.data[0]
+
+
+def get_running_refresh() -> Optional[dict[str, Any]]:
+    db = get_db()
+    rows = db.table("radar_refreshes").select("*").eq("status", "running").limit(1).execute()
+    return rows.data[0] if rows.data else None
+
+
+def get_latest_refresh() -> Optional[dict[str, Any]]:
+    db = get_db()
+    rows = db.table("radar_refreshes").select("*").order("id", desc=True).limit(1).execute()
+    return rows.data[0] if rows.data else None
+
+
+def close_stale_refreshes(older_than_min: int) -> int:
+    """Зависшие running-обновления старше older_than_min минут → error (чтобы замок не висел)."""
+    db = get_db()
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=older_than_min)).isoformat()
+    rows = (
+        db.table("radar_refreshes")
+        .update({
+            "status": "error",
+            "finished_at": _now_iso(),
+            "errors": [{"batch": None, "usernames": [], "error": "Обновление зависло и было закрыто"}],
+        })
+        .eq("status", "running")
+        .lt("created_at", cutoff)
+        .execute()
+    )
+    return len(rows.data or [])
+
+
+def count_refreshes_last_hour() -> int:
+    db = get_db()
+    since = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    rows = db.table("radar_refreshes").select("id", count="exact").gte("created_at", since).execute()
+    return rows.count or 0
+
+
+def finalize_refresh(
+    refresh_id: int, status: str, reels_saved: int, cost_usd: float, errors: list[dict[str, Any]],
+) -> bool:
+    """Условный update running → done|error: повторный вызов ничего не делает."""
+    db = get_db()
+    rows = (
+        db.table("radar_refreshes")
+        .update({
+            "status": status,
+            "reels_saved": reels_saved,
+            "cost_usd": cost_usd,
+            "errors": errors,
+            "finished_at": _now_iso(),
+        })
+        .eq("id", refresh_id)
+        .eq("status", "running")
+        .execute()
+    )
+    return bool(rows.data)
+
+
+def list_refresh_runs(refresh_id: int) -> list[dict[str, Any]]:
+    db = get_db()
+    return (
+        db.table("radar_scrape_runs")
+        .select("*")
+        .eq("refresh_id", refresh_id)
+        .order("batch_idx")
+        .execute()
+        .data
+    )
+
+
+def claim_run_start(run_id: int) -> bool:
+    """Захват старта пачки: условный update start_claimed_at=now() WHERE start_claimed_at IS NULL
+    AND status='pending'. True — только вызову, который реально захватил (он и стартует Apify)."""
+    db = get_db()
+    rows = (
+        db.table("radar_scrape_runs")
+        .update({"start_claimed_at": _now_iso()})
+        .eq("id", run_id)
+        .eq("status", "pending")
+        .is_("start_claimed_at", "null")
+        .execute()
+    )
+    return bool(rows.data)
+
+
+def mark_run_error(run_id: int, error: str) -> None:
+    """Пометка пачки ошибкой (pending|running → error)."""
+    finish_scrape_run_error(run_id, error)

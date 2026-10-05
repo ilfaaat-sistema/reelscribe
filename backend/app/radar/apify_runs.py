@@ -109,7 +109,10 @@ async def start_run(actor: str, run_input: dict[str, Any]) -> dict[str, str]:
 
 
 async def get_run(run_id: str, token_ref: str) -> dict[str, Any]:
-    """GET /v2/actor-runs/{runId} — текущий статус прогона."""
+    """GET /v2/actor-runs/{runId} — текущий статус прогона.
+
+    Возвращает также `cost_usd` — фактическую цену прогона (`usageTotalUsd`), None если Apify
+    её не отдал (прогон ещё идёт или поле отсутствует)."""
     token = _resolve_token(token_ref)
     async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=10.0)) as client:
         try:
@@ -121,7 +124,12 @@ async def get_run(run_id: str, token_ref: str) -> dict[str, Any]:
         raise ApifyRunError(f"Apify: опрос прогона {run_id} HTTP {resp.status_code} {resp.text[:200]}")
 
     data = (resp.json() or {}).get("data") or {}
-    return {"status": data.get("status"), "dataset_id": data.get("defaultDatasetId")}
+    cost = data.get("usageTotalUsd")
+    return {
+        "status": data.get("status"),
+        "dataset_id": data.get("defaultDatasetId"),
+        "cost_usd": float(cost) if isinstance(cost, (int, float)) else None,
+    }
 
 
 async def get_items(dataset_id: str, token_ref: str) -> list[dict[str, Any]]:

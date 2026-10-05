@@ -58,7 +58,7 @@
 Константы — в `backend/app/radar/settings.py`: `DEEP_LIMIT=60`, `DEEP_DAYS=90`,
 `INCR_LIMIT=15`, `INCR_DAYS=14`, `DEEP_STALE_DAYS=14`, `BATCH_DEEP=5`, `BATCH_INCR=10`,
 `BATCH_FOLLOWERS=25`, `FOLLOWERS_TTL_DAYS=3`, `MIN_REFRESH_INTERVAL_H=6`,
-`REFRESHES_PER_HOUR=2`, `REFRESH_STALE_MIN=40`, `START_CLAIM_STALE_SEC=90`, `USD_RUB=80`,
+`REFRESHES_PER_HOUR=2`, `REFRESH_STALE_MIN=180`, `START_CLAIM_STALE_SEC=90`, `USD_RUB=80`,
 `APIFY_COST_PER_PROFILE=0.0023` (непроверенная оценка, уточняется платным прогоном).
 
 - Источник идёт **глубоким** проходом, если `last_scraped_at` пуст или старше
@@ -81,8 +81,10 @@
   5. все терминальны → финал: `reels_saved`, `cost_usd`, `errors`, статус `done` (хотя бы
      одна пачка успешна) или `error`.
 - После успешной реел-пачки её никам ставится `last_scraped_at=now()` (и при 0 рилсов).
+  Метка ставится сразу по закрытии пачки, не дожидаясь финала обновления.
 - Замок: уникальный частичный индекс на `status='running'`. Перед созданием зависшие
   `running` старше `REFRESH_STALE_MIN` закрываются как `error`. Повтор при идущем → 409.
+  `GET /refresh/current` зависшие не закрывает — он всегда продолжает идущее обновление.
 - Лимит `REFRESHES_PER_HOUR` считается по `radar_refreshes`. Дочерние прогоны (с
   `refresh_id`) НЕ входят в `SCRAPES_PER_HOUR` разового сбора.
 - Каждая принятая реел-пачка (и разовый сбор тоже) пишет снимки в `radar_reel_snapshots`.
@@ -213,7 +215,7 @@ create unique index if not exists uq_radar_snap_run
 `GET /refresh/estimate`
 
 ```json
-{"sources_total": 20, "to_refresh": 20, "deep": 3, "incremental": 17, "batches": 6,
+{"sources_total": 20, "to_refresh": 20, "deep": 3, "incremental": 17, "batches": 4,
  "reels_est": 435, "reels_usd": 1.13, "followers_profiles": 20, "followers_usd": 0.05,
  "total_usd": 1.18, "total_rub": 94.0, "rate": 80, "skipped_fresh": 0}
 ```
@@ -335,7 +337,7 @@ RefreshBar:
   <div className="rs-table-wrap"><table className="rs-table">
     <thead><tr>
       <th className="rs-th"/>                                      {/* превью */}
-      <th className="rs-th">Аккаунт</th>
+      <th className="rs-th rs-th-left">Аккаунт</th>
       <th className="rs-th rs-th-sort desc" data-key="viral">Залётность</th>
       …data-key: views, speed, reach, posted_at, followers, likes, comments…
       <th className="rs-th"/> <th className="rs-th"/>               {/* 🔥, действие */}
@@ -394,7 +396,8 @@ RefreshBar:
 ```
 
 Модификаторы: `.rs-wide` (max-width 1400px), `.rs-badge.viral.v3|v5|v10`, `.rs-badge.rising`,
-`.rs-badge.low`, `.rs-badge.new`, `.rs-th-sort.asc|.desc`. Таблица скроллится горизонтально
+`.rs-badge.low`, `.rs-badge.new`, `.rs-th-sort.asc|.desc`, `.rs-th-left` (заголовок колонки
+«Аккаунт» в обеих таблицах — влево; остальные заголовки вправо). Таблица скроллится горизонтально
 внутри `.rs-table-wrap`; никаких `display:flex` на `td`/`tr`. Отступы и ширины — явными
 значениями, без `justify-content: space-between`.
 

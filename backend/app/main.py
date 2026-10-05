@@ -1,7 +1,19 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import chat, errors, export_, import_, progress, radar, reels, sessions, thumb
+from app.api import (
+    chat,
+    errors,
+    export_,
+    import_,
+    progress,
+    radar,
+    radar_intel,
+    radar_refresh,
+    reels,
+    sessions,
+    thumb,
+)
 from app.core.config import settings
 
 app = FastAPI(title="ReelScribe", version="0.1.0")
@@ -27,6 +39,8 @@ app.include_router(progress.router, prefix="/api")
 app.include_router(errors.router, prefix="/api")
 app.include_router(thumb.router, prefix="/api")
 app.include_router(radar.router, prefix="/api")
+app.include_router(radar_intel.router, prefix="/api")
+app.include_router(radar_refresh.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
 
 

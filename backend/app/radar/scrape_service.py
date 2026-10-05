@@ -122,6 +122,29 @@ async def start_followers_scrape(usernames: Optional[list[str]]) -> int:
     return run_id
 
 
+async def start_refresh_batch(run: dict[str, Any]) -> None:
+    """Запускает Apify для уже заведённой пачки обновления (строка radar_scrape_runs с
+    refresh_id). Вход берётся из run['kind'], run['usernames'] и run['params']
+    (`results_limit`, `newer_than`). Вызывать ТОЛЬКО после repo.claim_run_start — иначе
+    два вызова стартуют платный прогон дважды. Ошибка Apify → RadarApifyError (строку в error
+    переводит вызывающий). start_reel_scrape и его поведение не затронуты."""
+    names = list(run.get("usernames") or [])
+    params = run.get("params") or {}
+    if run["kind"] == "followers":
+        actor = radar_settings.PROFILE_ACTOR
+        run_input: dict[str, Any] = {"usernames": names}
+    else:
+        actor = radar_settings.REEL_ACTOR
+        run_input = {"username": names, "resultsLimit": params.get("results_limit")}
+        if params.get("newer_than"):
+            run_input["onlyPostsNewerThan"] = params["newer_than"]
+    try:
+        started = await apify_runs.start_run(actor, run_input)
+    except (ApifyExhaustedError, apify_runs.ApifyRunError) as exc:
+        raise RadarApifyError(str(exc)) from exc
+    repo.set_run_started(run["id"], started["run_id"], started["dataset_id"], started["token_ref"])
+
+
 def _map_reel(item: dict[str, Any]) -> Optional[dict[str, Any]]:
     """Apify item → строка radar_reels. Без shortCode строка не идентифицируема — пропускаем
     (маппинг сверен с Радар/backend/services/apify_scraper.py::_map_reel)."""
@@ -185,6 +208,8 @@ def _filter_by_cutoff(reels: list[dict[str, Any]], period_months: Optional[int])
     старом коде. Закреплённые рилсы (isPinned) исключения не получают: старый код на это
     поле вообще не смотрит, режутся наравне с остальными."""
     if not period_months:
+        # Пачки обновления (period_months=null) отсекаются самим Apify по onlyPostsNewerThan;
+        # второй фильтр здесь мог бы потерять рилсы, поэтому не режем.
         return reels
     cutoff = _cutoff_datetime(period_months)
     kept: list[dict[str, Any]] = []
@@ -250,9 +275,16 @@ async def poll_scrape_run(run_id: int) -> Optional[dict[str, Any]]:
                 username = item.get("username") or (item.get("inputUrl") or "").rstrip("/").split("/")[-1]
                 followers = item.get("followersCount")
                 if username and followers is not None:
-                    repo.upsert_competitor_followers(username, followers)
+                    repo.upsert_competitor_followers(username, followers, item.get("fullName"))
                     saved += 1
-            repo.finish_scrape_run_done(run_id, saved, 0.0)
+            actual = status.get("cost_usd")
+            if actual is not None:
+                f_cost = round(float(actual), 4)
+            elif run.get("refresh_id") is not None:
+                f_cost = round(saved * radar_settings.APIFY_COST_PER_PROFILE, 4)
+            else:
+                f_cost = 0.0
+            repo.finish_scrape_run_done(run_id, saved, f_cost)
             return repo.get_scrape_run(run_id)
 
         reels = [r for r in (_map_reel(item) for item in items) if r]
@@ -260,7 +292,17 @@ async def poll_scrape_run(run_id: int) -> Optional[dict[str, Any]]:
         reels = _dedupe_reels(reels)
         repo.ensure_competitors([r["username"] for r in reels if r.get("username")])
         repo.bulk_upsert_reels(reels, scrape_run_id=run_id)
-        cost = round(len(reels) * radar_settings.APIFY_COST_PER_REEL, 4)
+        try:
+            # Снимки метрик нужны для «набирает» (ТЗ 10), но не критичны: ошибка только в лог,
+            # приём датасета не откатываем.
+            repo.insert_reel_snapshots(reels, scrape_run_id=run_id)
+        except Exception as snap_exc:  # noqa: BLE001
+            logger.warning("poll_scrape_run(%s): запись снимков не удалась: %s", run_id, snap_exc)
+        actual = status.get("cost_usd")
+        if actual is not None:
+            cost = round(float(actual), 4)
+        else:
+            cost = round(len(reels) * radar_settings.APIFY_COST_PER_REEL, 4)
         repo.finish_scrape_run_done(run_id, len(reels), cost)
         return repo.get_scrape_run(run_id)
     except Exception as exc:  # приём датасета не удался — откатываем захват, залогировав причину
