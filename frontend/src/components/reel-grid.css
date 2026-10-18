@@ -96,9 +96,5 @@
 }
 
 @media (min-width: 1200px) {
-  .reel-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-}
-
-@media (min-width: 1600px) {
   .reel-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }
