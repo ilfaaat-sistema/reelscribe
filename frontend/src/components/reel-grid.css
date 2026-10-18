@@ -1,0 +1,104 @@
+.reel-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 12px;
+}
+
+.reel-grid-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--tx);
+  text-align: left;
+  overflow: hidden;
+}
+
+.reel-grid-card:hover { border-color: var(--iris); }
+.reel-grid-card:focus-visible { outline: 2px solid var(--iris); outline-offset: 3px; }
+
+.reel-grid-cover {
+  display: block;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  overflow: hidden;
+  background: radial-gradient(120% 80% at 50% 0%, #232838 0%, #181b24 60%, #14161d 100%);
+}
+
+.reel-grid-image {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.reel-grid-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 8px;
+  color: var(--mut);
+  font-size: 12px;
+  text-align: center;
+}
+
+.reel-grid-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+}
+
+.reel-grid-metric {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.reel-grid-icon { flex: 0 0 auto; }
+.reel-grid-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reel-grid-empty { margin: 0; padding: 36px 18px; color: var(--mut); text-align: center; }
+
+@media (max-width: 479px) {
+  .reel-grid-metrics { padding: 8px; gap: 4px; }
+  .reel-grid-metric { font-size: 11px; gap: 3px; }
+}
+
+@media (max-width: 359px) {
+  .reel-grid-metrics { padding: 6px; }
+  .reel-grid-metric { font-size: 10px; }
+}
+
+@media (min-width: 480px) {
+  .reel-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (min-width: 768px) {
+  .reel-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 18px; }
+}
+
+@media (min-width: 1200px) {
+  .reel-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+
+@media (min-width: 1600px) {
+  .reel-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}

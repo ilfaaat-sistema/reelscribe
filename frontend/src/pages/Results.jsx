@@ -4,6 +4,7 @@ import { getReels, getSession, retryJobs, getProgress, getSources, thumbUrl } fr
 import { fmtV, fmtPct, erClass } from '../lib/utils'
 import ReelDrawer from '../components/ReelDrawer'
 import ExportModal from '../components/ExportModal'
+import ReelGrid from '../components/ReelGrid'
 
 function StatusPill({ status }) {
   if (status === 'done') return <span className="pill p-done">✓ готово</span>
@@ -265,6 +266,7 @@ export default function Results() {
   const [mode, setMode] = useState('table')   // таблица — основной режим работы
   const [chip, setChip] = useState('all')
   const [search, setSearch] = useState('')
+  const [searchInput, setSearchInput] = useState('')
   const [sortKey, setSortKey] = useState('views')
   const [sortDesc, setSortDesc] = useState(true)
   const [showTr, setShowTr] = useState(true)   // по умолчанию русский; оригинал — одним кликом
@@ -294,25 +296,30 @@ export default function Results() {
   const searchTimer = useRef(null)
   const abortRef = useRef(null)
   const rwrapRef = useRef(null)
-  const lastScrollY = useRef(0)
   const [compact, setCompact] = useState(false)
+  const isScrollableMode = mode === 'table' || mode === 'grid'
+  const isCompact = compact && isScrollableMode && !loading && !error
 
-  // Шапка уезжает вверх при прокрутке таблицы вниз и возвращается при обратном движении —
-  // на экран влезает на три строки больше. Слушаем .rwrap, а не окно: таблица скроллится внутри.
+  // После сворачивания остаётся строка высотой 32 px. Короткая выдача
+  // должна сохранить прокрутку, иначе браузер обнулит scrollTop и раскроет панели снова.
+  const updateCompact = useCallback(el => {
+    if (!el || !isScrollableMode || loading || error) return
+    const remainingRange = el.scrollHeight - (document.documentElement.clientHeight - 32)
+    setCompact(previous => remainingRange > 24 && el.scrollTop > (previous ? 8 : 24))
+  }, [isScrollableMode, loading, error])
+
+  useEffect(() => { setCompact(false) }, [mode, sessionId, loading, error])
+
   useEffect(() => {
     const el = rwrapRef.current
-    if (!el || mode !== 'table') { setCompact(false); return }
-    lastScrollY.current = el.scrollTop
-    const onScroll = () => {
-      // Разворачиваем шапку только у самого верха списка. Реакция на каждое движение колеса
-      // вверх мешала: шапка выскакивала посреди чтения и сдвигала строки под курсором.
-      const y = el.scrollTop
-      setCompact(y > 140)
-      lastScrollY.current = y
-    }
-    el.addEventListener('scroll', onScroll, { passive: true })
-    return () => el.removeEventListener('scroll', onScroll)
-  }, [mode])
+    if (!el || !isScrollableMode) return
+    const observer = new ResizeObserver(() => updateCompact(el))
+    observer.observe(el)
+    if (el.firstElementChild) observer.observe(el.firstElementChild)
+    return () => observer.disconnect()
+  }, [mode, isScrollableMode, loading, error, updateCompact])
+
+  useEffect(() => () => clearTimeout(searchTimer.current), [])
 
   useEffect(() => {
     getSources().then(r => setSources(r?.items || [])).catch(() => {})
@@ -336,7 +343,7 @@ export default function Results() {
     if (abortRef.current) abortRef.current.abort()
     const controller = new AbortController()
     abortRef.current = controller
-    if (!silent && !append) setLoading(true)
+    if (!silent && !append) { setCompact(false); setLoading(true) }
     if (append) setLoadingMore(true)
     try {
       const params = {
@@ -423,8 +430,15 @@ export default function Results() {
   }
 
   function handleSearch(v) {
+    setSearchInput(v)
     clearTimeout(searchTimer.current)
     searchTimer.current = setTimeout(() => setSearch(v), 300)
+  }
+
+  function expandPanels(withFilters = false) {
+    if (rwrapRef.current) rwrapRef.current.scrollTop = 0
+    setCompact(false)
+    if (withFilters) setShowFilt(true)
   }
 
   function toggleSort(key) {
@@ -454,9 +468,21 @@ export default function Results() {
 
   const visibleCols = COLS.filter(c => cols.includes(c.key))
     .sort((a, b) => cols.indexOf(a.key) - cols.indexOf(b.key))
+  const hasFilters = Object.values(filters).some(value => value !== '')
+  const allSelected = reels.length > 0 && reels.every(r => selected.includes(r.id))
 
   return (
-    <div className={`resview wide ${compact ? 'compact' : ''}`}>
+    <div className={`resview wide ${isCompact ? 'compact' : ''}`}>
+      {isCompact && (
+        <div className="results-compactbar" role="group" aria-label="Компактная панель результатов">
+          <button type="button" onClick={() => expandPanels()} title="Вернуться к началу и развернуть панель">↑ Панель</button>
+          <span className="results-compact-count">{reels.length} из {total}</span>
+          <span className="spacer" />
+          <button type="button" aria-label="Открыть фильтры" title="Фильтры" onClick={() => expandPanels(true)}>⚙</button>
+          <button type="button" aria-label="Таблица" title="Таблица" aria-pressed={mode === 'table'} onClick={() => { expandPanels(); setMode('table') }}>☰</button>
+          <button type="button" aria-label="Сетка" title="Сетка" aria-pressed={mode === 'grid'} onClick={() => { expandPanels(); setMode('grid') }}>▦</button>
+        </div>
+      )}
       <div className="rtop">
         <span className="ti">
           Расшифровки <span className="rcount">
@@ -467,9 +493,9 @@ export default function Results() {
           </span>
         </span>
         <div className="spacer" />
-        <div className="toggle">
-          {[['analytics', '📊 Аналитика'], ['table', '☰ Таблица'], ['reading', '📖 Чтение']].map(([m, l]) => (
-            <button key={m} className={mode === m ? 'on' : ''} onClick={() => setMode(m)}>{l}</button>
+        <div className="toggle results-modes" aria-label="Режим просмотра">
+          {[['analytics', '📊 Аналитика'], ['table', '☰ Таблица'], ['grid', '▦ Сетка'], ['reading', '📖 Чтение']].map(([m, l]) => (
+            <button key={m} className={mode === m ? 'on' : ''} aria-pressed={mode === m} onClick={() => { setCompact(false); setMode(m) }}>{l}</button>
           ))}
         </div>
         {stuckCount > 0 && (
@@ -493,11 +519,18 @@ export default function Results() {
 
       {mode !== 'reading' && (
         <div className="subbar">
-          <input
-            className="search"
-            placeholder="Поиск по подписи и расшифровке…"
-            onChange={e => handleSearch(e.target.value)}
-          />
+          <div className="results-search">
+            <button className={`chip ${showFilt || hasFilters ? 'on' : ''}`} aria-expanded={showFilt} aria-controls="results-filters" onClick={() => setShowFilt(f => !f)}>
+              ⚙ Фильтры
+            </button>
+            <input
+              className="search"
+              value={searchInput}
+              aria-label="Поиск по подписи и расшифровке"
+              placeholder="Поиск по подписи и расшифровке…"
+              onChange={e => handleSearch(e.target.value)}
+            />
+          </div>
           {[
             ['all', 'Все'],
             ['viral', '🔥 Залётные'],
@@ -510,9 +543,6 @@ export default function Results() {
               onClick={() => setChip(v)}
             >{l}</button>
           ))}
-          <button className={`chip ${showFilt ? 'on' : ''}`} onClick={() => setShowFilt(f => !f)}>
-            ⚙ Фильтры
-          </button>
           {mode === 'table' && (
             <button className={`chip ${showCols ? 'on' : ''}`} onClick={() => setShowCols(f => !f)}>
               🧱 Столбцы
@@ -525,7 +555,7 @@ export default function Results() {
         </div>
       )}
 
-      <div className={`filtpanel ${showFilt ? 'on' : ''}`}>
+      <div id="results-filters" className={`filtpanel ${showFilt ? 'on' : ''}`}>
         <div className="fgroup">
           <label>Автор</label>
           <input placeholder="@handle" value={filters.author} onChange={e => setFilters(f => ({ ...f, author: e.target.value }))} />
@@ -579,7 +609,7 @@ export default function Results() {
       </div>
 
       {mode === 'table' && showCols && (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '8px 18px', borderBottom: '1px solid var(--line)', background: 'var(--panel)', flexShrink: 0 }}>
+        <div className="results-columns">
           {COLS.map(c => (
             <label key={c.key} className="chkline" style={{ fontSize: 12 }}>
               <input
@@ -609,6 +639,19 @@ export default function Results() {
 
       {!loading && !error && mode === 'analytics' && <Analytics reels={reels} onOpen={setDrawerReelId} />}
 
+      {!loading && !error && mode === 'grid' && (
+        <div className="rwrap" ref={rwrapRef} onScroll={e => updateCompact(e.currentTarget)}>
+          <ReelGrid reels={reels} onOpen={setDrawerReelId} />
+          {reels.length < total && (
+            <div className="results-more">
+              <button className="btn sm ghost" disabled={loadingMore} onClick={handleShowMore}>
+                {loadingMore ? 'Загрузка…' : `Показать ещё (${reels.length} из ${total})`}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {!loading && !error && mode === 'reading' && (
         <>
           <ReaderView reels={reels} onOpen={setDrawerReelId} />
@@ -623,14 +666,15 @@ export default function Results() {
       )}
 
       {!loading && !error && mode === 'table' && (
-        <div className="rwrap" ref={rwrapRef}>
+        <div className="rwrap" ref={rwrapRef} onScroll={e => updateCompact(e.currentTarget)}>
           <table>
             <thead>
               <tr>
                 <th className="nos" style={{ width: 36, textAlign: 'center' }}>
                   <input
                     type="checkbox"
-                    checked={selected.length === reels.length && reels.length > 0}
+                    aria-label="Выбрать все загруженные записи"
+                    checked={allSelected}
                     onChange={e => setSelected(e.target.checked ? reels.map(r => r.id) : [])}
                   />
                 </th>
@@ -658,7 +702,7 @@ export default function Results() {
               {reels.map((r, i) => (
                 <tr key={r.id} className="main" onClick={() => setDrawerReelId(r.id)}>
                   <td style={{ textAlign: 'center' }} onClick={e => { e.stopPropagation(); toggleSelect(r.id) }}>
-                    <input type="checkbox" checked={selected.includes(r.id)} onChange={() => toggleSelect(r.id)} />
+                    <input type="checkbox" aria-label={`Выбрать запись ${i + 1}`} checked={selected.includes(r.id)} onClick={e => e.stopPropagation()} onChange={() => toggleSelect(r.id)} />
                   </td>
                   <td className="rownum">{i + 1}</td>
                   {visibleCols.map(col => (

@@ -19,12 +19,14 @@ button{font-family:inherit;cursor:pointer}a{color:inherit}
 /* Таблице расшифровок 1280px мало: её колонки требуют ~1400px и справа обрезались.
    Растягиваем только страницу результатов, остальные экраны остаются прежней ширины. */
 .app:has(.resview.wide){max-width:none}
-/* Прокрутка таблицы вниз убирает верхние панели, обратное движение возвращает их.
-   Схлопываем через max-height: у панелей разная высота, а анимировать нужно все разом. */
-header,.rtop,.subbar{transition:max-height .18s ease,opacity .14s ease,padding .18s ease;overflow:hidden;max-height:200px}
-.app:has(.resview.compact)>header{max-height:0;opacity:0;padding-top:0;padding-bottom:0;border-bottom:0}
-.resview.compact .rtop,.resview.compact .subbar{max-height:0;opacity:0;padding-top:0;padding-bottom:0;border-bottom:0}
-.resview.compact .filtpanel{display:none}
+/* В компактном виде остаётся тонкая панель и заголовки таблицы. display:none исключает
+   скрытые элементы из фокуса и не создаёт промежуточных размеров при прокрутке. */
+body:has(.resview.compact)>#apps-bar{display:none}
+.app:has(.resview.compact){height:100vh;height:100dvh}
+.app:has(.resview.compact)>header,
+.resview.compact>.rtop,.resview.compact>.subbar,
+.resview.compact>.filtpanel,.resview.compact>.sessnote,
+.resview.compact>.results-columns{display:none}
 /* Липкая шапка таблицы должна быть непрозрачной: у колонок с подсветкой фон задан через
    transparent и сквозь заголовок просвечивала строка под ним. Смешиваем с фоном страницы. */
 thead th.grp-ratio{background:color-mix(in srgb,var(--iris) 7%,var(--bg))}
@@ -130,6 +132,22 @@ input[type=checkbox]{accent-color:var(--iris);width:15px;height:15px}
 .toggle button{background:none;border:0;color:var(--mut);padding:8px 13px;font-size:12.5px;font-weight:500}
 .toggle button.on{background:var(--iris);color:#fff}
 .subbar{display:flex;align-items:center;gap:8px;padding:10px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap;flex-shrink:0}
+.results-search{display:flex;align-items:center;gap:8px;flex:1;min-width:260px}
+.results-search>.chip{flex-shrink:0}
+.results-search>.search{min-width:0;width:100%}
+.results-columns{display:flex;gap:8px;flex-wrap:wrap;padding:8px 18px;border-bottom:1px solid var(--line);background:var(--panel);flex-shrink:0}
+.results-more{text-align:center;padding:16px}
+.results-compactbar{display:flex;align-items:center;gap:8px;height:32px;flex:0 0 32px;padding:0 12px;background:var(--panel);border-bottom:1px solid var(--line);font-size:11px;min-width:0}
+.results-compactbar button{height:26px;padding:2px 8px;background:none;border:0;border-radius:5px;color:var(--mut);font-size:12px;white-space:nowrap}
+.results-compactbar button:hover,.results-compactbar button[aria-pressed=true]{background:var(--panel2);color:var(--tx)}
+.results-compactbar button:focus-visible{outline:2px solid var(--iris);outline-offset:0}
+.results-compact-count{color:var(--mut);font-family:var(--mono);white-space:nowrap}
+@media(max-width:600px){
+  .resview .rtop,.resview .subbar{padding-left:12px;padding-right:12px}
+  .results-search{flex-basis:100%;min-width:0}
+  .results-modes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%;min-width:0}
+  .results-modes button{padding:8px 6px;white-space:nowrap}
+}
 .search{flex:1;min-width:180px;background:var(--panel);border:1px solid var(--line);color:var(--tx);padding:8px 12px;border-radius:8px;outline:none;font-size:13px}
 .search:focus{border-color:var(--iris)}.search::placeholder{color:var(--faint)}
 .chip{background:var(--panel);border:1px solid var(--line);color:var(--mut);padding:6px 11px;border-radius:20px;font-size:12px}
