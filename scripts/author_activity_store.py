@@ -17,7 +17,9 @@ FILES = ('checkpoint/selection.json', 'checkpoint/state.json', 'activity-report.
 
 
 class StoreError(Exception):
-    pass
+    def __init__(self, message, status_code=None):
+        super().__init__(message)
+        self.status_code = status_code
 
 
 def validate_data(value):
@@ -51,11 +53,13 @@ def github(method, path, payload=None, missing=False):
                                'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json'}, method=method)
     try:
         with urlopen(request, timeout=60) as response:
+            if response.status == 204:
+                return None
             return json.load(response)
     except HTTPError as error:
         if missing and error.code == 404:
             return None
-        raise StoreError(f'GitHub вернул HTTP {error.code}; данные не перезаписаны') from None
+        raise StoreError(f'GitHub вернул HTTP {error.code}; данные не перезаписаны', status_code=error.code) from None
 
 
 def ref(api=github):

@@ -95,6 +95,7 @@ def _report(selection, names, state, status, clock):
     authors = state['authors']
     available = [u for u in names if authors.get(u, {}).get('status') == 'available']
     unavailable = [u for u in names if authors.get(u, {}).get('status') == 'unavailable']
+    review_required = sum(bool(authors.get(u, {}).get('needs_review')) for u in names)
     posts, coverage = [], {}
     for username in available:
         author = authors[username]
@@ -113,6 +114,7 @@ def _report(selection, names, state, status, clock):
     report.update(provider='meta_graph', paid_runs=0, collected_at=_now(clock).isoformat(),
                   collection={'status': status, 'target': len(names), 'checked': len(available) + len(unavailable),
                               'available': len(available), 'unavailable': len(unavailable),
+                              'review_required': review_required,
                               'pending': len(names) - len(available) - len(unavailable),
                               'requests': state['requests'], 'cooldown_until': state.get('cooldown_until'),
                               'selection_label': selection.get('label', 'Все авторы каталога')})
@@ -164,14 +166,26 @@ def run_batch(checkpoint_dir, output_report, *, token=None, account_id=None, api
         if author.get('resume_required'):
             page = author.get('next_page')
             after = author.get('after')
-            if not isinstance(page, int) or not 1 <= page <= 20 or (page > 1 and not after):
+            if (not isinstance(page, int) or isinstance(page, bool) or page < 1
+                    or (page > 1 and not after)):
                 # Старый неполный checkpoint восстанавливаем с первой страницы.
                 # Собранные items сохраняются и дедуплицируются при продолжении.
                 page, after = 1, None
         else:
             page, after = 1, None
+        # При восстановлении с первой страницы старая история обхода не годится
+        # для поиска циклов: сохранённые items нужны лишь для итоговой дедупликации.
+        restarting = page == 1 and not after
+        if restarting:
+            author = dict(author, next_page=1, after=None, seen_cursors=[], traversal_ids=[])
+            state['authors'][username] = author
+        seen_cursors = [cursor for cursor in author.get('seen_cursors', [])
+                        if isinstance(cursor, str) and cursor]
+        traversal_ids = {str(identity) for identity in author.get('traversal_ids', [])}
+        if isinstance(after, str) and after and after not in seen_cursors:
+            seen_cursors.append(after)
 
-        while page <= 20:
+        while True:
             remaining = (deadline - _now(clock)).total_seconds()
             if attempts >= max_requests or remaining <= 0:
                 return publish('running')
@@ -257,17 +271,34 @@ def run_batch(checkpoint_dir, output_report, *, token=None, account_id=None, api
                 return publish('failed')
             batch = media['data']
             after_next = (media.get('paging', {}).get('cursors') or {}).get('after') if isinstance(media.get('paging'), dict) else None
+            page_ids = [str(entry['id']) for entry in batch
+                        if isinstance(entry, dict) and entry.get('id') is not None]
+            repeated_page = bool(batch and len(page_ids) == len(batch) and page > 1
+                                 and all(identity in traversal_ids for identity in page_ids))
+            repeated_cursor = bool(after_next and after_next in seen_cursors)
             items = _items_unique(items + batch)
+            if repeated_cursor or repeated_page:
+                author = dict(author, status='available', coverage='partial', items=items,
+                              reason='pagination_stalled', needs_review=True,
+                              resume_required=False, next_page=page + 1, after=after_next,
+                              seen_cursors=seen_cursors, traversal_ids=sorted(traversal_ids))
+                state['authors'][username] = author
+                publish('running')
+                break
+            traversal_ids.update(page_ids)
+            if isinstance(after_next, str) and after_next:
+                seen_cursors.append(after_next)
             stamps = [_stamp(item.get('timestamp')) for item in batch if isinstance(item, dict)]
             stamps = [stamp for stamp in stamps if stamp is not None]
             old_tail = len(stamps) >= 5 and all(stamp < since for stamp in stamps[-5:])
             exhausted = not after_next
-            finished = exhausted or batch == [] or old_tail or page >= 20
+            finished = exhausted or batch == [] or old_tail
             reason = ('cursor_exhausted' if exhausted else
-                      'empty_page' if batch == [] else 'observed_window_or_page_limit')
+                      'empty_page' if batch == [] else 'observed_window')
             author = dict(author, status='available', coverage='complete' if exhausted else 'partial',
                           items=items, reason=reason,
-                          resume_required=not finished, next_page=page + 1, after=after_next)
+                          resume_required=not finished, next_page=page + 1, after=after_next,
+                          seen_cursors=seen_cursors, traversal_ids=sorted(traversal_ids))
             state['authors'][username] = author
             publish('running')
             if max(usage.values(), default=0) >= 85:

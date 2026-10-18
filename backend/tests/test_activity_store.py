@@ -106,3 +106,17 @@ def test_author_names_are_not_credential_field_names():
     store.validate_data({'authors': {'secret_garden': {'items': []}, 'token_life': {'items': []}}})
     with pytest.raises(store.StoreError):
         store.validate_data({'authors': {'secret_garden': {'access_token': 'placeholder'}}})
+
+
+def test_workflow_dispatch_accepts_empty_204_response(monkeypatch):
+    class Response:
+        status = 204
+        def __enter__(self):
+            return self
+        def __exit__(self, *_):
+            return False
+        def read(self, *_):
+            raise AssertionError('Ответ 204 не содержит JSON')
+    monkeypatch.setenv('GH_TOKEN', 'test-only-not-a-real-token')
+    monkeypatch.setattr(store, 'urlopen', lambda *_args, **_kwargs: Response())
+    assert store.github('POST', 'actions/workflows/authors-activity.yml/dispatches', {'ref': 'main'}) is None
