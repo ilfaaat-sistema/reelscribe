@@ -235,3 +235,102 @@ def test_empty_page_with_cursor_is_partial_and_malformed_media_is_pending(tmp_pa
     assert report['collection']['status'] == 'failed'
     assert report['collection']['available'] == 0
     assert report['collection']['pending'] == 1
+
+
+def test_one_author_continues_after_twenty_pages_across_batches(tmp_path):
+    setup(tmp_path)
+    first_pages = [page([item(number, '2026-10-18T12:00:00+0000')], after=f'CUR{number}')
+                   for number in range(1, 21)]
+    first_client = Client(*first_pages)
+    first_report = batch(tmp_path, first_client, max_requests=20)
+    state = json.loads((tmp_path / 'state.json').read_text())
+    author = state['authors']['one']
+    assert len(first_client.calls) == 20
+    assert first_report['collection']['status'] == 'running'
+    assert author['next_page'] == 21
+    assert author['after'] == 'CUR20'
+    assert len(author['items']) == 20
+    assert author['resume_required'] is True
+    assert first_report['profiles'][0]['exact_total'] is None
+
+    old = [item(number, '2026-10-14T20:00:00+0000') for number in range(22, 27)]
+    second_client = Client(page([item(21)], after='CUR21'), page(old, after='CUR22'))
+    final_report = batch(tmp_path, second_client, max_requests=20)
+    assert len(second_client.calls) == 2
+    assert '.after(CUR20)' in second_client.calls[0][2]['fields']
+    assert '.after(CUR21)' in second_client.calls[1][2]['fields']
+    assert final_report['collection']['status'] == 'finished'
+    assert final_report['collection']['requests'] == 22
+    assert final_report['profiles'][0]['observed_total'] == 1
+    assert final_report['profiles'][0]['exact_total'] is None
+    final_state = json.loads((tmp_path / 'state.json').read_text())
+    assert len(final_state['authors']['one']['items']) == 26
+    assert final_state['authors']['one']['next_page'] == 23
+    assert final_state['authors']['one'].get('needs_review') is not True
+
+
+def test_repeated_cursor_stalls_partial_and_moves_to_next_author(tmp_path):
+    setup(tmp_path, ('one', 'two'))
+    client = Client(page([item(1)], after='SAME'),
+                    page([item(2)], after='SAME'),
+                    page([item(3)]))
+    report = batch(tmp_path, client)
+    assert len(client.calls) == 3
+    assert report['collection']['status'] == 'finished'
+    assert report['collection']['review_required'] == 1
+    assert report['collection']['unavailable'] == 0
+    assert report['profiles'][0]['observed_total'] == 2
+    assert report['profiles'][0]['exact_total'] is None
+    state = json.loads((tmp_path / 'state.json').read_text())
+    assert state['authors']['one']['reason'] == 'pagination_stalled'
+    assert state['authors']['one']['needs_review'] is True
+    assert state['authors']['one']['resume_required'] is False
+    assert batch(tmp_path, Client())['collection']['requests'] == 3
+
+
+def test_duplicate_page_without_new_ids_stalls_even_with_new_cursor(tmp_path):
+    setup(tmp_path)
+    client = Client(page([item(1)], after='FIRST'), page([item(1)], after='SECOND'))
+    report = batch(tmp_path, client)
+    assert len(client.calls) == 2
+    assert report['collection']['review_required'] == 1
+    assert report['profiles'][0]['exact_total'] is None
+    assert report['profiles'][0]['observed_total'] == 1
+    state = json.loads((tmp_path / 'state.json').read_text())
+    assert state['authors']['one']['items'] == [item(1)]
+
+
+def test_legacy_page_above_twenty_resumes_without_requerying(tmp_path):
+    setup(tmp_path, state={'authors': {'one': {'status': 'available', 'coverage': 'partial',
+                                             'items': [item(1)], 'resume_required': True,
+                                             'next_page': 21, 'after': 'PAGE20'}}, 'requests': 20})
+    client = Client(page([item(2)]))
+    report = batch(tmp_path, client)
+    assert len(client.calls) == 1
+    assert '.after(PAGE20)' in client.calls[0][2]['fields']
+    assert report['collection']['requests'] == 21
+    assert report['profiles'][0]['observed_total'] == 2
+
+
+def test_missing_cursor_replays_two_pages_then_reaches_new_third_page(tmp_path):
+    setup(tmp_path, state={'authors': {'one': {'status': 'available', 'coverage': 'partial',
+                                             'items': [item(1), item(2)],
+                                             'resume_required': True, 'next_page': 3,
+                                             'after': None,
+                                             'seen_cursors': ['CUR1', 'CUR2'],
+                                             'traversal_ids': ['1', '2']}},
+                           'requests': 2})
+    client = Client(page([item(1)], after='CUR1'),
+                    page([item(2)], after='CUR2'),
+                    page([item(3)]))
+    report = batch(tmp_path, client)
+    assert len(client.calls) == 3
+    assert '.after(CUR1)' in client.calls[1][2]['fields']
+    assert '.after(CUR2)' in client.calls[2][2]['fields']
+    assert report['collection']['status'] == 'finished'
+    assert report['collection']['review_required'] == 0
+    assert report['profiles'][0]['observed_total'] == 3
+    assert report['profiles'][0]['exact_total'] == 3
+    state = json.loads((tmp_path / 'state.json').read_text())
+    assert len(state['authors']['one']['items']) == 3
+    assert state['authors']['one'].get('needs_review') is not True
