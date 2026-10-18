@@ -36,12 +36,16 @@ jobs:
           from datetime import datetime, timezone
           from pathlib import Path
           state = json.loads((Path(os.environ['RUNNER_TEMP']) / 'authors-activity/state.json').read_text())
+          publication = json.loads((Path(os.environ['RUNNER_TEMP']) / 'authors-activity/publication.json').read_text())
+          initial = publication['base_sha'] is None
           status = state.get('job_status', 'running')
           until = state.get('cooldown_until')
           waiting = bool(until and datetime.fromisoformat(until) > datetime.now(timezone.utc))
           blocked = status in ('authentication_required', 'permissions_or_request_error', 'failed')
           manual = os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch'
-          run = status != 'finished' and not waiting and (not blocked or manual)
+          # Первый запуск публикует перенесённую очередь даже во время паузы.
+          # Сам сборщик по cooldown_until не отправляет запросы к Meta.
+          run = initial or (status != 'finished' and not waiting and (not blocked or manual))
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
               output.write('should_run=' + str(run).lower() + '\n')
           print('Состояние:', status, '; обработка сейчас:', run)

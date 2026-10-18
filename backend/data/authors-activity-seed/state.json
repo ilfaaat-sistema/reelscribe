@@ -24907,15 +24907,5189 @@
         }
       ],
       "reason": "observed_window_or_page_limit"
+    },
+    "kazantcevaolya": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "18157748002506312",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T15:19:05+0000"
+        },
+        {
+          "id": "17877726015564245",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-09T15:50:53+0000"
+        },
+        {
+          "id": "18492474394105868",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T12:31:12+0000"
+        },
+        {
+          "id": "18111234143130047",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-06T09:55:37+0000"
+        },
+        {
+          "id": "18066579452783999",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-05T15:46:03+0000"
+        },
+        {
+          "id": "18097958726411779",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-04T14:06:37+0000"
+        },
+        {
+          "id": "18093047033439539",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-02T13:54:41+0000"
+        },
+        {
+          "id": "18115630978806795",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-09-30T11:17:51+0000"
+        },
+        {
+          "id": "18138146470617356",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-28T12:29:36+0000"
+        },
+        {
+          "id": "17878885611626825",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-27T13:57:20+0000"
+        },
+        {
+          "id": "18099075422635782",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-09-25T10:47:18+0000"
+        },
+        {
+          "id": "17925149052423620",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-09-24T07:33:07+0000"
+        },
+        {
+          "id": "18021906068875757",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-23T13:25:04+0000"
+        },
+        {
+          "id": "18089903408228428",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-23T13:07:33+0000"
+        },
+        {
+          "id": "17956458444015193",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-18T15:12:51+0000"
+        },
+        {
+          "id": "18109722230041102",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-17T14:39:33+0000"
+        },
+        {
+          "id": "18376724833236729",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-09-16T11:52:27+0000"
+        },
+        {
+          "id": "18131369074582281",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-15T15:40:53+0000"
+        },
+        {
+          "id": "17949651459267040",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-09-14T12:06:09+0000"
+        },
+        {
+          "id": "17966553135008493",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-12T06:10:23+0000"
+        },
+        {
+          "id": "18049722860650801",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-09-09T18:28:33+0000"
+        },
+        {
+          "id": "17906519835520467",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-04T07:24:59+0000"
+        },
+        {
+          "id": "18071790494725976",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-30T14:30:20+0000"
+        },
+        {
+          "id": "17916848178435420",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-08-28T14:10:17+0000"
+        },
+        {
+          "id": "18316679221303353",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-27T11:03:16+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "netrudman": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "17910147600481910",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-18T09:38:33+0000"
+        },
+        {
+          "id": "18200539531377553",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T07:45:13+0000"
+        },
+        {
+          "id": "18097546952661632",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-16T07:34:16+0000"
+        },
+        {
+          "id": "18109289620932734",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T14:45:06+0000"
+        },
+        {
+          "id": "17883842598523156",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-15T09:49:02+0000"
+        },
+        {
+          "id": "18466579333184629",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-14T11:07:24+0000"
+        },
+        {
+          "id": "18106815833363522",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-13T14:58:33+0000"
+        },
+        {
+          "id": "18118570889471077",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-12T12:17:07+0000"
+        },
+        {
+          "id": "18126169567804484",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-12T07:15:51+0000"
+        },
+        {
+          "id": "18062738666789939",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-11T07:49:52+0000"
+        },
+        {
+          "id": "18127096832481994",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-11T07:24:35+0000"
+        },
+        {
+          "id": "18103179824009603",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-10T06:29:17+0000"
+        },
+        {
+          "id": "18004788725990442",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-09T16:36:54+0000"
+        },
+        {
+          "id": "18131288257763411",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-09T06:31:43+0000"
+        },
+        {
+          "id": "17878897611553928",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-08T14:03:01+0000"
+        },
+        {
+          "id": "18285058624291258",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-08T06:14:30+0000"
+        },
+        {
+          "id": "18029577710690994",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-07T15:01:56+0000"
+        },
+        {
+          "id": "17911517724491551",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-07T13:06:48+0000"
+        },
+        {
+          "id": "18072249008775406",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-07T09:50:53+0000"
+        },
+        {
+          "id": "18382359424300671",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-07T05:52:11+0000"
+        },
+        {
+          "id": "18117327979959055",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-06T09:47:04+0000"
+        },
+        {
+          "id": "18110928422598368",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-06T03:45:46+0000"
+        },
+        {
+          "id": "17914826691271551",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-05T15:30:05+0000"
+        },
+        {
+          "id": "18106506044461273",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-05T14:08:52+0000"
+        },
+        {
+          "id": "18020009201927484",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-04T12:34:25+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "grebenuk.m": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "18144468271578731",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T09:18:36+0000"
+        },
+        {
+          "id": "18120189979943948",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T05:58:47+0000"
+        },
+        {
+          "id": "17952792891272527",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T18:27:47+0000"
+        },
+        {
+          "id": "17911178265550812",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T16:49:05+0000"
+        },
+        {
+          "id": "18154635385457951",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-13T13:44:57+0000"
+        },
+        {
+          "id": "18473174239141092",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-12T11:05:06+0000"
+        },
+        {
+          "id": "18118874734988135",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-12T09:18:07+0000"
+        },
+        {
+          "id": "18122968508491986",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-11T17:49:26+0000"
+        },
+        {
+          "id": "18112658515846428",
+          "media_type": "IMAGE",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-11T17:43:54+0000"
+        },
+        {
+          "id": "18128817898825403",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-11T08:11:33+0000"
+        },
+        {
+          "id": "18118179394954130",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-10T07:41:02+0000"
+        },
+        {
+          "id": "18090718388205064",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-09T14:21:14+0000"
+        },
+        {
+          "id": "18125239237861029",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T07:15:12+0000"
+        },
+        {
+          "id": "17912506983283565",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-06T15:12:02+0000"
+        },
+        {
+          "id": "18008125886779927",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-06T15:07:53+0000"
+        },
+        {
+          "id": "18091029005208123",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-05T18:03:42+0000"
+        },
+        {
+          "id": "18463858759142369",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-05T16:40:38+0000"
+        },
+        {
+          "id": "18131784736743424",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-04T12:15:28+0000"
+        },
+        {
+          "id": "18094954928652070",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-04T12:11:55+0000"
+        },
+        {
+          "id": "18491778679104575",
+          "media_type": "IMAGE",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-04T08:11:41+0000"
+        },
+        {
+          "id": "18127512949880951",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-03T16:40:24+0000"
+        },
+        {
+          "id": "18129177523812263",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-02T18:22:49+0000"
+        },
+        {
+          "id": "18093402872448169",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-30T14:12:37+0000"
+        },
+        {
+          "id": "17976137226126506",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-29T19:25:07+0000"
+        },
+        {
+          "id": "17867582472660732",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-29T18:43:47+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "iapartners": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "18106214828205371",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-18T00:21:14+0000"
+        },
+        {
+          "id": "18633218701027353",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-17T00:09:23+0000"
+        },
+        {
+          "id": "18132606884498335",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T20:51:48+0000"
+        },
+        {
+          "id": "18123939751937964",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-16T03:09:49+0000"
+        },
+        {
+          "id": "18118899502767890",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-15T02:44:49+0000"
+        },
+        {
+          "id": "18123075113293128",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-13T22:53:32+0000"
+        },
+        {
+          "id": "17905108623667832",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-12T23:18:28+0000"
+        },
+        {
+          "id": "18135721330643399",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T23:11:49+0000"
+        },
+        {
+          "id": "18117042208967554",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-06T23:21:00+0000"
+        },
+        {
+          "id": "17982548462904556",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-05T23:35:26+0000"
+        },
+        {
+          "id": "18108275977929633",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-05T22:14:16+0000"
+        },
+        {
+          "id": "18102676304312893",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-30T00:02:32+0000"
+        },
+        {
+          "id": "18010757285992157",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-09-29T01:48:51+0000"
+        },
+        {
+          "id": "17994255942044525",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-29T00:08:03+0000"
+        },
+        {
+          "id": "17959401882223267",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-28T01:28:01+0000"
+        },
+        {
+          "id": "17995614038830154",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-26T13:57:54+0000"
+        },
+        {
+          "id": "17983143276029331",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-07-17T23:33:58+0000"
+        },
+        {
+          "id": "18102707722989749",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-06-02T21:41:27+0000"
+        },
+        {
+          "id": "17964110079087352",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-05-30T22:06:54+0000"
+        },
+        {
+          "id": "18114985864649627",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-05-29T20:32:37+0000"
+        },
+        {
+          "id": "18076577048249733",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-05-29T00:27:14+0000"
+        },
+        {
+          "id": "17922790410357008",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-05-26T22:54:15+0000"
+        },
+        {
+          "id": "18091630088352122",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-05-25T21:04:00+0000"
+        },
+        {
+          "id": "18333806248264267",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-05-24T16:16:41+0000"
+        },
+        {
+          "id": "18466008904102278",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-05-22T23:23:05+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "olga_food_blogger": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "18221831326341521",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-18T09:06:26+0000"
+        },
+        {
+          "id": "18114378695130099",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-18T08:41:10+0000"
+        },
+        {
+          "id": "17951242941281307",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T20:16:11+0000"
+        },
+        {
+          "id": "18160204765504702",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T20:07:55+0000"
+        },
+        {
+          "id": "17911299120472999",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T19:52:10+0000"
+        },
+        {
+          "id": "18635911882037325",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T16:17:25+0000"
+        },
+        {
+          "id": "18085227299706200",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T13:38:44+0000"
+        },
+        {
+          "id": "17901874152669031",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T09:24:36+0000"
+        },
+        {
+          "id": "17961472149224156",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T09:18:48+0000"
+        },
+        {
+          "id": "18354284761175187",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T09:14:04+0000"
+        },
+        {
+          "id": "18145463839588000",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T09:10:58+0000"
+        },
+        {
+          "id": "18038946335848639",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T08:58:23+0000"
+        },
+        {
+          "id": "17912589168545611",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T15:55:10+0000"
+        },
+        {
+          "id": "18137697838642906",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T15:48:50+0000"
+        },
+        {
+          "id": "18188913886411011",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T15:44:22+0000"
+        },
+        {
+          "id": "17936954559391292",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T14:47:24+0000"
+        },
+        {
+          "id": "18189403027412341",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T18:48:56+0000"
+        },
+        {
+          "id": "18060006854545946",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T18:38:26+0000"
+        },
+        {
+          "id": "18130640737751416",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T18:28:50+0000"
+        },
+        {
+          "id": "18398249554161482",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T13:25:45+0000"
+        },
+        {
+          "id": "18113027134845104",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T10:33:13+0000"
+        },
+        {
+          "id": "18146232397596297",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T10:00:09+0000"
+        },
+        {
+          "id": "18098959928086940",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T09:43:39+0000"
+        },
+        {
+          "id": "18076081193462824",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T08:54:08+0000"
+        },
+        {
+          "id": "18194311651401472",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T17:25:49+0000"
+        },
+        {
+          "id": "17911956393501361",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T16:55:57+0000"
+        },
+        {
+          "id": "18199656907375740",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T13:26:47+0000"
+        },
+        {
+          "id": "18118668394974682",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T12:49:22+0000"
+        },
+        {
+          "id": "18355842112171672",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T12:15:57+0000"
+        },
+        {
+          "id": "18348741790265727",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T11:59:57+0000"
+        },
+        {
+          "id": "18101954948267866",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T07:17:23+0000"
+        },
+        {
+          "id": "18195836263401129",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-13T22:43:01+0000"
+        },
+        {
+          "id": "18473716876112420",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-13T22:36:26+0000"
+        },
+        {
+          "id": "18137670709651089",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-13T22:17:27+0000"
+        },
+        {
+          "id": "18020199824942892",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-13T22:05:57+0000"
+        },
+        {
+          "id": "18386221087238415",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-13T17:11:16+0000"
+        },
+        {
+          "id": "18372281944244928",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-13T08:16:16+0000"
+        },
+        {
+          "id": "18130527886703116",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-13T07:33:50+0000"
+        },
+        {
+          "id": "18014239124956589",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-12T22:11:01+0000"
+        },
+        {
+          "id": "18217182307358042",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-12T22:05:13+0000"
+        },
+        {
+          "id": "18122569286315647",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-12T21:17:14+0000"
+        },
+        {
+          "id": "17911691289498385",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-12T13:02:36+0000"
+        },
+        {
+          "id": "18194028733400929",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-12T12:56:32+0000"
+        },
+        {
+          "id": "17978013152918525",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-11T22:27:25+0000"
+        },
+        {
+          "id": "18119710649516380",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-11T22:22:39+0000"
+        },
+        {
+          "id": "18634341862021602",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-11T19:30:52+0000"
+        },
+        {
+          "id": "18030658277685927",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-10T19:09:21+0000"
+        },
+        {
+          "id": "18075448889560709",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-10T18:43:03+0000"
+        },
+        {
+          "id": "18348444931271049",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-10T18:33:23+0000"
+        },
+        {
+          "id": "18096847301449845",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-10T10:47:17+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "shlomadaria": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "18433954261183859",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T12:24:16+0000"
+        },
+        {
+          "id": "18114625630990728",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-09T08:57:52+0000"
+        },
+        {
+          "id": "18135297250654300",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-04T10:21:37+0000"
+        },
+        {
+          "id": "18032015228675542",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-30T08:06:25+0000"
+        },
+        {
+          "id": "18097358492548316",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-28T08:46:53+0000"
+        },
+        {
+          "id": "17950196091280088",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-24T07:50:18+0000"
+        },
+        {
+          "id": "18043135226833036",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-20T09:03:25+0000"
+        },
+        {
+          "id": "18122395006890305",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-18T09:08:41+0000"
+        },
+        {
+          "id": "18028640339883640",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-15T08:18:15+0000"
+        },
+        {
+          "id": "18371791987233738",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-13T11:26:56+0000"
+        },
+        {
+          "id": "17982739047118786",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-11T07:48:23+0000"
+        },
+        {
+          "id": "18628774327025841",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-09T08:54:01+0000"
+        },
+        {
+          "id": "18150420805547589",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-04T08:51:07+0000"
+        },
+        {
+          "id": "17906250105556533",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-01T08:05:25+0000"
+        },
+        {
+          "id": "18065409512780238",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-28T08:42:36+0000"
+        },
+        {
+          "id": "18127969939762417",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-27T07:34:24+0000"
+        },
+        {
+          "id": "18140874454503409",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-26T07:22:19+0000"
+        },
+        {
+          "id": "18108943112125420",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-24T09:19:59+0000"
+        },
+        {
+          "id": "18121550629853776",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-22T06:56:36+0000"
+        },
+        {
+          "id": "18109776455104494",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-21T08:09:05+0000"
+        },
+        {
+          "id": "18080430167689544",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-20T08:48:36+0000"
+        },
+        {
+          "id": "17926078686165159",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-16T07:33:49+0000"
+        },
+        {
+          "id": "18131382397725794",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-15T09:16:46+0000"
+        },
+        {
+          "id": "18119023795841687",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-11T09:04:02+0000"
+        },
+        {
+          "id": "18086762339559533",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-07T07:11:31+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "korolgovorit": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "18120669433987798",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-18T09:14:14+0000"
+        },
+        {
+          "id": "18159980767455098",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-17T17:44:27+0000"
+        },
+        {
+          "id": "18415335364092687",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-17T15:29:10+0000"
+        },
+        {
+          "id": "17990790507025105",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T13:18:28+0000"
+        },
+        {
+          "id": "18163193707434405",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T11:43:30+0000"
+        },
+        {
+          "id": "18468845779143169",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T08:15:13+0000"
+        },
+        {
+          "id": "18180337684427437",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-17T06:24:12+0000"
+        },
+        {
+          "id": "18152979280532983",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T18:42:01+0000"
+        },
+        {
+          "id": "17960772654220480",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T16:22:14+0000"
+        },
+        {
+          "id": "18100238729544367",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T14:50:12+0000"
+        },
+        {
+          "id": "17872703628639929",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T13:27:59+0000"
+        },
+        {
+          "id": "18212306239369094",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T12:29:37+0000"
+        },
+        {
+          "id": "18646836616058409",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-16T08:45:11+0000"
+        },
+        {
+          "id": "18114951635618327",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T19:08:11+0000"
+        },
+        {
+          "id": "18104443586366446",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T18:02:48+0000"
+        },
+        {
+          "id": "18016063991958773",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T17:27:28+0000"
+        },
+        {
+          "id": "18096262220152605",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T12:14:06+0000"
+        },
+        {
+          "id": "18108966410612774",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-15T09:07:12+0000"
+        },
+        {
+          "id": "17928733062180373",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T16:09:09+0000"
+        },
+        {
+          "id": "17990960535058206",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T14:45:07+0000"
+        },
+        {
+          "id": "18629635771003331",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T11:32:28+0000"
+        },
+        {
+          "id": "18107519219264605",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-14T09:32:59+0000"
+        },
+        {
+          "id": "18108139169616188",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T08:05:58+0000"
+        },
+        {
+          "id": "18117064078801850",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-13T17:57:45+0000"
+        },
+        {
+          "id": "18060642587539515",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-13T16:38:46+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "lebedev.news": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "18168333379485223",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T15:40:44+0000"
+        },
+        {
+          "id": "17965632699203271",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T15:40:34+0000"
+        },
+        {
+          "id": "18110735417579301",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T15:40:15+0000"
+        },
+        {
+          "id": "18107491796196302",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T10:12:47+0000"
+        },
+        {
+          "id": "17995245423016885",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T10:12:46+0000"
+        },
+        {
+          "id": "18229220539329296",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T10:12:34+0000"
+        },
+        {
+          "id": "17961732171215880",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T09:36:09+0000"
+        },
+        {
+          "id": "17988510305874809",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T09:36:07+0000"
+        },
+        {
+          "id": "17925058689428698",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T09:35:53+0000"
+        },
+        {
+          "id": "18080827934368499",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-11T21:04:20+0000"
+        },
+        {
+          "id": "17964653192980623",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-09T10:09:28+0000"
+        },
+        {
+          "id": "18093679331673719",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-09T10:07:04+0000"
+        },
+        {
+          "id": "18056367707569133",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-09T10:06:54+0000"
+        },
+        {
+          "id": "18093908090653471",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T11:31:18+0000"
+        },
+        {
+          "id": "17916634509259185",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T11:31:17+0000"
+        },
+        {
+          "id": "18072332570733861",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T11:31:15+0000"
+        },
+        {
+          "id": "18412298737093514",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-07T10:31:35+0000"
+        },
+        {
+          "id": "18117007201960296",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-07T10:31:32+0000"
+        },
+        {
+          "id": "17970305865159857",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-07T10:31:25+0000"
+        },
+        {
+          "id": "18462656257138057",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-06T08:24:38+0000"
+        },
+        {
+          "id": "18136780396713336",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-06T08:24:31+0000"
+        },
+        {
+          "id": "18164324608484504",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-06T08:24:25+0000"
+        },
+        {
+          "id": "18121200401298131",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-06T08:24:22+0000"
+        },
+        {
+          "id": "18123037588898712",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-05T19:46:11+0000"
+        },
+        {
+          "id": "18337093807256037",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-05T09:07:49+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "jflojudo": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "18569358496076229",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-09T01:29:24+0000"
+        },
+        {
+          "id": "17974208628145979",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T20:45:34+0000"
+        },
+        {
+          "id": "18127303504853159",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-07T21:54:15+0000"
+        },
+        {
+          "id": "17950505343050021",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-06T19:32:20+0000"
+        },
+        {
+          "id": "17970723702169935",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-03T03:41:38+0000"
+        },
+        {
+          "id": "18562165021076731",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-02T19:21:40+0000"
+        },
+        {
+          "id": "17958097374234716",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-02T00:26:22+0000"
+        },
+        {
+          "id": "17879027301547898",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-01T20:23:02+0000"
+        },
+        {
+          "id": "17975084366935009",
+          "media_type": "IMAGE",
+          "media_product_type": "FEED",
+          "timestamp": "2026-09-30T22:12:27+0000"
+        },
+        {
+          "id": "18122394427708636",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-29T20:14:54+0000"
+        },
+        {
+          "id": "18124483402922650",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-29T04:04:43+0000"
+        },
+        {
+          "id": "17873022057636053",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-28T16:36:31+0000"
+        },
+        {
+          "id": "18073056191744482",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-25T15:48:21+0000"
+        },
+        {
+          "id": "18395216902160114",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-09-25T03:18:14+0000"
+        },
+        {
+          "id": "18004084169791342",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-24T04:35:52+0000"
+        },
+        {
+          "id": "18122089774730505",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-22T21:45:35+0000"
+        },
+        {
+          "id": "18074220848746466",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-21T14:02:46+0000"
+        },
+        {
+          "id": "18623077966028504",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-11T17:43:21+0000"
+        },
+        {
+          "id": "17997826163816453",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-11T15:21:15+0000"
+        },
+        {
+          "id": "17882449251502742",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-10T19:05:23+0000"
+        },
+        {
+          "id": "18101514185002998",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-10T01:26:09+0000"
+        },
+        {
+          "id": "18089049656669717",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-08T19:06:07+0000"
+        },
+        {
+          "id": "18113585857812091",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-04T01:35:45+0000"
+        },
+        {
+          "id": "18112783444799062",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-02T15:22:29+0000"
+        },
+        {
+          "id": "18166041424482422",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-02T01:25:31+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "theaisurfer": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "17925056694441239",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T04:27:44+0000"
+        },
+        {
+          "id": "18138322030616220",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T04:27:43+0000"
+        },
+        {
+          "id": "17966852805198797",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T04:27:18+0000"
+        },
+        {
+          "id": "18164855125490635",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T04:26:36+0000"
+        },
+        {
+          "id": "18136531192636888",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T01:58:14+0000"
+        },
+        {
+          "id": "18085918478701472",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T04:04:16+0000"
+        },
+        {
+          "id": "17975681783933724",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-13T01:09:17+0000"
+        },
+        {
+          "id": "17949197730269074",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-12T03:28:59+0000"
+        },
+        {
+          "id": "18141558229590452",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-21T01:03:39+0000"
+        },
+        {
+          "id": "18189014731400535",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-16T01:01:18+0000"
+        },
+        {
+          "id": "18117194539977188",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-15T01:03:07+0000"
+        },
+        {
+          "id": "18103685165338231",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-15T01:02:47+0000"
+        },
+        {
+          "id": "18118909795938227",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-15T01:02:41+0000"
+        },
+        {
+          "id": "18114480193787735",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-12T19:40:11+0000"
+        },
+        {
+          "id": "18110976932114103",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-08T01:01:56+0000"
+        },
+        {
+          "id": "17931051336385809",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-27T01:08:22+0000"
+        },
+        {
+          "id": "18193827658378617",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-26T02:06:30+0000"
+        },
+        {
+          "id": "17896178403379004",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-13T02:28:46+0000"
+        },
+        {
+          "id": "17922607041409982",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-12T01:02:22+0000"
+        },
+        {
+          "id": "18193143565379921",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-09T01:05:06+0000"
+        },
+        {
+          "id": "18099634943461546",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-07-30T01:04:07+0000"
+        },
+        {
+          "id": "18078126938693948",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-07-29T01:04:34+0000"
+        },
+        {
+          "id": "18184830826403398",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-07-28T01:05:05+0000"
+        },
+        {
+          "id": "18163624039462597",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-07-25T17:09:21+0000"
+        },
+        {
+          "id": "17926520070380373",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-07-24T01:03:42+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "nomadatoast": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "18590554738067761",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T14:32:02+0000"
+        },
+        {
+          "id": "17941411830368984",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-13T14:26:31+0000"
+        },
+        {
+          "id": "18133129846667690",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-12T14:30:03+0000"
+        },
+        {
+          "id": "17990888778065188",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-07T13:26:35+0000"
+        },
+        {
+          "id": "17927817798181036",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-06T13:56:29+0000"
+        },
+        {
+          "id": "18117663262945100",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-01T15:00:19+0000"
+        },
+        {
+          "id": "18088416908492448",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-30T14:48:58+0000"
+        },
+        {
+          "id": "18496602433096579",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-28T14:03:29+0000"
+        },
+        {
+          "id": "17967603152964361",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-24T14:14:06+0000"
+        },
+        {
+          "id": "18164170426484158",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-22T14:50:14+0000"
+        },
+        {
+          "id": "17946980682328649",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-20T16:56:22+0000"
+        },
+        {
+          "id": "17976229715917930",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-16T14:55:50+0000"
+        },
+        {
+          "id": "18109041164333567",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-11T14:25:29+0000"
+        },
+        {
+          "id": "18354031048168786",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-10T14:34:36+0000"
+        },
+        {
+          "id": "18038480249830374",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-08T14:37:04+0000"
+        },
+        {
+          "id": "18094373276531051",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-04T14:57:18+0000"
+        },
+        {
+          "id": "17948278113256762",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-28T16:06:26+0000"
+        },
+        {
+          "id": "18052612097590751",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-26T14:12:27+0000"
+        },
+        {
+          "id": "17937120588096592",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-21T15:25:20+0000"
+        },
+        {
+          "id": "18093916391381765",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-20T16:31:57+0000"
+        },
+        {
+          "id": "18404582638081727",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-14T14:46:13+0000"
+        },
+        {
+          "id": "17949167520247998",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-12T14:14:45+0000"
+        },
+        {
+          "id": "18071401967719499",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-11T14:42:10+0000"
+        },
+        {
+          "id": "18609941218018934",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-10T14:24:35+0000"
+        },
+        {
+          "id": "18013872170930391",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-07T14:32:41+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "designwithtoshi": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "18476725834117198",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-17T11:54:11+0000"
+        },
+        {
+          "id": "17908418490566920",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T11:36:34+0000"
+        },
+        {
+          "id": "18177582133451196",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T11:52:55+0000"
+        },
+        {
+          "id": "18138938566548198",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T11:40:52+0000"
+        },
+        {
+          "id": "18118569133768492",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-13T11:28:42+0000"
+        },
+        {
+          "id": "18124120891902985",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-12T11:38:58+0000"
+        },
+        {
+          "id": "17913270522550315",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T11:11:30+0000"
+        },
+        {
+          "id": "18024045806947561",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-07T11:49:41+0000"
+        },
+        {
+          "id": "17969951955151594",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-05T11:25:53+0000"
+        },
+        {
+          "id": "17968580858962323",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-01T11:08:27+0000"
+        },
+        {
+          "id": "18630255331003292",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-30T11:32:24+0000"
+        },
+        {
+          "id": "18346477957265103",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-29T12:01:57+0000"
+        },
+        {
+          "id": "18136613794639000",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-09-28T11:29:32+0000"
+        },
+        {
+          "id": "18121035728297086",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-26T11:38:59+0000"
+        },
+        {
+          "id": "18073491149563973",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-09-25T11:33:15+0000"
+        },
+        {
+          "id": "18045837605812576",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-24T11:48:28+0000"
+        },
+        {
+          "id": "18178140553431978",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-23T11:50:09+0000"
+        },
+        {
+          "id": "18119492209940499",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-22T11:55:50+0000"
+        },
+        {
+          "id": "18111574894841921",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-21T09:40:49+0000"
+        },
+        {
+          "id": "18090737297374800",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-19T11:11:47+0000"
+        },
+        {
+          "id": "18379372018232693",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-18T12:17:08+0000"
+        },
+        {
+          "id": "17879554038689548",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-17T12:13:38+0000"
+        },
+        {
+          "id": "17986269609063415",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-16T11:19:52+0000"
+        },
+        {
+          "id": "17899521675377629",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-09-15T10:41:07+0000"
+        },
+        {
+          "id": "18068514068781425",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-14T10:17:50+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "pressauz": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "17905183968352568",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-18T09:26:44+0000"
+        },
+        {
+          "id": "18629816002029689",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-18T08:53:48+0000"
+        },
+        {
+          "id": "18248076964313393",
+          "media_type": "IMAGE",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-17T15:42:53+0000"
+        },
+        {
+          "id": "17994840053846409",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T11:31:56+0000"
+        },
+        {
+          "id": "17916875760467366",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T07:25:02+0000"
+        },
+        {
+          "id": "18118211762100753",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T17:11:25+0000"
+        },
+        {
+          "id": "18105522266634142",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T11:35:29+0000"
+        },
+        {
+          "id": "18188789665410348",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T10:46:36+0000"
+        },
+        {
+          "id": "18075898607733599",
+          "media_type": "IMAGE",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-16T04:53:05+0000"
+        },
+        {
+          "id": "18181206331439131",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T04:09:06+0000"
+        },
+        {
+          "id": "17990946270054751",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T16:42:41+0000"
+        },
+        {
+          "id": "18181628782438081",
+          "media_type": "IMAGE",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-15T15:10:26+0000"
+        },
+        {
+          "id": "18150007792479069",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T14:30:37+0000"
+        },
+        {
+          "id": "17995295354843831",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T14:01:44+0000"
+        },
+        {
+          "id": "18106479797205163",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T13:25:56+0000"
+        },
+        {
+          "id": "18113044544520657",
+          "media_type": "IMAGE",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-15T12:56:40+0000"
+        },
+        {
+          "id": "17932394799415209",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T08:48:52+0000"
+        },
+        {
+          "id": "18033093902675343",
+          "media_type": "IMAGE",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-15T08:04:59+0000"
+        },
+        {
+          "id": "18038996720844480",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T07:48:17+0000"
+        },
+        {
+          "id": "18065970869616517",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T06:57:44+0000"
+        },
+        {
+          "id": "18159990985509211",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T16:14:31+0000"
+        },
+        {
+          "id": "17919627675447793",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T15:54:55+0000"
+        },
+        {
+          "id": "18077090783441817",
+          "media_type": "IMAGE",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-14T15:24:36+0000"
+        },
+        {
+          "id": "18070225628588840",
+          "media_type": "IMAGE",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-14T15:15:56+0000"
+        },
+        {
+          "id": "18074818565469004",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T14:23:17+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "invideo.io": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "18124497817935405",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T14:30:07+0000"
+        },
+        {
+          "id": "18117973954958372",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T09:27:55+0000"
+        },
+        {
+          "id": "17908212303328734",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T14:30:25+0000"
+        },
+        {
+          "id": "18282428554291271",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T13:30:33+0000"
+        },
+        {
+          "id": "18118308973966581",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T14:30:06+0000"
+        },
+        {
+          "id": "17973287301176189",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-13T19:30:06+0000"
+        },
+        {
+          "id": "18119363851974782",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-13T14:30:06+0000"
+        },
+        {
+          "id": "17985477156109275",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-12T12:01:06+0000"
+        },
+        {
+          "id": "18134098054734833",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-09T11:38:28+0000"
+        },
+        {
+          "id": "18031521245888457",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T20:30:08+0000"
+        },
+        {
+          "id": "18633721897042749",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T14:37:52+0000"
+        },
+        {
+          "id": "18092972114166207",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-07T14:32:50+0000"
+        },
+        {
+          "id": "18116606144045273",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-06T14:30:06+0000"
+        },
+        {
+          "id": "18075765320726634",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-06T11:30:06+0000"
+        },
+        {
+          "id": "18100923512269240",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-05T15:00:06+0000"
+        },
+        {
+          "id": "18102891581295999",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-03T14:30:06+0000"
+        },
+        {
+          "id": "18085550630312147",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-02T14:35:11+0000"
+        },
+        {
+          "id": "18560265820076222",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-02T08:35:24+0000"
+        },
+        {
+          "id": "18071036954774295",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-01T15:27:33+0000"
+        },
+        {
+          "id": "17908019610483935",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-30T14:30:07+0000"
+        },
+        {
+          "id": "18022671326874031",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-30T09:11:31+0000"
+        },
+        {
+          "id": "18415893790156513",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-29T19:54:36+0000"
+        },
+        {
+          "id": "18129913382499139",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-29T14:30:05+0000"
+        },
+        {
+          "id": "18095681462425747",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-28T14:55:15+0000"
+        },
+        {
+          "id": "17868884478646503",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-26T14:30:02+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "aironzak": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "18376434358209135",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T20:33:07+0000"
+        },
+        {
+          "id": "18499690354101819",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-13T19:05:33+0000"
+        },
+        {
+          "id": "18106674869248272",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-01T00:04:14+0000"
+        },
+        {
+          "id": "17878744509553178",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-29T22:07:28+0000"
+        },
+        {
+          "id": "17905097565592379",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-28T19:41:05+0000"
+        },
+        {
+          "id": "18097899248435868",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-24T15:54:29+0000"
+        },
+        {
+          "id": "18005404323003209",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-18T13:34:53+0000"
+        },
+        {
+          "id": "18284509255291233",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-17T22:13:36+0000"
+        },
+        {
+          "id": "17987545563105979",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-17T13:13:45+0000"
+        },
+        {
+          "id": "18094917164425110",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-17T06:10:05+0000"
+        },
+        {
+          "id": "18192086890402236",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-15T18:32:10+0000"
+        },
+        {
+          "id": "18137755738618650",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-14T21:31:09+0000"
+        },
+        {
+          "id": "17907009939517490",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-14T13:43:50+0000"
+        },
+        {
+          "id": "18122027393514556",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-10T12:02:40+0000"
+        },
+        {
+          "id": "17905670037503109",
+          "media_type": "IMAGE",
+          "media_product_type": "FEED",
+          "timestamp": "2026-09-09T22:30:09+0000"
+        },
+        {
+          "id": "18120873796903264",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-09T14:40:49+0000"
+        },
+        {
+          "id": "17907447720304276",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-09T10:47:22+0000"
+        },
+        {
+          "id": "17934907233365376",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-08T21:54:54+0000"
+        },
+        {
+          "id": "17959828857194575",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-08T11:04:11+0000"
+        },
+        {
+          "id": "18125936950818669",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-07T20:53:10+0000"
+        },
+        {
+          "id": "18424326313150096",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-07T17:04:27+0000"
+        },
+        {
+          "id": "18008356943974522",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-09-07T11:28:41+0000"
+        },
+        {
+          "id": "18339860977284875",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-06T12:42:17+0000"
+        },
+        {
+          "id": "18030273050853186",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-04T17:41:53+0000"
+        },
+        {
+          "id": "17883951378684124",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-03T20:27:36+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "ternovoy_oleg": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "18134013250677683",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T16:19:38+0000"
+        },
+        {
+          "id": "18339769387261541",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T10:53:29+0000"
+        },
+        {
+          "id": "18103111472191151",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T11:40:36+0000"
+        },
+        {
+          "id": "18461684776184939",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-07T23:20:26+0000"
+        },
+        {
+          "id": "18381568546235453",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-05T16:16:11+0000"
+        },
+        {
+          "id": "17922058497437397",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-26T18:15:16+0000"
+        },
+        {
+          "id": "17911405911285845",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-09-25T16:27:46+0000"
+        },
+        {
+          "id": "18034998839839565",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-25T14:42:19+0000"
+        },
+        {
+          "id": "18088465895219455",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-20T13:46:44+0000"
+        },
+        {
+          "id": "17946052422324600",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-13T11:45:13+0000"
+        },
+        {
+          "id": "17860506891695557",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-12T15:58:07+0000"
+        },
+        {
+          "id": "18063334955792165",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-07T19:14:33+0000"
+        },
+        {
+          "id": "17955157809249848",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-06T17:48:42+0000"
+        },
+        {
+          "id": "18141336412581294",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-06T13:31:19+0000"
+        },
+        {
+          "id": "18114944156060971",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-06T13:25:45+0000"
+        },
+        {
+          "id": "18102762050194042",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-06T13:22:01+0000"
+        },
+        {
+          "id": "17885755449616358",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-06T13:00:54+0000"
+        },
+        {
+          "id": "18090090539675666",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-02T17:51:11+0000"
+        },
+        {
+          "id": "18027674459888430",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-08-26T15:03:26+0000"
+        },
+        {
+          "id": "18093909128075971",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-06T12:32:30+0000"
+        },
+        {
+          "id": "17943732078223624",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-06-15T12:48:28+0000"
+        },
+        {
+          "id": "17968407096120394",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-06-13T23:38:12+0000"
+        },
+        {
+          "id": "18085972736005256",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-03-26T23:36:00+0000"
+        },
+        {
+          "id": "18060885326352544",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-03-08T15:21:43+0000"
+        },
+        {
+          "id": "18078168908374609",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-03-06T17:03:58+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "tebe_poslaniye": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "18218405011348771",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-18T09:18:30+0000"
+        },
+        {
+          "id": "18465456229188544",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-18T08:00:12+0000"
+        },
+        {
+          "id": "17976189887935512",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T15:28:58+0000"
+        },
+        {
+          "id": "18105054424998482",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T12:00:34+0000"
+        },
+        {
+          "id": "18099356099386181",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T06:55:09+0000"
+        },
+        {
+          "id": "18118759892472909",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T13:02:13+0000"
+        },
+        {
+          "id": "18149938135502546",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T14:00:23+0000"
+        },
+        {
+          "id": "18023747822872772",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T08:26:40+0000"
+        },
+        {
+          "id": "17874120570650133",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-13T12:00:04+0000"
+        },
+        {
+          "id": "18118949462472570",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-13T07:00:02+0000"
+        },
+        {
+          "id": "18123433405831547",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-12T15:00:10+0000"
+        },
+        {
+          "id": "18114893513145949",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-12T12:00:05+0000"
+        },
+        {
+          "id": "18162979468513431",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-12T07:15:09+0000"
+        },
+        {
+          "id": "17971107207161235",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-11T15:00:25+0000"
+        },
+        {
+          "id": "17904499995584337",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-11T12:00:11+0000"
+        },
+        {
+          "id": "18109711166164153",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-11T07:08:52+0000"
+        },
+        {
+          "id": "17970973779157649",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-10T05:57:26+0000"
+        },
+        {
+          "id": "17913955848523425",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T12:00:05+0000"
+        },
+        {
+          "id": "17974945248134545",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T08:12:27+0000"
+        },
+        {
+          "id": "17997646763826824",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-07T12:00:19+0000"
+        },
+        {
+          "id": "18156388498520212",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-07T06:44:23+0000"
+        },
+        {
+          "id": "17958728784214149",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-06T07:24:01+0000"
+        },
+        {
+          "id": "18129646105783624",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-04T08:00:10+0000"
+        },
+        {
+          "id": "18168832999482406",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-03T14:42:28+0000"
+        },
+        {
+          "id": "18340793950281157",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-03T11:48:23+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "buildingwithtan": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "18032736089670608",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-04T11:45:34+0000"
+        },
+        {
+          "id": "18071144360726236",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-02T11:34:23+0000"
+        },
+        {
+          "id": "18072810299738344",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-01T12:53:35+0000"
+        },
+        {
+          "id": "18116438360084522",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-30T12:33:16+0000"
+        },
+        {
+          "id": "17906415072488663",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-29T12:47:54+0000"
+        },
+        {
+          "id": "17945961171299772",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-28T12:58:27+0000"
+        },
+        {
+          "id": "18118370353980696",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-27T12:24:34+0000"
+        },
+        {
+          "id": "18044278874829226",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-26T13:54:12+0000"
+        },
+        {
+          "id": "17976787214925318",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-24T13:21:54+0000"
+        },
+        {
+          "id": "18103696214626201",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-21T14:21:35+0000"
+        },
+        {
+          "id": "18091595048183043",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-20T12:58:08+0000"
+        },
+        {
+          "id": "18123347458889094",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-19T12:44:46+0000"
+        },
+        {
+          "id": "18074812643433695",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-18T12:42:56+0000"
+        },
+        {
+          "id": "18057729725546616",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-17T13:05:19+0000"
+        },
+        {
+          "id": "18123101818861360",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-16T12:57:26+0000"
+        },
+        {
+          "id": "18370783453301174",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-15T13:31:28+0000"
+        },
+        {
+          "id": "17899120242378123",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-14T13:05:56+0000"
+        },
+        {
+          "id": "17863108662677667",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-13T12:39:47+0000"
+        },
+        {
+          "id": "18147908491554478",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-12T13:28:55+0000"
+        },
+        {
+          "id": "18380914825224189",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-11T13:28:36+0000"
+        },
+        {
+          "id": "17906579892472416",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-10T12:20:37+0000"
+        },
+        {
+          "id": "18111257333039662",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-09T13:20:21+0000"
+        },
+        {
+          "id": "17904576738329964",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-08T13:30:27+0000"
+        },
+        {
+          "id": "18113131058096884",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-07T13:29:14+0000"
+        },
+        {
+          "id": "18089479919693613",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-06T13:34:42+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "darkhero_official": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "18174679045454964",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-13T15:18:44+0000"
+        },
+        {
+          "id": "18636247828052028",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-07T16:07:38+0000"
+        },
+        {
+          "id": "18111071681175582",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-06T14:02:26+0000"
+        },
+        {
+          "id": "18104948609360422",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-04T19:49:20+0000"
+        },
+        {
+          "id": "18076888709436383",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-29T20:15:57+0000"
+        },
+        {
+          "id": "18125054836868432",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-28T15:33:33+0000"
+        },
+        {
+          "id": "18017417726941027",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-27T22:24:52+0000"
+        },
+        {
+          "id": "18083965691505563",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-26T17:29:27+0000"
+        },
+        {
+          "id": "18104378855575545",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-24T17:53:43+0000"
+        },
+        {
+          "id": "18645563713037327",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-22T20:32:27+0000"
+        },
+        {
+          "id": "18127666606753738",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-22T14:14:28+0000"
+        },
+        {
+          "id": "17909084664497271",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-19T12:33:55+0000"
+        },
+        {
+          "id": "18151648861541650",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-16T19:15:47+0000"
+        },
+        {
+          "id": "18045203681631950",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-16T08:21:35+0000"
+        },
+        {
+          "id": "18062447588789188",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-13T14:30:15+0000"
+        },
+        {
+          "id": "18111076001118755",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-10T19:05:56+0000"
+        },
+        {
+          "id": "18114571751022698",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-09T18:43:11+0000"
+        },
+        {
+          "id": "18153760987516204",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-05T15:46:11+0000"
+        },
+        {
+          "id": "18426803668199645",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-29T14:37:14+0000"
+        },
+        {
+          "id": "18213601615347588",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-26T14:04:11+0000"
+        },
+        {
+          "id": "18110293007326383",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-23T14:01:59+0000"
+        },
+        {
+          "id": "17954248419207971",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-22T16:37:28+0000"
+        },
+        {
+          "id": "17956370799208482",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-20T20:17:51+0000"
+        },
+        {
+          "id": "17916849600428966",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-20T11:09:44+0000"
+        },
+        {
+          "id": "18140291701602007",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-13T13:46:32+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "dashkiev": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "18104020973527174",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T17:00:59+0000"
+        },
+        {
+          "id": "18497242183098274",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-17T16:33:11+0000"
+        },
+        {
+          "id": "17994891390019114",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T16:39:55+0000"
+        },
+        {
+          "id": "18108951431190724",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T13:29:06+0000"
+        },
+        {
+          "id": "18159699412508504",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T19:03:44+0000"
+        },
+        {
+          "id": "18066341084784793",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T16:38:46+0000"
+        },
+        {
+          "id": "18125443961475961",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T15:56:56+0000"
+        },
+        {
+          "id": "18054871553584774",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-13T17:16:51+0000"
+        },
+        {
+          "id": "17950014567057367",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-13T15:32:26+0000"
+        },
+        {
+          "id": "17915664546460677",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-12T18:03:50+0000"
+        },
+        {
+          "id": "18113580422138666",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-11T15:53:09+0000"
+        },
+        {
+          "id": "18128967820872197",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-11T12:53:16+0000"
+        },
+        {
+          "id": "17903063775599075",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-10T13:07:13+0000"
+        },
+        {
+          "id": "18152565532490704",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-10T12:21:30+0000"
+        },
+        {
+          "id": "18131292328814715",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-09T12:38:06+0000"
+        },
+        {
+          "id": "17895165981655034",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T16:29:56+0000"
+        },
+        {
+          "id": "17949835596321396",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T13:37:28+0000"
+        },
+        {
+          "id": "17900186520602514",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-07T15:06:45+0000"
+        },
+        {
+          "id": "18110279975163662",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-07T14:35:52+0000"
+        },
+        {
+          "id": "18044878751821897",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-06T18:45:48+0000"
+        },
+        {
+          "id": "18370290865212568",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-06T07:34:43+0000"
+        },
+        {
+          "id": "17892105972681424",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-05T15:26:18+0000"
+        },
+        {
+          "id": "17870200347647747",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-05T08:49:04+0000"
+        },
+        {
+          "id": "17874269727650374",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-04T18:05:01+0000"
+        },
+        {
+          "id": "17910264831547118",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-04T14:54:06+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "andfilipov": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "18644467714031530",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T16:25:01+0000"
+        },
+        {
+          "id": "18019639364941982",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T09:56:53+0000"
+        },
+        {
+          "id": "18087822911701450",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-14T12:00:34+0000"
+        },
+        {
+          "id": "18115067021323733",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-11T10:23:01+0000"
+        },
+        {
+          "id": "17983575612093062",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-09T15:06:28+0000"
+        },
+        {
+          "id": "18115749434022752",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T14:29:51+0000"
+        },
+        {
+          "id": "17919695310243269",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T13:03:02+0000"
+        },
+        {
+          "id": "18110671259146257",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-03T12:25:42+0000"
+        },
+        {
+          "id": "18099735917380450",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-01T10:44:19+0000"
+        },
+        {
+          "id": "18207434365370811",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-30T10:35:58+0000"
+        },
+        {
+          "id": "18052773956799796",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-26T15:02:53+0000"
+        },
+        {
+          "id": "18092562254662284",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-09-23T16:11:33+0000"
+        },
+        {
+          "id": "18052764353803290",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-21T12:14:39+0000"
+        },
+        {
+          "id": "17915801232450238",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-09-19T13:34:32+0000"
+        },
+        {
+          "id": "18062161202787758",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-17T16:19:00+0000"
+        },
+        {
+          "id": "18092282582161676",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-16T13:29:41+0000"
+        },
+        {
+          "id": "18178241116429456",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-09-14T13:21:26+0000"
+        },
+        {
+          "id": "17972486651937955",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-08T15:10:30+0000"
+        },
+        {
+          "id": "18115272979956315",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-07T13:35:07+0000"
+        },
+        {
+          "id": "18630281416059105",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-06T13:31:35+0000"
+        },
+        {
+          "id": "18443007661127004",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-05T15:35:06+0000"
+        },
+        {
+          "id": "18142257877582483",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-03T14:11:02+0000"
+        },
+        {
+          "id": "18460298989139101",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-08-29T15:31:28+0000"
+        },
+        {
+          "id": "18110774879088210",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-27T12:53:51+0000"
+        },
+        {
+          "id": "18128873359737273",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-08-25T08:57:00+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "socialcanvasbyrahul": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "18106088387154143",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T15:17:48+0000"
+        },
+        {
+          "id": "18114664235466056",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T11:15:51+0000"
+        },
+        {
+          "id": "17966373120193285",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-13T13:08:11+0000"
+        },
+        {
+          "id": "18104913182200369",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-13T11:40:53+0000"
+        },
+        {
+          "id": "17986911318062781",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-05T12:39:32+0000"
+        },
+        {
+          "id": "18129420562752861",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-04T12:45:03+0000"
+        },
+        {
+          "id": "18108579809621519",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-02T07:53:53+0000"
+        },
+        {
+          "id": "18155687449508044",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-01T15:55:32+0000"
+        },
+        {
+          "id": "18124446550906197",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-30T12:04:52+0000"
+        },
+        {
+          "id": "17941799790379293",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-29T12:32:12+0000"
+        },
+        {
+          "id": "18125561846484166",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-28T16:12:03+0000"
+        },
+        {
+          "id": "18043076144823730",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-28T11:42:24+0000"
+        },
+        {
+          "id": "18116297576282571",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-27T14:23:52+0000"
+        },
+        {
+          "id": "18011509811761152",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-25T11:59:30+0000"
+        },
+        {
+          "id": "17895349827604955",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-23T12:00:00+0000"
+        },
+        {
+          "id": "17936116188380831",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-22T11:41:01+0000"
+        },
+        {
+          "id": "18088338011690571",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-21T14:56:31+0000"
+        },
+        {
+          "id": "18022081220929930",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-21T14:50:10+0000"
+        },
+        {
+          "id": "18101050349120666",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-17T05:31:28+0000"
+        },
+        {
+          "id": "18090425066254850",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-09-17T03:32:50+0000"
+        },
+        {
+          "id": "18209103841365036",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-16T04:13:58+0000"
+        },
+        {
+          "id": "17919887271431210",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-12T06:20:44+0000"
+        },
+        {
+          "id": "18148330255554068",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-11T13:28:06+0000"
+        },
+        {
+          "id": "18176102659448631",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-09T04:10:02+0000"
+        },
+        {
+          "id": "17977309857094212",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-08T14:51:20+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "seneamin__": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "18075843992732895",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T14:40:19+0000"
+        },
+        {
+          "id": "17907976752560190",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T14:23:03+0000"
+        },
+        {
+          "id": "18005641070989398",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T14:21:45+0000"
+        },
+        {
+          "id": "18150825034545691",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T14:20:19+0000"
+        },
+        {
+          "id": "17954746263275682",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T14:16:49+0000"
+        },
+        {
+          "id": "18337701907262044",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T14:15:39+0000"
+        },
+        {
+          "id": "18094466267664455",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T13:48:28+0000"
+        },
+        {
+          "id": "17881671936535454",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T13:34:05+0000"
+        },
+        {
+          "id": "17879420790543718",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-05T19:58:28+0000"
+        },
+        {
+          "id": "17890626525653824",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-05T16:07:21+0000"
+        },
+        {
+          "id": "18115001090088602",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-05T15:16:55+0000"
+        },
+        {
+          "id": "18097503347647383",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-04T17:04:17+0000"
+        },
+        {
+          "id": "18178412281436303",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-30T15:43:31+0000"
+        },
+        {
+          "id": "18016159703933344",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-28T14:45:00+0000"
+        },
+        {
+          "id": "18130232257744731",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-23T14:18:21+0000"
+        },
+        {
+          "id": "18144671089566829",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-20T12:12:23+0000"
+        },
+        {
+          "id": "18623803816004885",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-18T16:08:08+0000"
+        },
+        {
+          "id": "18106155490930603",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-17T16:20:54+0000"
+        },
+        {
+          "id": "17928070644402287",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-09-15T11:44:34+0000"
+        },
+        {
+          "id": "18073732757451225",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-13T12:53:39+0000"
+        },
+        {
+          "id": "18124793903482889",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-13T12:53:23+0000"
+        },
+        {
+          "id": "18211823050363685",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-13T12:45:57+0000"
+        },
+        {
+          "id": "17944409631071859",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-13T12:42:13+0000"
+        },
+        {
+          "id": "17908193568471581",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-10T23:33:50+0000"
+        },
+        {
+          "id": "18140221624608488",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-10T14:03:17+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "aleko.so": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "18211553635364012",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T13:28:17+0000"
+        },
+        {
+          "id": "18083387219686385",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T08:39:44+0000"
+        },
+        {
+          "id": "18128862401480238",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T14:29:23+0000"
+        },
+        {
+          "id": "17931283494166506",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T10:22:18+0000"
+        },
+        {
+          "id": "18152119033530966",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T13:46:12+0000"
+        },
+        {
+          "id": "18074021138571153",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-13T14:17:55+0000"
+        },
+        {
+          "id": "17907504057561436",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-13T09:36:33+0000"
+        },
+        {
+          "id": "18638525227041438",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-12T15:50:49+0000"
+        },
+        {
+          "id": "18134560450636981",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-11T14:20:36+0000"
+        },
+        {
+          "id": "17968941857962719",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-10T08:04:25+0000"
+        },
+        {
+          "id": "18136348435638200",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-09T12:23:26+0000"
+        },
+        {
+          "id": "18110693345270812",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-09T07:32:57+0000"
+        },
+        {
+          "id": "17915242233525671",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T13:07:43+0000"
+        },
+        {
+          "id": "18098914160177883",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-07T14:14:47+0000"
+        },
+        {
+          "id": "18478483036116105",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-06T14:05:15+0000"
+        },
+        {
+          "id": "17867790411661809",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-05T14:07:59+0000"
+        },
+        {
+          "id": "18449492401133621",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-04T07:22:41+0000"
+        },
+        {
+          "id": "18090224108677121",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-03T10:50:54+0000"
+        },
+        {
+          "id": "18116530262071407",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-02T12:36:56+0000"
+        },
+        {
+          "id": "18110728732884337",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-01T16:10:57+0000"
+        },
+        {
+          "id": "17997682638010697",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-01T12:55:57+0000"
+        },
+        {
+          "id": "17947114032299625",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-30T14:18:27+0000"
+        },
+        {
+          "id": "18008611734002455",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-30T10:33:55+0000"
+        },
+        {
+          "id": "17885443611686576",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-29T14:19:00+0000"
+        },
+        {
+          "id": "18113142233108680",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-28T15:19:14+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "fusionmasterai": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "17908614534326997",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T14:43:24+0000"
+        },
+        {
+          "id": "18127275334894790",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T16:32:30+0000"
+        },
+        {
+          "id": "18106560637950659",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T16:17:29+0000"
+        },
+        {
+          "id": "18161100505498145",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-12T16:15:44+0000"
+        },
+        {
+          "id": "18031030010854111",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-10T17:51:19+0000"
+        },
+        {
+          "id": "17895953211611909",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-09T14:20:18+0000"
+        },
+        {
+          "id": "18077043851416532",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T18:14:50+0000"
+        },
+        {
+          "id": "18011983778971291",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-07T15:59:37+0000"
+        },
+        {
+          "id": "18062972795546417",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-07T11:11:22+0000"
+        },
+        {
+          "id": "18150761497481909",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-05-17T11:40:14+0000"
+        },
+        {
+          "id": "17967752685108090",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-05-16T09:28:06+0000"
+        },
+        {
+          "id": "18173785999414693",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-05-14T05:27:40+0000"
+        },
+        {
+          "id": "18372387985205464",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-05-12T09:03:18+0000"
+        },
+        {
+          "id": "17887171506507337",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-05-08T08:41:42+0000"
+        },
+        {
+          "id": "18110185688495747",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-05-05T12:56:43+0000"
+        },
+        {
+          "id": "18119970946576487",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-05-03T14:49:24+0000"
+        },
+        {
+          "id": "17877410010592205",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-04-30T20:06:44+0000"
+        },
+        {
+          "id": "18433660090136201",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-04-29T07:59:23+0000"
+        },
+        {
+          "id": "18390547591081076",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-04-22T17:41:56+0000"
+        },
+        {
+          "id": "18165882385424204",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-04-21T07:09:11+0000"
+        },
+        {
+          "id": "18193363615367405",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-04-17T15:03:58+0000"
+        },
+        {
+          "id": "18078530912552967",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-04-14T08:07:50+0000"
+        },
+        {
+          "id": "18004310972885175",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-04-13T15:10:16+0000"
+        },
+        {
+          "id": "17918535777340079",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-04-12T08:45:48+0000"
+        },
+        {
+          "id": "18113105173753589",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-04-10T19:15:25+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "gabscanu": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "18097934881697653",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-01-06T10:05:00+0000"
+        },
+        {
+          "id": "17868168645532789",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-01-05T09:55:00+0000"
+        },
+        {
+          "id": "17870554116502033",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-01-05T01:35:42+0000"
+        },
+        {
+          "id": "18302971279283435",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2025-12-17T10:35:00+0000"
+        },
+        {
+          "id": "17917324992228370",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2025-12-08T09:55:00+0000"
+        },
+        {
+          "id": "18098196364835428",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2025-12-01T09:30:00+0000"
+        },
+        {
+          "id": "17943516626947660",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2025-11-15T08:45:00+0000"
+        },
+        {
+          "id": "18352964185162817",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2025-11-14T09:50:00+0000"
+        },
+        {
+          "id": "18096990817695503",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2025-11-08T10:45:00+0000"
+        },
+        {
+          "id": "18388212022193596",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2025-11-07T09:30:00+0000"
+        },
+        {
+          "id": "17968774121960375",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2025-11-05T09:40:00+0000"
+        },
+        {
+          "id": "18005854724654948",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2025-11-04T11:35:00+0000"
+        },
+        {
+          "id": "18083583689061972",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2025-11-03T10:35:00+0000"
+        },
+        {
+          "id": "17902607571147258",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2025-11-01T09:25:00+0000"
+        },
+        {
+          "id": "18301324474269583",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2025-10-31T08:50:00+0000"
+        },
+        {
+          "id": "18128145211494310",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2025-10-30T08:40:00+0000"
+        },
+        {
+          "id": "17953340805015591",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2025-10-29T10:20:00+0000"
+        },
+        {
+          "id": "18069800867461359",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2025-10-28T10:20:00+0000"
+        },
+        {
+          "id": "17927985324111430",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2025-10-27T09:15:00+0000"
+        },
+        {
+          "id": "18058770764197394",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2025-10-26T09:00:00+0000"
+        },
+        {
+          "id": "17937534639092669",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2025-10-25T10:30:00+0000"
+        },
+        {
+          "id": "17991182273890672",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2025-10-24T09:30:00+0000"
+        },
+        {
+          "id": "17948564334024127",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2025-10-23T11:25:00+0000"
+        },
+        {
+          "id": "18395531305131902",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2025-10-23T05:37:13+0000"
+        },
+        {
+          "id": "18081684845489912",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2025-10-21T10:50:00+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "alinabalashova": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "18118401622789506",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T13:00:19+0000"
+        },
+        {
+          "id": "18194940532392881",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T12:15:58+0000"
+        },
+        {
+          "id": "18128823106761833",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-01T16:00:08+0000"
+        },
+        {
+          "id": "17900506227377468",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-26T11:55:06+0000"
+        },
+        {
+          "id": "17906934603473548",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-24T10:00:06+0000"
+        },
+        {
+          "id": "17911803150529822",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-23T14:00:06+0000"
+        },
+        {
+          "id": "18061772915792189",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-09-19T09:10:00+0000"
+        },
+        {
+          "id": "18153982750507693",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-10T06:00:04+0000"
+        },
+        {
+          "id": "17885437998478722",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-07T06:00:07+0000"
+        },
+        {
+          "id": "18110205740117682",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-03T09:30:04+0000"
+        },
+        {
+          "id": "18615049354012840",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-30T09:00:04+0000"
+        },
+        {
+          "id": "18113560915800186",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-29T07:00:05+0000"
+        },
+        {
+          "id": "18131105212558065",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-07-29T09:00:04+0000"
+        },
+        {
+          "id": "18057136592777575",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-07-28T16:00:03+0000"
+        },
+        {
+          "id": "18072173447390119",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-07-28T07:00:03+0000"
+        },
+        {
+          "id": "18087542864146576",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-07-20T06:00:05+0000"
+        },
+        {
+          "id": "18075076223495835",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-07-16T06:40:06+0000"
+        },
+        {
+          "id": "17929776111360133",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-07-14T08:00:05+0000"
+        },
+        {
+          "id": "18087395294141921",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-07-11T06:00:07+0000"
+        },
+        {
+          "id": "18025774151836259",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-07-09T06:00:10+0000"
+        },
+        {
+          "id": "18217218004332464",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-06-28T08:00:09+0000"
+        },
+        {
+          "id": "18078815381647845",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-06-25T06:00:09+0000"
+        },
+        {
+          "id": "18099327380467984",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-06-24T06:00:08+0000"
+        },
+        {
+          "id": "18097479428223985",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-06-20T06:05:10+0000"
+        },
+        {
+          "id": "18084267788562983",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-06-18T08:00:09+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "iliesse_ns": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "18028997300856713",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-18T08:50:02+0000"
+        },
+        {
+          "id": "17951783235329722",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T13:22:42+0000"
+        },
+        {
+          "id": "18102255668326986",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T09:14:17+0000"
+        },
+        {
+          "id": "17931198324165965",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T08:31:53+0000"
+        },
+        {
+          "id": "18168580450462044",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T18:02:04+0000"
+        },
+        {
+          "id": "18012399110766388",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T08:42:36+0000"
+        },
+        {
+          "id": "18093283085548739",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T16:12:02+0000"
+        },
+        {
+          "id": "17952170178289749",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T08:02:39+0000"
+        },
+        {
+          "id": "18117175768797428",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-13T09:55:30+0000"
+        },
+        {
+          "id": "18098158994548700",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-12T14:23:01+0000"
+        },
+        {
+          "id": "18104596484396487",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-11T16:38:30+0000"
+        },
+        {
+          "id": "18105767942614365",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-11T12:13:24+0000"
+        },
+        {
+          "id": "18008862806778518",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-11T07:52:06+0000"
+        },
+        {
+          "id": "17986562691073676",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-10T11:56:10+0000"
+        },
+        {
+          "id": "18094088360164387",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-10T08:53:52+0000"
+        },
+        {
+          "id": "17908400607558413",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-09T08:43:08+0000"
+        },
+        {
+          "id": "17965080941983821",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T08:25:00+0000"
+        },
+        {
+          "id": "18001219298808579",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-07T12:22:11+0000"
+        },
+        {
+          "id": "17906257353568763",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-07T07:40:51+0000"
+        },
+        {
+          "id": "18086623316303041",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-06T10:43:04+0000"
+        },
+        {
+          "id": "18098056289452579",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-06T09:42:38+0000"
+        },
+        {
+          "id": "18109351025147317",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-05T17:24:58+0000"
+        },
+        {
+          "id": "17974319739135793",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-05T11:07:45+0000"
+        },
+        {
+          "id": "18022049666927571",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-04T13:15:49+0000"
+        },
+        {
+          "id": "18097418735414644",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-04T07:37:08+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "wbforyouman": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "18117392446806185",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T15:38:46+0000"
+        },
+        {
+          "id": "18129892583502970",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T16:54:24+0000"
+        },
+        {
+          "id": "17884562751504807",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T16:50:18+0000"
+        },
+        {
+          "id": "18247835941310440",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-06T17:10:40+0000"
+        },
+        {
+          "id": "18105837344195650",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-01T15:57:45+0000"
+        },
+        {
+          "id": "18129987847733252",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-19T15:26:23+0000"
+        },
+        {
+          "id": "18379522513235671",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-02T16:19:27+0000"
+        },
+        {
+          "id": "17886019080458842",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-17T16:42:46+0000"
+        },
+        {
+          "id": "18134674606611995",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-08-12T14:35:10+0000"
+        },
+        {
+          "id": "17982268127871762",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-07-31T14:24:57+0000"
+        },
+        {
+          "id": "18110364478984073",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-07-20T16:32:51+0000"
+        },
+        {
+          "id": "18467550271105085",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-06-30T17:04:40+0000"
+        },
+        {
+          "id": "17966411114936235",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-06-29T16:40:09+0000"
+        },
+        {
+          "id": "18062911874715785",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-06-26T16:30:21+0000"
+        },
+        {
+          "id": "17861474292649257",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-06-25T16:50:02+0000"
+        },
+        {
+          "id": "17999112407779106",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-06-23T17:40:02+0000"
+        },
+        {
+          "id": "18100177331129894",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-06-22T16:56:33+0000"
+        },
+        {
+          "id": "18100782295944868",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-06-20T15:00:17+0000"
+        },
+        {
+          "id": "17868753819686480",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-06-19T16:55:04+0000"
+        },
+        {
+          "id": "18222999988318586",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-06-18T17:05:36+0000"
+        },
+        {
+          "id": "18083168918203247",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-06-17T16:05:35+0000"
+        },
+        {
+          "id": "18095614130219159",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-06-16T17:30:11+0000"
+        },
+        {
+          "id": "18128173255715361",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-06-15T16:59:03+0000"
+        },
+        {
+          "id": "18034467851673757",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-06-14T16:24:29+0000"
+        },
+        {
+          "id": "18160810072458121",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-06-13T16:42:03+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "justusechannel": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "17897009811655586",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T15:11:36+0000"
+        },
+        {
+          "id": "18142871620607339",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T17:55:02+0000"
+        },
+        {
+          "id": "17896278537610470",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T13:54:29+0000"
+        },
+        {
+          "id": "17906268774578560",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T15:14:16+0000"
+        },
+        {
+          "id": "18108526661579572",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-13T14:22:27+0000"
+        },
+        {
+          "id": "18133979770583503",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-12T14:26:50+0000"
+        },
+        {
+          "id": "18110909294169459",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-11T13:08:28+0000"
+        },
+        {
+          "id": "18637244353041972",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-10T14:51:10+0000"
+        },
+        {
+          "id": "17972737422148389",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-09T15:22:08+0000"
+        },
+        {
+          "id": "17987164022880214",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-08T15:34:15+0000"
+        },
+        {
+          "id": "18145743925574584",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-07T14:54:46+0000"
+        },
+        {
+          "id": "17897563125396232",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-06T16:02:27+0000"
+        },
+        {
+          "id": "18128051113859579",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-05T14:25:48+0000"
+        },
+        {
+          "id": "18150712243527762",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-04T14:13:48+0000"
+        },
+        {
+          "id": "18115189277083856",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-03T14:24:13+0000"
+        },
+        {
+          "id": "18149153230541933",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-02T13:07:56+0000"
+        },
+        {
+          "id": "18422163943151607",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-01T18:21:53+0000"
+        },
+        {
+          "id": "17950969365271386",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-30T15:55:06+0000"
+        },
+        {
+          "id": "17895099075609345",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-29T13:43:29+0000"
+        },
+        {
+          "id": "18072294440480294",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-28T16:08:48+0000"
+        },
+        {
+          "id": "17926772730181732",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-27T11:26:27+0000"
+        },
+        {
+          "id": "18128518205487425",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-26T13:23:24+0000"
+        },
+        {
+          "id": "18225850660327503",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-25T15:01:34+0000"
+        },
+        {
+          "id": "18445985572192940",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-24T15:18:58+0000"
+        },
+        {
+          "id": "18114851503807208",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-23T13:12:37+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "enterthemaitrix": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "17913533190283979",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T00:06:13+0000"
+        },
+        {
+          "id": "18210397015362882",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T14:59:26+0000"
+        },
+        {
+          "id": "17879798160548730",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-09T23:35:07+0000"
+        },
+        {
+          "id": "17941130691098766",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-05T00:43:27+0000"
+        },
+        {
+          "id": "17946690231346799",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-04T00:00:08+0000"
+        },
+        {
+          "id": "17905167954592914",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-30T19:32:27+0000"
+        },
+        {
+          "id": "18108199649247536",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-25T23:25:18+0000"
+        },
+        {
+          "id": "18056619440557769",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-25T21:00:05+0000"
+        },
+        {
+          "id": "18429878209181284",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-24T23:36:45+0000"
+        },
+        {
+          "id": "18114616505040828",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-23T23:45:32+0000"
+        },
+        {
+          "id": "18106908899212437",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-22T23:45:14+0000"
+        },
+        {
+          "id": "17998870416007388",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-22T19:26:40+0000"
+        },
+        {
+          "id": "18214508491347385",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-18T19:33:56+0000"
+        },
+        {
+          "id": "17902877994586726",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-16T19:12:21+0000"
+        },
+        {
+          "id": "18108718525897483",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-16T01:09:32+0000"
+        },
+        {
+          "id": "17905820028327167",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-15T17:20:39+0000"
+        },
+        {
+          "id": "18072581060726999",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-15T00:56:05+0000"
+        },
+        {
+          "id": "18111574982038603",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-11T01:24:40+0000"
+        },
+        {
+          "id": "18109581476149445",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-10T15:00:19+0000"
+        },
+        {
+          "id": "18218252854322377",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-09T01:09:39+0000"
+        },
+        {
+          "id": "17907751545471172",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-08T22:39:46+0000"
+        },
+        {
+          "id": "18049157843597767",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-05T01:17:40+0000"
+        },
+        {
+          "id": "18065622428762308",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-04T21:15:43+0000"
+        },
+        {
+          "id": "18166140226454465",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-04T00:05:40+0000"
+        },
+        {
+          "id": "18098443286151078",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-03T05:49:43+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
+    },
+    "ipoolgoo": {
+      "status": "available",
+      "coverage": "partial",
+      "items": [
+        {
+          "id": "18111138674596092",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T11:18:17+0000"
+        },
+        {
+          "id": "17882643633652351",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-17T07:47:33+0000"
+        },
+        {
+          "id": "18452892781133378",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T18:35:09+0000"
+        },
+        {
+          "id": "17950593429337838",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T15:38:30+0000"
+        },
+        {
+          "id": "18014535866970620",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-16T11:53:23+0000"
+        },
+        {
+          "id": "17983058409106785",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T12:46:06+0000"
+        },
+        {
+          "id": "18382033633231092",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T11:10:41+0000"
+        },
+        {
+          "id": "18114217235026893",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-15T07:48:22+0000"
+        },
+        {
+          "id": "18113053946165472",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T08:34:09+0000"
+        },
+        {
+          "id": "17994746981840750",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-14T07:37:44+0000"
+        },
+        {
+          "id": "17888230446619343",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-14T06:50:06+0000"
+        },
+        {
+          "id": "17883287649690205",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-11T16:09:03+0000"
+        },
+        {
+          "id": "17949164445342060",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-06T09:58:47+0000"
+        },
+        {
+          "id": "18217976245348995",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-05T17:42:44+0000"
+        },
+        {
+          "id": "18073633760760274",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-05T07:48:26+0000"
+        },
+        {
+          "id": "18196592530386080",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-05T07:31:16+0000"
+        },
+        {
+          "id": "18114290483023765",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-05T06:27:02+0000"
+        },
+        {
+          "id": "18128732773700328",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "timestamp": "2026-10-02T07:37:28+0000"
+        },
+        {
+          "id": "18244491325312331",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-02T05:05:08+0000"
+        },
+        {
+          "id": "18092952578262904",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-10-01T11:23:33+0000"
+        },
+        {
+          "id": "17906737206561939",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-29T13:04:54+0000"
+        },
+        {
+          "id": "18133409806661811",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-29T12:59:32+0000"
+        },
+        {
+          "id": "18131106850750052",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-29T12:53:06+0000"
+        },
+        {
+          "id": "17984404581080601",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-29T12:44:12+0000"
+        },
+        {
+          "id": "18137925199537416",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "timestamp": "2026-09-29T12:28:14+0000"
+        }
+      ],
+      "reason": "observed_window_or_page_limit"
     }
   },
-  "requests": 45,
+  "requests": 79,
   "started_at": "2026-10-18T09:08:38.168380+00:00",
   "last_usage": {
-    "call_count": 15,
+    "call_count": 12,
     "total_cputime": 0,
-    "total_time": 88
+    "total_time": 87
   },
   "job_status": "cooldown",
-  "cooldown_until": "2026-10-18T10:11:21.428759+00:00"
+  "cooldown_until": "2026-10-18T11:03:28.572247+00:00"
 }
