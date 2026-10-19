@@ -112,12 +112,11 @@ function Drawer({ id, listItem, onClose, excluded }) {
         <div className="carousels-drawer-head">
           <div className="carousels-drawer-title"><span className="carousels-eyebrow">Карусель</span><strong>{item?.username ? `@${item.username}` : 'Публикация Instagram'}</strong></div>
           {item && !isHidden && <div className="carousels-head-summary">
-            <span className="carousels-head-date">{date(item.timestamp)} МСК</span>
             <div className="carousels-head-stats">
+              <Metric label="подписчиков" value={item.followers} />
               <Metric label="лайков" value={item.likes} />
               <Metric label="комментариев" value={item.comments} />
               <Metric label="просмотров" value={item.views} />
-              <Metric label="подписчиков" value={item.followers} />
             </div>
           </div>}
           <button ref={closeRef} type="button" className="carousels-close" onClick={onClose} aria-label="Закрыть">✕</button>
@@ -136,7 +135,10 @@ function Drawer({ id, listItem, onClose, excluded }) {
                 allowFullScreen
               />
             ) : <Cover item={item} large />}
-            {link && <a href={link} target="_blank" rel="noopener noreferrer" className="carousels-ig-link">Открыть в Instagram ↗</a>}
+            <div className="carousels-media-footer">
+              {link && <a href={link} target="_blank" rel="noopener noreferrer" className="carousels-ig-link">Открыть в Instagram ↗</a>}
+              <span className="carousels-media-date">{date(item.timestamp)} МСК</span>
+            </div>
           </div>
           <div className="carousels-detail">
             <h2>Текст публикации</h2>
