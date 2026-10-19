@@ -64,6 +64,17 @@
 .carousels-metric { display: flex; flex-direction: column; min-width: 0; padding: 11px; background: var(--bg); border: 1px solid var(--line); border-radius: 9px; }
 .carousels-metric b { font-family: var(--mono); font-size: 15px; overflow: hidden; text-overflow: ellipsis; }
 .carousels-metric small { color: var(--mut); font-size: 10px; }
+@media (min-width: 701px) {
+  .carousels-drawer { display: flex; flex-direction: column; width: min(1180px, 98vw); overflow: hidden; }
+  .carousels-drawer-head { position: relative; flex: 0 0 auto; }
+  .carousels-drawer-body { flex: 1; min-height: 0; grid-template-columns: minmax(360px, .78fr) minmax(0, 1.22fr); }
+  .carousels-media { min-height: 0; padding: 14px; overflow: auto; }
+  .carousels-media iframe { width: min(100%, max(280px, calc(80dvh - 248px))); height: calc(100dvh - 150px); }
+  .carousels-detail { min-height: 0; padding: 16px; overflow: auto; }
+  .carousels-detail-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; margin: 12px 0 18px; }
+  .carousels-metric { padding: 8px; }
+  .carousels-metric b { font-size: 13px; overflow-wrap: anywhere; }
+}
 .carousels-detail h2 { font-size: 13px; font-weight: 650; margin: 0 0 9px; }
 .carousels-caption { margin: 0; padding: 14px 16px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; border: 1px solid var(--line); border-left: 3px solid var(--teal); border-radius: 9px; background: var(--bg); }
 .carousels-muted { color: var(--mut); font-size: 12px; }
