@@ -55,3 +55,21 @@ test('Скрытые авторы передаются в JSON для фильт
   try { assert.equal((await getCarousels({ exclude_authors: ['alice', 'bob'], offset: 100 })).total, 10) }
   finally { globalThis.fetch = previous }
 })
+
+test('избранные авторы отправляются POST даже при пустом списке и сочетаются со скрытыми', async () => {
+  const previous = globalThis.fetch
+  const bodies = []
+  globalThis.fetch = async (url, options) => {
+    assert.equal(url, '/api/radar/carousels')
+    assert.equal(options.method, 'POST')
+    bodies.push(JSON.parse(options.body))
+    return { ok: true, json: async () => ({ items: [], total: 0 }) }
+  }
+  try {
+    await getCarousels({ include_authors: [], exclude_authors: ['hidden'] })
+    await getCarousels({ include_authors: ['alice', 'bob'] })
+    assert.deepEqual(bodies[0].include_authors, [])
+    assert.deepEqual(bodies[0].exclude_authors, ['hidden'])
+    assert.deepEqual(bodies[1].include_authors, ['alice', 'bob'])
+  } finally { globalThis.fetch = previous }
+})
