@@ -41,3 +41,17 @@ test('503 показывает сообщение API, а сетевые и от
     globalThis.fetch = previous
   }
 })
+
+test('Скрытые авторы передаются в JSON для фильтрации до пагинации', async () => {
+  const previous = globalThis.fetch
+  globalThis.fetch = async (url, options) => {
+    assert.equal(url, '/api/radar/carousels')
+    assert.equal(options.method, 'POST')
+    const body = JSON.parse(options.body)
+    assert.deepEqual(body.exclude_authors, ['alice', 'bob'])
+    assert.equal(body.offset, 100)
+    return { ok: true, json: async () => ({ total: 10, items: [] }) }
+  }
+  try { assert.equal((await getCarousels({ exclude_authors: ['alice', 'bob'], offset: 100 })).total, 10) }
+  finally { globalThis.fetch = previous }
+})

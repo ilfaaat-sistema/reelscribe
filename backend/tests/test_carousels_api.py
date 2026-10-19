@@ -49,3 +49,32 @@ def test_http_interface_validates_filters_and_detail_ids(monkeypatch):
     assert client.get('/api/radar/carousels?sort=views').status_code == 422
     assert client.get('/api/radar/carousels/../../private').status_code == 404
     assert client.get('/api/radar/carousels/1').json()['id'] == '1'
+
+
+def test_exclusions_apply_before_sorting_counting_and_page_fill():
+    value = report()
+    result = page(value, limit=2, exclude_authors=['@ALICE'])
+    assert result['total'] == 1
+    assert [row['username'] for row in result['items']] == ['bob']
+    assert page(value, 'alice', exclude_authors=['alice'])['total'] == 0
+    assert value['items'][0]['username'] == 'alice'
+    assert page(value)['total'] == 4
+
+
+def test_hidden_authors_query_is_read_only_and_validated(monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from app.api import carousels
+    value = report()
+    async def data():
+        return value
+    monkeypatch.setattr(carousels, '_report', data)
+    app = FastAPI()
+    app.include_router(carousels.router, prefix='/api')
+    client = TestClient(app)
+    response = client.post('/api/radar/carousels', json={'exclude_authors': ['ALICE', 'alice'], 'limit': 50})
+    assert response.status_code == 200 and response.json()['total'] == 1
+    assert response.json()['items'][0]['username'] == 'bob'
+    assert client.get('/api/radar/carousels?limit=50').json()['total'] == 4
+    assert client.post('/api/radar/carousels', json={'exclude_authors': ['evil/x']}).status_code == 422
+    assert client.post('/api/radar/carousels', json={'exclude_authors': ['alice'] * 1601}).status_code == 422

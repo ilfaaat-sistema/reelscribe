@@ -1,9 +1,9 @@
 const BASE = (import.meta.env?.VITE_API_URL || '') + '/api/radar/carousels'
 
-async function readJson(url, signal) {
+async function readJson(url, signal, options = {}) {
   let response
   try {
-    response = await fetch(url, { signal })
+    response = await fetch(url, { ...options, signal })
   } catch (error) {
     if (error?.name === 'AbortError') throw error
     throw new Error('Нет соединения с сервером')
@@ -22,7 +22,13 @@ async function readJson(url, signal) {
   return response.json()
 }
 
-export function getCarousels({ author = '', sort = 'likes', order = 'desc', limit = 50, offset = 0 } = {}, signal) {
+export function getCarousels({ author = '', sort = 'likes', order = 'desc', limit = 50, offset = 0, exclude_authors = [] } = {}, signal) {
+  if (exclude_authors.length) {
+    return readJson(BASE, signal, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ author, sort, order, limit, offset, exclude_authors }),
+    })
+  }
   const query = new URLSearchParams({ sort, order, limit: String(limit), offset: String(offset) })
   if (author) query.set('author', author)
   return readJson(`${BASE}?${query}`, signal)

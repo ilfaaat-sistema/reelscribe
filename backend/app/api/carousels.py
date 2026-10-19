@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field, field_validator
 
 router = APIRouter(prefix='/radar/carousels', tags=['carousels'])
 REPORT_URL = 'https://raw.githubusercontent.com/ilfaaat-sistema/reelscribe/refs/heads/data/authors-carousels-20261013-20261019/activity-report.json'
@@ -76,10 +77,13 @@ async def _report():
             raise HTTPException(503, 'Недельный сбор пока недоступен. Попробуйте обновить страницу позже.') from None
 
 
-def page(report, author='', sort='likes', order='desc', limit=50, offset=0):
+def page(report, author='', sort='likes', order='desc', limit=50, offset=0, exclude_authors=()):
     items, seen = [], set()
+    excluded = {username.lower().lstrip('@') for username in exclude_authors}
     for raw in report.get('items', []):
         if not isinstance(raw, dict) or raw.get('media_type') != 'CAROUSEL_ALBUM' or raw.get('id') is None:
+            continue
+        if raw.get('username', '').lower() in excluded:
             continue
         if author and raw.get('username', '').lower() != author.lower().lstrip('@'):
             continue
@@ -106,6 +110,33 @@ async def list_carousels(author: str = Query('', pattern=r'^@?[A-Za-z0-9._]{0,30
     if limit not in (50, 100):
         raise HTTPException(422, 'Размер страницы: 50 или 100')
     return page(await _report(), author, sort, order, limit, offset)
+
+
+class CarouselQuery(BaseModel):
+    author: str = Field('', pattern=r'^@?[A-Za-z0-9._]{0,30}$')
+    sort: Literal['likes', 'comments', 'timestamp'] = 'likes'
+    order: Literal['desc', 'asc'] = 'desc'
+    limit: Literal[50, 100] = 50
+    offset: int = Field(0, ge=0)
+    exclude_authors: list[str] = Field(default_factory=list, max_length=1600)
+
+    @field_validator('exclude_authors')
+    @classmethod
+    def valid_exclusions(cls, names):
+        result = []
+        for name in names:
+            value = name.lower().lstrip('@')
+            if not re.fullmatch(r'[a-z0-9._]{1,30}', value):
+                raise ValueError('Некорректное имя скрытого автора')
+            if value not in result:
+                result.append(value)
+        return result
+
+
+@router.post('')
+async def filtered_carousels(query: CarouselQuery):
+    """Только чтение: исключения приходят из настроек просмотра, без записи в коллекцию."""
+    return page(await _report(), **query.model_dump())
 
 
 @router.get('/{media_id}')
