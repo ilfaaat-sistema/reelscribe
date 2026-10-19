@@ -53,8 +53,8 @@
 .carousels-drawer-head strong { display: block; font-size: 15px; margin-top: 2px; }
 .carousels-close { display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 50%; background: var(--panel2); color: var(--tx); }
 .carousels-drawer-body { display: grid; grid-template-columns: minmax(320px, 1.08fr) minmax(290px, .92fr); min-height: calc(100% - 67px); }
-.carousels-media { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 22px; background: #101115; border-right: 1px solid var(--line); }
-.carousels-media iframe { display: block; width: 100%; min-height: min(710px, calc(100dvh - 160px)); border: 0; border-radius: 8px; background: #fff; }
+.carousels-media { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 22px; background: #101115; border-right: 1px solid var(--line); container-type: inline-size; }
+.carousels-media iframe { display: block; flex: 0 0 auto; width: 100%; height: max(800px, calc(100cqw + 460px)); border: 0; border-radius: 8px; background: #fff; }
 .carousels-cover-large { width: min(100%, 440px); }
 .carousels-ig-link { display: inline-block; align-self: flex-start; color: var(--iris); text-decoration: none; font-size: 12px; }
 .carousels-ig-link:hover { text-decoration: underline; }
@@ -78,7 +78,7 @@
   .carousels-drawer { width: 100vw; }
   .carousels-drawer-body { display: block; }
   .carousels-media { border-right: 0; border-bottom: 1px solid var(--line); padding: 12px; }
-  .carousels-media iframe { width: min(100%, 440px); min-height: 540px; }
+  .carousels-media iframe { width: min(100%, 440px); }
   .carousels-detail { padding: 18px; }
 }
 @media (max-width: 390px) { .carousels-heading { align-items: flex-start; flex-direction: column; } .carousels-pagination { gap: 7px; font-size: 10px; } }
