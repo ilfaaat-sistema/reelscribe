@@ -28,6 +28,15 @@
 .carousels-progress-track i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--iris), var(--teal)); }
 .carousels-progress small { grid-column: 1 / -1; }
 .carousels-controls { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0; }
+.carousels-author-search { position: relative; display: flex; align-items: center; flex: 0 1 225px; min-width: 180px; min-height: 36px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.carousels-author-search:focus-within { border-color: var(--iris); }
+.carousels-author-search input { flex: 1; min-width: 0; padding: 8px 9px; border: 0; outline: 0; background: transparent; color: var(--tx); font: inherit; font-size: 12px; }
+.carousels-author-search > button { flex: 0 0 auto; padding: 5px 8px; border: 0; background: transparent; color: var(--mut); font-size: 17px; }
+.carousels-author-search > button:hover { color: var(--tx); }
+.carousels-author-options { position: absolute; z-index: 10; top: calc(100% + 4px); left: 0; right: 0; max-height: 220px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); box-shadow: 0 8px 24px #0008; }
+.carousels-author-options button { display: block; width: 100%; padding: 9px 11px; border: 0; background: transparent; color: var(--tx); text-align: left; font-size: 12px; }
+.carousels-author-options button:hover, .carousels-author-options button:focus-visible { background: var(--panel2); }
+.carousels-author-search-error { position: absolute; z-index: 10; top: calc(100% + 4px); left: 0; min-width: 220px; padding: 8px 10px; border: 1px solid var(--rose); border-radius: 8px; background: var(--panel); color: var(--rose); font-size: 11px; }
 .carousels-controls label { display: flex; align-items: center; gap: 7px; color: var(--mut); font-size: 11px; }
 .carousels-controls select { min-width: 145px; background: var(--panel); color: var(--tx); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12px; }
 .carousels-controls .carousels-favorite-toggle { gap: 8px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--tx); font-size: 12px; cursor: pointer; }
