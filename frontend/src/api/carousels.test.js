@@ -73,3 +73,22 @@ test('избранные авторы отправляются POST даже п�
     assert.deepEqual(bodies[1].include_authors, ['alice', 'bob'])
   } finally { globalThis.fetch = previous }
 })
+
+test('источник NEYRO_SET7 отправляется POST вместе с фильтрами избранных и скрытых', async () => {
+  const previous = globalThis.fetch
+  let body
+  globalThis.fetch = async (url, options) => {
+    assert.equal(url, '/api/radar/carousels')
+    assert.equal(options.method, 'POST')
+    body = JSON.parse(options.body)
+    return { ok: true, json: async () => ({ items: [], total: 7 }) }
+  }
+  try {
+    const result = await getCarousels({ source_account: 'neyro_set7', include_authors: ['alice'], exclude_authors: ['hidden'], offset: 50 })
+    assert.equal(result.total, 7)
+    assert.equal(body.source_account, 'neyro_set7')
+    assert.deepEqual(body.include_authors, ['alice'])
+    assert.deepEqual(body.exclude_authors, ['hidden'])
+    assert.equal(body.offset, 50)
+  } finally { globalThis.fetch = previous }
+})

@@ -91,3 +91,26 @@ def test_hidden_authors_query_is_read_only_and_validated(monkeypatch):
     assert favorites.status_code == 200 and favorites.json()['total'] == 3
     assert client.post('/api/radar/carousels', json={'include_authors': []}).json()['total'] == 0
     assert client.post('/api/radar/carousels', json={'include_authors': ['bad/name']}).status_code == 422
+
+
+def test_source_account_filters_before_pagination_and_intersects_favorites(monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from app.api import carousels
+    async def data():
+        return report()
+    async def authors():
+        return {'alice'}
+    monkeypatch.setattr(carousels, '_report', data)
+    monkeypatch.setattr(carousels, '_neyro_source_authors', authors)
+    app = FastAPI()
+    app.include_router(carousels.router, prefix='/api')
+    client = TestClient(app)
+    url = '/api/radar/carousels'
+    result = client.post(url, json={'source_account': 'neyro_set7', 'limit': 50}).json()
+    assert result['total'] == 3
+    assert all(item['username'] == 'alice' for item in result['items'])
+    assert client.post(url, json={'source_account': 'neyro_set7', 'include_authors': ['bob']}).json()['total'] == 0
+    assert client.post(url, json={'source_account': 'neyro_set7', 'exclude_authors': ['alice']}).json()['total'] == 0
+    assert client.get(url + '?limit=50').json()['total'] == 4
+    assert client.post(url, json={'source_account': 'unknown'}).status_code == 422

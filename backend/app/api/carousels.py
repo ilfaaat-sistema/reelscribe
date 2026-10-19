@@ -11,11 +11,16 @@ import httpx
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 
+from app.core.db import get_db
+
 router = APIRouter(prefix='/radar/carousels', tags=['carousels'])
 REPORT_URL = 'https://raw.githubusercontent.com/ilfaaat-sistema/reelscribe/refs/heads/data/authors-carousels-20261013-20261019/activity-report.json'
 _cache = None
 _cached_at = 0.0
 _lock = asyncio.Lock()
+_source_authors_cache = None
+_source_cached_at = 0.0
+_source_lock = asyncio.Lock()
 ITEM_KEYS = ('id', 'username', 'permalink', 'shortcode', 'timestamp', 'caption', 'media_type',
              'media_url', 'thumbnail_url', 'likes', 'comments', 'views', 'followers', 'collected_at')
 SUMMARY_KEYS = ('start_date', 'end_date', 'timezone', 'collected_at', 'collection', 'totals', 'profiles')
@@ -77,6 +82,39 @@ async def _report():
             raise HTTPException(503, 'Недельный сбор пока недоступен. Попробуйте обновить страницу позже.') from None
 
 
+def _read_neyro_source_authors():
+    """Source tags already exposed through /api/reels; read only author handles."""
+    names = set()
+    batch = 500
+    for start in range(0, 5000, batch):
+        rows = (get_db().table('reels')
+                .select('author_handle,reel_sources!inner(account)')
+                .eq('reel_sources.account', 'neyro_set7')
+                .order('id').range(start, start + batch - 1).execute().data or [])
+        names.update(name for row in rows
+                     if isinstance(row, dict)
+                     for name in [str(row.get('author_handle') or '').lstrip('@').lower()]
+                     if re.fullmatch(r'[a-z0-9._]{1,30}', name))
+        if len(rows) < batch:
+            return names
+    raise ValueError('Слишком много записей источника')
+
+
+async def _neyro_source_authors():
+    global _source_authors_cache, _source_cached_at
+    if _source_authors_cache is not None and time.monotonic() - _source_cached_at < 300:
+        return _source_authors_cache
+    async with _source_lock:
+        if _source_authors_cache is not None and time.monotonic() - _source_cached_at < 300:
+            return _source_authors_cache
+        try:
+            result = await asyncio.to_thread(_read_neyro_source_authors)
+        except Exception:
+            raise HTTPException(503, 'Не удалось прочитать авторов NEYRO_SET7. Попробуйте позже.') from None
+        _source_authors_cache, _source_cached_at = result, time.monotonic()
+        return result
+
+
 def page(report, author='', sort='likes', order='desc', limit=50, offset=0,
          exclude_authors=(), include_authors=None):
     items, seen = [], set()
@@ -125,6 +163,7 @@ class CarouselQuery(BaseModel):
     offset: int = Field(0, ge=0)
     exclude_authors: list[str] = Field(default_factory=list, max_length=1600)
     include_authors: Optional[list[str]] = Field(None, max_length=1600)
+    source_account: Optional[Literal['neyro_set7']] = None
 
     @field_validator('exclude_authors', 'include_authors')
     @classmethod
@@ -144,7 +183,13 @@ class CarouselQuery(BaseModel):
 @router.post('')
 async def filtered_carousels(query: CarouselQuery):
     """Только чтение: исключения приходят из настроек просмотра, без записи в коллекцию."""
-    return page(await _report(), **query.model_dump())
+    filters = query.model_dump()
+    source = filters.pop('source_account')
+    if source == 'neyro_set7':
+        allowed = await _neyro_source_authors()
+        included = filters['include_authors']
+        filters['include_authors'] = sorted(allowed if included is None else allowed.intersection(included))
+    return page(await _report(), **filters)
 
 
 @router.get('/{media_id}')

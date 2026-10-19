@@ -177,12 +177,13 @@ export default function Carousels() {
 
   const author = searchParams.get('author')?.trim() || ''
   const favoriteOnly = searchParams.get('favorite') === '1'
+  const sourceAccount = searchParams.get('source') === 'neyro_set7' ? 'neyro_set7' : null
   const sort = SORTS.has(searchParams.get('sort')) ? searchParams.get('sort') : 'likes'
   const order = searchParams.get('order') === 'asc' ? 'asc' : 'desc'
   const limit = searchParams.get('limit') === '100' ? 100 : 50
   const detailId = searchParams.get('id')
   const includeAuthors = favoriteOnly ? favorites.authors : null
-  const listParams = useMemo(() => ({ author, sort, order, limit, exclude_authors: excludedAuthors, include_authors: includeAuthors }), [author, sort, order, limit, excludedAuthors, includeAuthors])
+  const listParams = useMemo(() => ({ author, sort, order, limit, exclude_authors: excludedAuthors, include_authors: includeAuthors, source_account: sourceAccount }), [author, sort, order, limit, excludedAuthors, includeAuthors, sourceAccount])
   const { data, loading, error, loadingMore, moreError, loadMore, refresh, hasMore } = useCarouselFeed(listParams)
 
   useEffect(() => {
@@ -260,10 +261,10 @@ export default function Carousels() {
       <header className="carousels-heading">
         <div>
           <span className="carousels-eyebrow">Радар · карусели</span>
-          <h1>{author ? `Карусели @${author}` : 'Все карусели'}</h1>
+          <h1>{author ? `Карусели @${author}` : sourceAccount ? 'Карусели NEYRO_SET7' : 'Все карусели'}</h1>
           <p>13–19 октября 2026 · время Москвы</p>
         </div>
-        {author && <button type="button" className="carousels-all" onClick={() => changePage({ author: null, offset: 0 })}>Все карусели</button>}
+        {(author || sourceAccount) && <button type="button" className="carousels-all" onClick={() => changePage({ author: null, source: null, offset: 0 })}>Все карусели</button>}
       </header>
 
       <div className="carousels-summary" aria-live="polite">
@@ -288,6 +289,10 @@ export default function Carousels() {
         <label className="carousels-favorite-toggle">
           <input type="checkbox" checked={favoriteOnly} onChange={event => changePage({ favorite: event.target.checked ? '1' : null, offset: 0 })} />
           Только избранные
+        </label>
+        <label className="carousels-favorite-toggle">
+          <input type="checkbox" checked={sourceAccount === 'neyro_set7'} onChange={event => changePage({ source: event.target.checked ? 'neyro_set7' : null, offset: 0 })} />
+          Только NEYRO_SET7
         </label>
         <label>Сортировать
           <select value={sort} onChange={event => changePage({ sort: event.target.value, offset: 0 })}>
