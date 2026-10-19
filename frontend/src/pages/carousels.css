@@ -58,22 +58,23 @@
 .carousels-pagination { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 26px 0; color: var(--mut); font-family: var(--mono); font-size: 12px; }
 .carousels-overlay { position: fixed; inset: 0; z-index: 35; background: #070911bd; display: flex; justify-content: flex-end; }
 .carousels-drawer { width: min(960px, 96vw); height: 100vh; height: 100dvh; overflow: auto; background: var(--panel); border-left: 1px solid var(--line); box-shadow: -16px 0 50px #0008; }
-.carousels-drawer-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.carousels-drawer-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 8px 20px; background: var(--panel); border-bottom: 1px solid var(--line); }
 .carousels-drawer-head strong { display: block; font-size: 15px; margin-top: 2px; }
 .carousels-drawer-title { flex: 0 0 auto; }
-.carousels-head-summary { display: flex; align-items: center; gap: 12px; min-width: 0; margin-left: auto; }
-.carousels-head-date { flex: 0 0 auto; color: var(--mut); font-size: 11px; white-space: nowrap; }
-.carousels-head-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; min-width: 0; }
+.carousels-head-summary { display: flex; flex: 1; align-items: center; gap: 10px; min-width: 0; }
+.carousels-head-stats { display: grid; flex: 1; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; min-width: 0; }
 .carousels-head-stats .carousels-metric { min-width: 72px; padding: 0 8px; border: 0; border-left: 1px solid var(--line); border-radius: 0; background: transparent; }
 .carousels-head-stats .carousels-metric b { font-size: 13px; }
 .carousels-head-stats .carousels-metric small { font-size: 10px; }
-.carousels-close { display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 50%; background: var(--panel2); color: var(--tx); }
+.carousels-close { display: grid; flex: 0 0 auto; place-items: center; width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 50%; background: var(--panel2); color: var(--tx); }
 .carousels-drawer-body { display: grid; grid-template-columns: minmax(320px, 1.08fr) minmax(290px, .92fr); min-height: calc(100% - 67px); }
 .carousels-media { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 22px; background: #101115; border-right: 1px solid var(--line); container-type: inline-size; }
 .carousels-media iframe { display: block; flex: 0 0 auto; width: 100%; height: max(800px, calc(100cqw + 460px)); border: 0; border-radius: 8px; background: #fff; }
 .carousels-cover-large { width: min(100%, 440px); }
 .carousels-ig-link { display: inline-block; align-self: flex-start; color: var(--iris); text-decoration: none; font-size: 12px; }
 .carousels-ig-link:hover { text-decoration: underline; }
+.carousels-media-footer { display: flex; flex-direction: column; align-self: stretch; gap: 4px; }
+.carousels-media-date { color: var(--mut); font-size: 11px; }
 .carousels-detail { min-width: 0; padding: 24px; }
 .carousels-metric { display: flex; flex-direction: column; min-width: 0; padding: 11px; background: var(--bg); border: 1px solid var(--line); border-radius: 9px; }
 .carousels-metric b { font-family: var(--mono); font-size: 15px; overflow: hidden; text-overflow: ellipsis; }
@@ -84,7 +85,7 @@
   .carousels-drawer-body { flex: 1; min-height: 0; grid-template-columns: minmax(360px, .78fr) minmax(0, 1.22fr); }
   .carousels-media { min-height: 0; padding: 14px; overflow: auto; }
   .carousels-media iframe { width: min(100%, max(280px, calc(80dvh - 248px))); height: calc(100dvh - 150px); }
-  .carousels-detail { min-height: 0; padding: 16px; overflow: auto; }
+  .carousels-detail { min-height: 0; padding: 8px 16px 16px; overflow: auto; }
   .carousels-head-stats .carousels-metric b { overflow-wrap: anywhere; }
 }
 .carousels-detail h2 { font-size: 13px; font-weight: 650; margin: 0 0 9px; }
@@ -100,8 +101,8 @@
   .carousels-progress { flex-basis: calc(100% - 90px); }
   .carousels-drawer { width: 100vw; }
   .carousels-drawer-head { flex-wrap: wrap; gap: 8px 12px; }
-  .carousels-head-summary { order: 3; width: 100%; margin-left: 0; justify-content: space-between; }
-  .carousels-head-stats { flex: 1; }
+  .carousels-head-summary { order: 3; flex: 1 1 100%; flex-wrap: wrap; gap: 8px; }
+  .carousels-head-stats { flex: 1 1 100%; }
   .carousels-head-stats .carousels-metric { min-width: 0; padding: 0 4px; }
   .carousels-head-stats .carousels-metric small { font-size: 9px; }
   .carousels-drawer-body { display: block; }
