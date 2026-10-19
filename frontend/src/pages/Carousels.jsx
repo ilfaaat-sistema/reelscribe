@@ -109,23 +109,21 @@ function Drawer({ id, listItem, onClose, excluded }) {
   return (
     <div className="carousels-overlay" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
       <aside className="carousels-drawer" role="dialog" aria-modal="true" aria-label="Карусель Instagram">
-        <div className="carousels-drawer-head">
-          <div className="carousels-drawer-title"><span className="carousels-eyebrow">Карусель</span><strong>{item?.username ? `@${item.username}` : 'Публикация Instagram'}</strong></div>
-          {item && !isHidden && <div className="carousels-head-summary">
-            <div className="carousels-head-stats">
-              <Metric label="подписчиков" value={item.followers} />
-              <Metric label="лайков" value={item.likes} />
-              <Metric label="комментариев" value={item.comments} />
-              <Metric label="просмотров" value={item.views} />
-            </div>
-          </div>}
-          <button ref={closeRef} type="button" className="carousels-close" onClick={onClose} aria-label="Закрыть">✕</button>
-        </div>
+        <button ref={closeRef} type="button" className="carousels-close" onClick={onClose} aria-label="Закрыть">✕</button>
         {error && <p className="carousels-error" role="alert">{error}</p>}
         {loading && !item && <p className="carousels-loading" role="status">Загружаем публикацию…</p>}
         {isHidden && <p className="carousels-muted">Этот автор скрыт. Вернуть его можно в списке «Скрытые авторы».</p>}
         {item && !isHidden && <div className="carousels-drawer-body">
           <div className="carousels-media">
+            <div className="carousels-drawer-head">
+              <div className="carousels-drawer-title"><span className="carousels-eyebrow">Карусель</span><strong>{item.username ? `@${item.username}` : 'Публикация Instagram'}</strong></div>
+              <div className="carousels-head-stats">
+                <Metric label="подписчиков" value={item.followers} />
+                <Metric label="лайков" value={item.likes} />
+                <Metric label="комментариев" value={item.comments} />
+                <Metric label="просмотров" value={item.views} />
+              </div>
+            </div>
             {canEmbed ? (
               <iframe
                 src={`https://www.instagram.com/p/${item.shortcode}/embed/`}
