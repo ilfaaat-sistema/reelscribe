@@ -7,15 +7,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from datetime import datetime
 from pathlib import Path
-from time import time
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
 
-REPORT_URL = ('https://raw.githubusercontent.com/ilfaaat-sistema/reelscribe/refs/heads/'
-              'data/authors-carousels-20261013-20261019/activity-report.json')
+REPOSITORY = 'ilfaaat-sistema/reelscribe'
+BRANCH = 'data/authors-carousels-20261013-20261019'
+REF_URL = f'https://api.github.com/repos/{REPOSITORY}/git/ref/heads/{BRANCH}'
 # В checkpoint при включении приоритета уже были завершены 219 авторов вне NEYRO_SET7.
 # Пока приоритетная группа не исчерпана, новые завершения относятся только к ней.
 NON_PRIORITY_BASELINE = 219
@@ -66,8 +67,14 @@ def main() -> None:
     parser.add_argument('--authors-file', type=Path, default=default_authors_file())
     args = parser.parse_args()
     catalog = json.loads(args.authors_file.read_text(encoding='utf-8'))
-    request = Request(f'{REPORT_URL}?v={int(time() // 60)}',
-                      headers={'Accept': 'application/json'})
+    reference = Request(REF_URL, headers={'Accept': 'application/vnd.github+json',
+                                          'User-Agent': 'reelscribe-status'})
+    with urlopen(reference, timeout=10) as response:
+        commit = json.load(response)['object']['sha']
+    if not re.fullmatch(r'[0-9a-f]{40}', commit):
+        raise ValueError('GitHub вернул некорректный коммит отчёта')
+    report_url = f'https://raw.githubusercontent.com/{REPOSITORY}/{commit}/activity-report.json'
+    request = Request(report_url, headers={'Accept': 'application/json'})
     with urlopen(request, timeout=10) as response:
         report = json.load(response)
     result = summary(report, catalog)
