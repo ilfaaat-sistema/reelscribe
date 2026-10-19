@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { thumbUrl } from '../api/client'
 import { getCarousel } from '../api/carousels'
 import { HIDDEN_AUTHORS_KEY, readHiddenAuthors, writeHiddenAuthors, hideAuthor, restoreAuthor } from '../api/hiddenAuthors'
+import { FAVORITE_AUTHORS_KEY, readFavoriteAuthors, writeFavoriteAuthors, toggleFavoriteAuthor } from '../api/favoriteAuthors'
 import useCarouselFeed from '../hooks/useCarouselFeed'
 import './carousels.css'
 
@@ -154,6 +155,8 @@ export default function Carousels() {
   const restoreScroll = useRef(null)
   const sentinelRef = useRef(null)
   const [hidden, setHidden] = useState(() => readHiddenAuthors())
+  const [favorites, setFavorites] = useState(() => readFavoriteAuthors())
+  const [favoriteError, setFavoriteError] = useState(() => readFavoriteAuthors().error)
   const [hiddenError, setHiddenError] = useState('')
   const [lastHidden, setLastHidden] = useState(null)
   const excludedAuthors = useMemo(() => hidden.authors.map(item => item.username), [hidden.authors])
@@ -162,17 +165,24 @@ export default function Carousels() {
   useEffect(() => {
     const sync = event => {
       if (event.key === HIDDEN_AUTHORS_KEY || event.key === null) setHidden(readHiddenAuthors())
+      if (event.key === FAVORITE_AUTHORS_KEY || event.key === null) {
+        const result = readFavoriteAuthors()
+        setFavorites(result)
+        setFavoriteError(result.error)
+      }
     }
     window.addEventListener('storage', sync)
     return () => window.removeEventListener('storage', sync)
   }, [])
 
   const author = searchParams.get('author')?.trim() || ''
+  const favoriteOnly = searchParams.get('favorite') === '1'
   const sort = SORTS.has(searchParams.get('sort')) ? searchParams.get('sort') : 'likes'
   const order = searchParams.get('order') === 'asc' ? 'asc' : 'desc'
   const limit = searchParams.get('limit') === '100' ? 100 : 50
   const detailId = searchParams.get('id')
-  const listParams = useMemo(() => ({ author, sort, order, limit, exclude_authors: excludedAuthors }), [author, sort, order, limit, excludedAuthors])
+  const includeAuthors = favoriteOnly ? favorites.authors : null
+  const listParams = useMemo(() => ({ author, sort, order, limit, exclude_authors: excludedAuthors, include_authors: includeAuthors }), [author, sort, order, limit, excludedAuthors, includeAuthors])
   const { data, loading, error, loadingMore, moreError, loadMore, refresh, hasMore } = useCarouselFeed(listParams)
 
   useEffect(() => {
@@ -218,6 +228,15 @@ export default function Carousels() {
       setLastHidden(hide ? username : null)
       updateQuery({ offset: 0, id: null })
     } catch (e) { setHiddenError(e.message) }
+  }
+
+  const changeFavorite = username => {
+    try {
+      const next = toggleFavoriteAuthor(favorites.authors, username)
+      writeFavoriteAuthors(next)
+      setFavorites({ authors: next, error: '' })
+      setFavoriteError('')
+    } catch (e) { setFavoriteError(e.message) }
   }
 
   const backPath = safeAuthorsReturn(location.state?.authorsReturnTo)
@@ -266,6 +285,10 @@ export default function Carousels() {
       </div>
 
       <div className="carousels-controls">
+        <label className="carousels-favorite-toggle">
+          <input type="checkbox" checked={favoriteOnly} onChange={event => changePage({ favorite: event.target.checked ? '1' : null, offset: 0 })} />
+          Только избранные
+        </label>
         <label>Сортировать
           <select value={sort} onChange={event => changePage({ sort: event.target.value, offset: 0 })}>
             <option value="timestamp">По дате</option>
@@ -287,6 +310,15 @@ export default function Carousels() {
         </label>
       </div>
 
+      <details className="carousels-favorites-list">
+        <summary>Избранные авторы ({favorites.authors.length})</summary>
+        <p className="carousels-muted">Сохранено в этом браузере. Добавляйте и убирайте авторов звёздой на карточке.</p>
+        {favorites.authors.length ? <ul>{favorites.authors.map(username => <li key={username}>
+          <span>@{username}</span><button type="button" onClick={() => changeFavorite(username)} aria-label={`Убрать @${username} из избранного`}>Убрать</button>
+        </li>)}</ul> : <p className="carousels-muted">Список пуст. Добавьте автора звёздой на его карточке.</p>}
+      </details>
+      {favoriteError && <p className="carousels-error" role="alert">{favoriteError}</p>}
+
       <details className="carousels-hidden-list">
         <summary>Скрытые авторы ({hidden.authors.length})</summary>
         <p className="carousels-muted">Сохранено в этом браузере. Обновление страницы и очистка кэша сохраняют список; очистка данных сайта удаляет его.</p>
@@ -306,7 +338,7 @@ export default function Carousels() {
 
       {error && <div className="carousels-error" role="alert">{error}<button type="button" onClick={refresh}>Повторить</button></div>}
       {loading && !data && <p className="carousels-loading" role="status">Загружаем карусели…</p>}
-      {!loading && !error && !items.length && <p className="carousels-empty">{authorUnknown ? 'Данные каруселей этого автора пока недоступны.' : 'Каруселей по выбранному фильтру пока нет.'}</p>}
+      {!loading && !error && !items.length && <p className="carousels-empty">{favoriteOnly && !favorites.authors.length ? 'Список избранных авторов пуст. Добавьте авторов звёздой на карточках.' : authorUnknown ? 'Данные каруселей этого автора пока недоступны.' : 'Каруселей по выбранному фильтру пока нет.'}</p>}
       {!!items.length && <div className="carousels-grid">
         {items.map(item => <div className="carousels-tile" key={item.id}><button
           className="carousels-card"
@@ -324,6 +356,11 @@ export default function Carousels() {
           aria-label={`Скрыть автора @${item.username}`} title={`Скрыть все карусели @${item.username}`}
           onClick={() => changeHidden(item.username, true)}>
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M3 3l18 18M10.6 10.6a2 2 0 002.8 2.8M9.2 4.5A10 10 0 0112 4c5.5 0 9.5 8 9.5 8a19 19 0 01-3.1 4.3M6 6a21 21 0 00-3.5 6s4 8 9.5 8a10 10 0 005-1.4" /></svg>
+        </button><button type="button" className={`carousels-favorite-author${favorites.authors.includes(item.username?.toLowerCase()) ? ' is-favorite' : ''}`}
+          aria-pressed={favorites.authors.includes(item.username?.toLowerCase())}
+          aria-label={`${favorites.authors.includes(item.username?.toLowerCase()) ? 'Убрать из' : 'Добавить в'} избранное @${item.username}`} title={`${favorites.authors.includes(item.username?.toLowerCase()) ? 'Убрать из' : 'Добавить в'} избранное`}
+          onClick={() => changeFavorite(item.username)}>
+          <span aria-hidden="true">{favorites.authors.includes(item.username?.toLowerCase()) ? '★' : '☆'}</span>
         </button></div>)}
       </div>}
 

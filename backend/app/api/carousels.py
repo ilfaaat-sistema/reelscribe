@@ -77,13 +77,18 @@ async def _report():
             raise HTTPException(503, 'Недельный сбор пока недоступен. Попробуйте обновить страницу позже.') from None
 
 
-def page(report, author='', sort='likes', order='desc', limit=50, offset=0, exclude_authors=()):
+def page(report, author='', sort='likes', order='desc', limit=50, offset=0,
+         exclude_authors=(), include_authors=None):
     items, seen = [], set()
     excluded = {username.lower().lstrip('@') for username in exclude_authors}
+    included = ({username.lower().lstrip('@') for username in include_authors}
+                if include_authors is not None else None)
     for raw in report.get('items', []):
         if not isinstance(raw, dict) or raw.get('media_type') != 'CAROUSEL_ALBUM' or raw.get('id') is None:
             continue
         if raw.get('username', '').lower() in excluded:
+            continue
+        if included is not None and raw.get('username', '').lower() not in included:
             continue
         if author and raw.get('username', '').lower() != author.lower().lstrip('@'):
             continue
@@ -119,15 +124,18 @@ class CarouselQuery(BaseModel):
     limit: Literal[50, 100] = 50
     offset: int = Field(0, ge=0)
     exclude_authors: list[str] = Field(default_factory=list, max_length=1600)
+    include_authors: Optional[list[str]] = Field(None, max_length=1600)
 
-    @field_validator('exclude_authors')
+    @field_validator('exclude_authors', 'include_authors')
     @classmethod
-    def valid_exclusions(cls, names):
+    def valid_authors(cls, names):
+        if names is None:
+            return None
         result = []
         for name in names:
             value = name.lower().lstrip('@')
             if not re.fullmatch(r'[a-z0-9._]{1,30}', value):
-                raise ValueError('Некорректное имя скрытого автора')
+                raise ValueError('Некорректное имя автора')
             if value not in result:
                 result.append(value)
         return result

@@ -61,6 +61,15 @@ def test_exclusions_apply_before_sorting_counting_and_page_fill():
     assert page(value)['total'] == 4
 
 
+def test_favorites_include_before_pagination_and_combine_with_exclusions():
+    value = report()
+    assert [row['id'] for row in page(value, include_authors=['@ALICE'])['items']] == ['3', '1', '2']
+    assert page(value, include_authors=['alice'])['total'] == 3
+    assert page(value, include_authors=[])['total'] == 0
+    assert page(value, include_authors=['alice'], exclude_authors=['ALICE'])['total'] == 0
+    assert page(value, include_authors=['bob'], author='alice')['total'] == 0
+
+
 def test_hidden_authors_query_is_read_only_and_validated(monkeypatch):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
@@ -78,3 +87,7 @@ def test_hidden_authors_query_is_read_only_and_validated(monkeypatch):
     assert client.get('/api/radar/carousels?limit=50').json()['total'] == 4
     assert client.post('/api/radar/carousels', json={'exclude_authors': ['evil/x']}).status_code == 422
     assert client.post('/api/radar/carousels', json={'exclude_authors': ['alice'] * 1601}).status_code == 422
+    favorites = client.post('/api/radar/carousels', json={'include_authors': ['alice', '@ALICE']})
+    assert favorites.status_code == 200 and favorites.json()['total'] == 3
+    assert client.post('/api/radar/carousels', json={'include_authors': []}).json()['total'] == 0
+    assert client.post('/api/radar/carousels', json={'include_authors': ['bad/name']}).status_code == 422

@@ -22,11 +22,11 @@ async function readJson(url, signal, options = {}) {
   return response.json()
 }
 
-export function getCarousels({ author = '', sort = 'likes', order = 'desc', limit = 50, offset = 0, exclude_authors = [] } = {}, signal) {
-  if (exclude_authors.length) {
+export function getCarousels({ author = '', sort = 'likes', order = 'desc', limit = 50, offset = 0, exclude_authors = [], include_authors = null } = {}, signal) {
+  if (include_authors != null || exclude_authors.length) {
     return readJson(BASE, signal, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ author, sort, order, limit, offset, exclude_authors }),
+      body: JSON.stringify({ author, sort, order, limit, offset, exclude_authors, ...(include_authors == null ? {} : { include_authors }) }),
     })
   }
   const query = new URLSearchParams({ sort, order, limit: String(limit), offset: String(offset) })
