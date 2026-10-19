@@ -110,7 +110,16 @@ function Drawer({ id, listItem, onClose, excluded }) {
     <div className="carousels-overlay" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
       <aside className="carousels-drawer" role="dialog" aria-modal="true" aria-label="Карусель Instagram">
         <div className="carousels-drawer-head">
-          <div><span className="carousels-eyebrow">Карусель</span><strong>{item?.username ? `@${item.username}` : 'Публикация Instagram'}</strong></div>
+          <div className="carousels-drawer-title"><span className="carousels-eyebrow">Карусель</span><strong>{item?.username ? `@${item.username}` : 'Публикация Instagram'}</strong></div>
+          {item && !isHidden && <div className="carousels-head-summary">
+            <span className="carousels-head-date">{date(item.timestamp)} МСК</span>
+            <div className="carousels-head-stats">
+              <Metric label="лайков" value={item.likes} />
+              <Metric label="комментариев" value={item.comments} />
+              <Metric label="просмотров" value={item.views} />
+              <Metric label="подписчиков" value={item.followers} />
+            </div>
+          </div>}
           <button ref={closeRef} type="button" className="carousels-close" onClick={onClose} aria-label="Закрыть">✕</button>
         </div>
         {error && <p className="carousels-error" role="alert">{error}</p>}
@@ -130,13 +139,6 @@ function Drawer({ id, listItem, onClose, excluded }) {
             {link && <a href={link} target="_blank" rel="noopener noreferrer" className="carousels-ig-link">Открыть в Instagram ↗</a>}
           </div>
           <div className="carousels-detail">
-            <div className="carousels-detail-meta">{date(item.timestamp)} МСК</div>
-            <div className="carousels-detail-stats">
-              <Metric label="лайков" value={item.likes} />
-              <Metric label="комментариев" value={item.comments} />
-              <Metric label="просмотров" value={item.views} />
-              <Metric label="подписчиков" value={item.followers} />
-            </div>
             <h2>Текст публикации</h2>
             {item.caption
               ? <p className="carousels-caption">{item.caption}</p>
