@@ -87,3 +87,16 @@
   .carousels-summary-count { width: 100%; }
   .carousels-controls label { flex-wrap: wrap; }
 }
+
+.carousels-tile { position: relative; min-width: 0; }
+.carousels-tile .carousels-card { width: 100%; height: 100%; }
+.carousels-hide-author { position: absolute; z-index: 1; top: 8px; left: 8px; display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid #ffffff55; border-radius: 8px; background: #111c; color: white; }
+.carousels-hide-author:hover { background: #873146; border-color: #ffc2cc; }
+.carousels-hidden-list { margin: 10px 0; color: var(--mut); font-size: 12px; }
+.carousels-hidden-list summary { width: fit-content; cursor: pointer; color: var(--tx); }
+.carousels-hidden-list ul { max-height: 260px; overflow: auto; padding: 0; margin: 8px 0; list-style: none; }
+.carousels-hidden-list li { display: flex; align-items: center; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.carousels-hidden-list li > span { color: var(--tx); min-width: 140px; }
+.carousels-hidden-list button, .carousels-hide-notice button { border: 1px solid var(--line); border-radius: 7px; background: var(--panel2); color: var(--tx); padding: 6px 10px; }
+.carousels-hide-notice { display: flex; align-items: center; gap: 12px; margin: 8px 0; font-size: 12px; color: var(--teal); }
+@media (max-width: 700px) { .carousels-hidden-list li { flex-wrap: wrap; } .carousels-hidden-list li small { display: none; } }

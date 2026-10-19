@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { thumbUrl } from '../api/client'
 import { getCarousel, getCarousels } from '../api/carousels'
+import { HIDDEN_AUTHORS_KEY, readHiddenAuthors, writeHiddenAuthors, hideAuthor, restoreAuthor } from '../api/hiddenAuthors'
 import './carousels.css'
 
 const numberFormat = new Intl.NumberFormat('ru-RU')
@@ -75,7 +76,7 @@ function Metric({ label, value }) {
   return <span className="carousels-metric"><b>{count(value)}</b><small>{label}</small></span>
 }
 
-function Drawer({ id, listItem, onClose }) {
+function Drawer({ id, listItem, onClose, excluded }) {
   const [item, setItem] = useState(listItem || null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -97,6 +98,7 @@ function Drawer({ id, listItem, onClose }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  const isHidden = excluded?.has(item?.username?.toLowerCase())
   const link = instagramUrl(item)
   const canEmbed = /^[\w-]+$/.test(item?.shortcode || '')
 
@@ -109,7 +111,8 @@ function Drawer({ id, listItem, onClose }) {
         </div>
         {error && <p className="carousels-error" role="alert">{error}</p>}
         {loading && !item && <p className="carousels-loading" role="status">Загружаем публикацию…</p>}
-        {item && <div className="carousels-drawer-body">
+        {isHidden && <p className="carousels-muted">Этот автор скрыт. Вернуть его можно в списке «Скрытые авторы».</p>}
+        {item && !isHidden && <div className="carousels-drawer-body">
           <div className="carousels-media">
             {canEmbed ? (
               <iframe
@@ -147,10 +150,24 @@ export default function Carousels() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const pageRef = useRef(null)
+  const restoreScroll = useRef(null)
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [refresh, setRefresh] = useState(0)
+  const [hidden, setHidden] = useState(() => readHiddenAuthors())
+  const [hiddenError, setHiddenError] = useState('')
+  const [lastHidden, setLastHidden] = useState(null)
+  const excludedAuthors = useMemo(() => hidden.authors.map(item => item.username), [hidden.authors])
+  const excluded = useMemo(() => new Set(excludedAuthors), [excludedAuthors])
+
+  useEffect(() => {
+    const sync = event => {
+      if (event.key === HIDDEN_AUTHORS_KEY || event.key === null) setHidden(readHiddenAuthors())
+    }
+    window.addEventListener('storage', sync)
+    return () => window.removeEventListener('storage', sync)
+  }, [])
 
   const author = searchParams.get('author')?.trim() || ''
   const sort = SORTS.has(searchParams.get('sort')) ? searchParams.get('sort') : 'likes'
@@ -159,9 +176,16 @@ export default function Carousels() {
   const rawOffset = Number(searchParams.get('offset'))
   const offset = Number.isSafeInteger(rawOffset) && rawOffset >= 0 ? rawOffset : 0
   const detailId = searchParams.get('id')
-  const listParams = useMemo(() => ({ author, sort, order, limit, offset }), [author, sort, order, limit, offset])
+  const listParams = useMemo(() => ({ author, sort, order, limit, offset, exclude_authors: excludedAuthors }), [author, sort, order, limit, offset, excludedAuthors])
 
-  useEffect(() => { setData(null) }, [listParams])
+  useEffect(() => { setData(null) }, [author, sort, order, limit, offset])
+
+  useEffect(() => {
+    if (!loading && data && restoreScroll.current != null) {
+      if (pageRef.current) pageRef.current.scrollTop = restoreScroll.current
+      restoreScroll.current = null
+    }
+  }, [data, loading])
 
   const updateQuery = useCallback((changes) => {
     const next = new URLSearchParams(location.search)
@@ -195,6 +219,21 @@ export default function Carousels() {
     pageRef.current?.scrollTo({ top: 0, behavior: 'instant' })
   }
 
+  const changeHidden = (username, hide) => {
+    try {
+      // Успех показываем только после записи: при отказе localStorage список не меняется.
+      const current = readHiddenAuthors()
+      if (current.error) { setHiddenError(current.error); return }
+      const next = hide ? hideAuthor(current.authors, username) : restoreAuthor(current.authors, username)
+      writeHiddenAuthors(next)
+      restoreScroll.current = offset === 0 ? pageRef.current?.scrollTop || 0 : 0
+      setHidden({ authors: next, error: '' })
+      setHiddenError('')
+      setLastHidden(hide ? username : null)
+      updateQuery({ offset: 0, id: null })
+    } catch (e) { setHiddenError(e.message) }
+  }
+
   const backPath = safeAuthorsReturn(location.state?.authorsReturnTo)
   const backToRadar = () => navigate(backPath || '/radar', {
     state: backPath ? { authorsScrollTop: location.state?.authorsScrollTop } : undefined,
@@ -207,7 +246,7 @@ export default function Carousels() {
   const authorCount = profile?.carousels
   const isPartial = collection && collection.status !== 'finished'
   const authorUnknown = author && authorCount == null
-  const items = data?.items || []
+  const items = (data?.items || []).filter(item => !excluded.has(item.username?.toLowerCase()))
   const listItem = items.find(item => String(item.id) === detailId)
 
   return <main className="carousels-page" ref={pageRef}>
@@ -262,14 +301,30 @@ export default function Carousels() {
         </label>
       </div>
 
+      <details className="carousels-hidden-list">
+        <summary>Скрытые авторы ({hidden.authors.length})</summary>
+        <p className="carousels-muted">Сохранено в этом браузере. Обновление страницы и очистка кэша сохраняют список; очистка данных сайта удаляет его.</p>
+        {hidden.authors.length ? <ul>{hidden.authors.map(item => <li key={item.username}>
+          <span>@{item.username}</span><small>{date(item.hidden_at)}</small>
+          <button type="button" onClick={() => changeHidden(item.username, false)}>Вернуть в сетку</button>
+        </li>)}</ul> : <p className="carousels-muted">Скрытых авторов пока нет.</p>}
+      </details>
+      {(hidden.error || hiddenError) && <p className="carousels-error" role="alert">{hiddenError || hidden.error}</p>}
+      {lastHidden && <div className="carousels-hide-notice" role="status">Автор @{lastHidden} скрыт.
+        <button type="button" onClick={() => changeHidden(lastHidden, false)}>Отменить</button>
+      </div>}
+      {author && excluded.has(author.toLowerCase().replace(/^@/, '')) && <div className="carousels-hide-notice">
+        Автор @{author.replace(/^@/, '')} в списке скрытых.
+        <button type="button" onClick={() => changeHidden(author, false)}>Вернуть в сетку</button>
+      </div>}
+
       {error && <div className="carousels-error" role="alert">{error}<button type="button" onClick={() => setRefresh(value => value + 1)}>Повторить</button></div>}
       {loading && !data && <p className="carousels-loading" role="status">Загружаем карусели…</p>}
       {!loading && !error && !items.length && <p className="carousels-empty">{authorUnknown ? 'Данные каруселей этого автора пока недоступны.' : 'Каруселей по выбранному фильтру пока нет.'}</p>}
       {!error && !!items.length && <div className="carousels-grid">
-        {items.map(item => <button
+        {items.map(item => <div className="carousels-tile" key={item.id}><button
           className="carousels-card"
           type="button"
-          key={item.id}
           onClick={() => updateQuery({ id: item.id })}
           aria-label={`Открыть карусель @${item.username || 'автор неизвестен'}`}
         >
@@ -279,7 +334,11 @@ export default function Carousels() {
             <small>{date(item.timestamp)} МСК</small>
             <span className="carousels-card-stats"><span>♥ {count(item.likes)}</span><span>◌ {count(item.comments)}</span></span>
           </span>
-        </button>)}
+        </button><button type="button" className="carousels-hide-author"
+          aria-label={`Скрыть автора @${item.username}`} title={`Скрыть все карусели @${item.username}`}
+          onClick={() => changeHidden(item.username, true)}>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M3 3l18 18M10.6 10.6a2 2 0 002.8 2.8M9.2 4.5A10 10 0 0112 4c5.5 0 9.5 8 9.5 8a19 19 0 01-3.1 4.3M6 6a21 21 0 00-3.5 6s4 8 9.5 8a10 10 0 005-1.4" /></svg>
+        </button></div>)}
       </div>}
 
       {!error && total != null && total > limit && <nav className="carousels-pagination" aria-label="Страницы каруселей">
@@ -288,6 +347,6 @@ export default function Carousels() {
         <button type="button" disabled={offset + limit >= total} onClick={() => changePage({ offset: offset + limit })}>Вперёд →</button>
       </nav>}
     </div>
-    {detailId && <Drawer key={detailId} id={detailId} listItem={listItem} onClose={() => updateQuery({ id: null })} />}
+    {detailId && <Drawer key={detailId} id={detailId} listItem={listItem} excluded={excluded} onClose={() => updateQuery({ id: null })} />}
   </main>
 }
