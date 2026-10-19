@@ -7,28 +7,28 @@
   background: var(--bg);
   color: var(--tx);
 }
-.carousels-content { max-width: 1600px; margin: 0 auto; padding: 24px clamp(14px, 3vw, 42px) 64px; }
+.carousels-content { max-width: 1600px; margin: 0 auto; padding: 10px clamp(14px, 2vw, 26px) 40px; }
 .carousels-back { border: 0; background: none; color: var(--mut); padding: 3px 0; font-size: 13px; }
 .carousels-back:hover { color: var(--tx); }
-.carousels-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; padding: 16px 0 20px; border: 0; }
-.carousels-heading h1 { font-size: clamp(24px, 3vw, 38px); letter-spacing: -.025em; line-height: 1.1; margin: 6px 0; overflow-wrap: anywhere; }
+.carousels-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; padding: 6px 0 10px; border: 0; }
+.carousels-heading h1 { font-size: clamp(22px, 2vw, 28px); letter-spacing: -.025em; line-height: 1.1; margin: 0; overflow-wrap: anywhere; }
 .carousels-heading p { margin: 0; color: var(--mut); font-size: 13px; }
 .carousels-eyebrow { display: block; color: var(--teal); font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .11em; }
 .carousels-all, .carousels-reload, .carousels-pagination button, .carousels-error button { background: var(--panel2); color: var(--tx); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; font-size: 12px; }
 .carousels-all:hover, .carousels-reload:hover, .carousels-pagination button:hover:not(:disabled), .carousels-error button:hover { border-color: var(--iris); }
 .carousels-reload:disabled, .carousels-pagination button:disabled { opacity: .45; cursor: default; }
-.carousels-summary { display: flex; align-items: center; gap: 20px; padding: 14px 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 13px; }
-.carousels-summary-count { display: flex; flex-direction: column; flex: 0 0 auto; }
-.carousels-summary-count strong { font-family: var(--mono); font-size: 28px; line-height: 1.1; }
+.carousels-summary { display: flex; align-items: center; gap: 20px; padding: 9px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 13px; }
+.carousels-summary-count { display: flex; flex-direction: row; align-items: baseline; gap: 8px; flex: 0 0 auto; }
+.carousels-summary-count strong { font-family: var(--mono); font-size: 22px; line-height: 1.1; }
 .carousels-summary-count span, .carousels-progress small { color: var(--mut); font-size: 11px; }
-.carousels-progress { flex: 1; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 2px 12px; font-size: 12px; }
+.carousels-progress { flex: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 3px 12px; font-size: 12px; }
 .carousels-progress > span { color: var(--teal); font-weight: 600; }
 .carousels-progress b { color: var(--tx); font-family: var(--mono); font-weight: 500; }
-.carousels-progress-track { grid-column: 1 / -1; width: min(360px, 100%); height: 5px; margin: 4px 0; overflow: hidden; border-radius: 5px; background: var(--panel2); }
+.carousels-progress-track { width: min(180px, 100%); height: 4px; margin: 4px 0; overflow: hidden; border-radius: 5px; background: var(--panel2); }
 .carousels-progress-track i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--iris), var(--teal)); }
 .carousels-progress small { grid-column: 1 / -1; }
-.carousels-controls { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0; }
-.carousels-controls label { display: flex; flex-direction: column; gap: 5px; color: var(--mut); font-size: 11px; }
+.carousels-controls { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0; }
+.carousels-controls label { display: flex; align-items: center; gap: 7px; color: var(--mut); font-size: 11px; }
 .carousels-controls select { min-width: 145px; background: var(--panel); color: var(--tx); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12px; }
 .carousels-controls select:focus-visible, .carousels-page button:focus-visible, .carousels-drawer button:focus-visible, .carousels-drawer a:focus-visible { outline: 2px solid var(--iris); outline-offset: 2px; }
 .carousels-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
@@ -80,3 +80,10 @@
   .carousels-detail { padding: 18px; }
 }
 @media (max-width: 390px) { .carousels-heading { align-items: flex-start; flex-direction: column; } .carousels-pagination { gap: 7px; font-size: 10px; } }
+
+.carousels-heading > div { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 14px; }
+.carousels-heading .carousels-eyebrow { display: none; }
+@media (max-width: 700px) {
+  .carousels-summary-count { width: 100%; }
+  .carousels-controls label { flex-wrap: wrap; }
+}
