@@ -13,6 +13,8 @@ const dateFormat = new Intl.DateTimeFormat('ru-RU', {
   hour: '2-digit', minute: '2-digit',
 })
 const SORTS = new Set(['timestamp', 'likes', 'comments'])
+const CYRILLIC = { а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'kh', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'shch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya' }
+const searchName = value => String(value || '').trim().replace(/^@/, '').toLowerCase().replace(/[а-яё]/g, letter => CYRILLIC[letter])
 const STATUS_LABELS = {
   running: 'Сбор продолжается', cooldown: 'Ожидание лимита Meta', finished: 'Обход авторов завершён',
   failed: 'Сбор прерван', authentication_required: 'Нужна проверка авторизации Meta',
@@ -159,6 +161,9 @@ export default function Carousels() {
   const [favoriteError, setFavoriteError] = useState(() => readFavoriteAuthors().error)
   const [hiddenError, setHiddenError] = useState('')
   const [lastHidden, setLastHidden] = useState(null)
+  const [searchDraft, setSearchDraft] = useState(() => searchParams.get('author') || '')
+  const [searchFocused, setSearchFocused] = useState(false)
+  const [searchError, setSearchError] = useState('')
   const excludedAuthors = useMemo(() => hidden.authors.map(item => item.username), [hidden.authors])
   const excluded = useMemo(() => new Set(excludedAuthors), [excludedAuthors])
 
@@ -176,6 +181,7 @@ export default function Carousels() {
   }, [])
 
   const author = searchParams.get('author')?.trim() || ''
+  useEffect(() => { setSearchDraft(author) }, [author])
   const favoriteOnly = searchParams.get('favorite') === '1'
   const sourceAccount = searchParams.get('source') === 'neyro_set7' ? 'neyro_set7' : null
   const sort = SORTS.has(searchParams.get('sort')) ? searchParams.get('sort') : 'likes'
@@ -214,6 +220,25 @@ export default function Carousels() {
   const changePage = changes => {
     updateQuery(changes)
     pageRef.current?.scrollTo({ top: 0, behavior: 'instant' })
+  }
+
+  const searchTerm = searchName(searchDraft)
+  const searchMatches = searchTerm.length >= 2
+    ? (data?.profiles || []).filter(profile => profile.username?.toLowerCase().includes(searchTerm)).slice(0, 6)
+    : []
+  const chooseAuthor = username => {
+    setSearchDraft(username || '')
+    setSearchFocused(false)
+    setSearchError('')
+    changePage({ author: username || null, id: null, offset: 0 })
+  }
+  const submitAuthor = event => {
+    event.preventDefault()
+    if (!searchTerm) { chooseAuthor(null); return }
+    const exact = searchMatches.find(profile => profile.username?.toLowerCase() === searchTerm)
+    if (exact || searchMatches.length === 1) chooseAuthor((exact || searchMatches[0]).username)
+    else if (searchMatches.length) setSearchFocused(true)
+    else setSearchError('Автор не найден в сохранённой истории.')
   }
 
   const changeHidden = (username, hide) => {
@@ -286,6 +311,19 @@ export default function Carousels() {
       </div>
 
       <div className="carousels-controls">
+        <form className="carousels-author-search" onSubmit={submitAuthor}
+          onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setSearchFocused(false) }}>
+          <input aria-label="Поиск автора" placeholder="Сердитов или serditov" autoComplete="off"
+            value={searchDraft} onFocus={() => setSearchFocused(true)}
+            onChange={event => { setSearchDraft(event.target.value); setSearchError(''); setSearchFocused(true) }} />
+          {searchDraft && <button type="button" aria-label="Очистить поиск автора" onClick={() => chooseAuthor(null)}>×</button>}
+          <button type="submit" aria-label="Найти автора">⌕</button>
+          {searchFocused && searchMatches.length > 0 && <div className="carousels-author-options" role="listbox" aria-label="Найденные авторы">
+            {searchMatches.map(profile => <button key={profile.username} type="button" role="option" aria-selected={author === profile.username}
+              onClick={() => chooseAuthor(profile.username)}>@{profile.username}</button>)}
+          </div>}
+          {searchError && <span className="carousels-author-search-error" role="alert">{searchError}</span>}
+        </form>
         <label className="carousels-favorite-toggle">
           <input type="checkbox" checked={favoriteOnly} onChange={event => changePage({ favorite: event.target.checked ? '1' : null, offset: 0 })} />
           Только избранные
