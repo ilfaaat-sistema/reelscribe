@@ -54,4 +54,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           META_IG_TOKEN: ${{ secrets.META_IG_TOKEN }}
           META_IG_USER_ID: ${{ secrets.META_IG_USER_ID }}
+          CAROUSEL_FIRST_AUTHORS: alex_magnier,artemiy.miller,ilia.paliy,romarayt
+          CAROUSEL_PRIORITY_AUTHORS: ${{ secrets.CAROUSEL_PRIORITY_AUTHORS }}
           META_IG_API_VERSION: v23.0
