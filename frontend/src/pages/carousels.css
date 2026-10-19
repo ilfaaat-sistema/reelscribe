@@ -100,3 +100,22 @@
 .carousels-hidden-list button, .carousels-hide-notice button { border: 1px solid var(--line); border-radius: 7px; background: var(--panel2); color: var(--tx); padding: 6px 10px; }
 .carousels-hide-notice { display: flex; align-items: center; gap: 12px; margin: 8px 0; font-size: 12px; color: var(--teal); }
 @media (max-width: 700px) { .carousels-hidden-list li { flex-wrap: wrap; } .carousels-hidden-list li small { display: none; } }
+
+/* Переключатели остаются островком поверх прокручиваемого контента. */
+.app:has(.carousels-page) { position: relative; }
+.app:has(.carousels-page) > header.app-header-floating { position: absolute; inset: 0 0 auto; z-index: 20; padding: 6px 12px; border: 0; background: transparent; pointer-events: none; flex-wrap: nowrap; gap: 8px; }
+.app-header-floating .app-header-island { display: flex; align-items: center; gap: 12px; padding: 7px 11px; border: 1px solid var(--line); border-radius: 13px; background: color-mix(in srgb, var(--bg) 94%, transparent); box-shadow: 0 4px 14px #0003; pointer-events: auto; }
+.app-header-floating > .btn { background: var(--bg); pointer-events: auto; box-shadow: 0 4px 14px #0003; }
+.app-header-floating .app-header-island h1 { white-space: nowrap; }
+.app-header-floating + .carousels-page .carousels-content { padding-top: 68px; }
+.carousels-feed-end { overflow-anchor: none; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 14px; min-height: 90px; padding: 18px 0; color: var(--mut); font-size: 12px; }
+.carousels-feed-end button { border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; background: var(--panel2); color: var(--tx); }
+.carousels-feed-end p { color: var(--rose); }
+@media (max-width: 700px) {
+  .app-header-floating .app-header-island { gap: 7px; padding: 6px; }
+  .app-header-floating .app-header-island .logo { display: none; }
+  .app-header-floating .app-header-island h1 { font-size: 13px; }
+  .app-header-floating .appswitch { padding: 3px; }
+  .app-header-floating .appswitch button { padding: 5px 8px; font-size: 12px; }
+  .app-header-floating > .btn { padding: 7px 8px; font-size: 11px; }
+}
