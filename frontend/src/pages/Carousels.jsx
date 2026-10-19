@@ -358,7 +358,8 @@ export default function Carousels() {
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M3 3l18 18M10.6 10.6a2 2 0 002.8 2.8M9.2 4.5A10 10 0 0112 4c5.5 0 9.5 8 9.5 8a19 19 0 01-3.1 4.3M6 6a21 21 0 00-3.5 6s4 8 9.5 8a10 10 0 005-1.4" /></svg>
         </button><button type="button" className={`carousels-favorite-author${favorites.authors.includes(item.username?.toLowerCase()) ? ' is-favorite' : ''}`}
           aria-pressed={favorites.authors.includes(item.username?.toLowerCase())}
-          aria-label={`${favorites.authors.includes(item.username?.toLowerCase()) ? 'Убрать из' : 'Добавить в'} избранное @${item.username}`} title={`${favorites.authors.includes(item.username?.toLowerCase()) ? 'Убрать из' : 'Добавить в'} избранное`}
+          aria-label={favorites.authors.includes(item.username?.toLowerCase()) ? `Убрать @${item.username} из избранного` : `Добавить @${item.username} в избранное`}
+          title={favorites.authors.includes(item.username?.toLowerCase()) ? 'Убрать из избранного' : 'Добавить в избранное'}
           onClick={() => changeFavorite(item.username)}>
           <span aria-hidden="true">{favorites.authors.includes(item.username?.toLowerCase()) ? '★' : '☆'}</span>
         </button></div>)}
