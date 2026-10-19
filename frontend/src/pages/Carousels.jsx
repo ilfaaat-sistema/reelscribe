@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { thumbUrl } from '../api/client'
-import { getCarousel, getCarousels } from '../api/carousels'
+import { getCarousel } from '../api/carousels'
 import { HIDDEN_AUTHORS_KEY, readHiddenAuthors, writeHiddenAuthors, hideAuthor, restoreAuthor } from '../api/hiddenAuthors'
+import useCarouselFeed from '../hooks/useCarouselFeed'
 import './carousels.css'
 
 const numberFormat = new Intl.NumberFormat('ru-RU')
@@ -151,10 +152,7 @@ export default function Carousels() {
   const [searchParams] = useSearchParams()
   const pageRef = useRef(null)
   const restoreScroll = useRef(null)
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [refresh, setRefresh] = useState(0)
+  const sentinelRef = useRef(null)
   const [hidden, setHidden] = useState(() => readHiddenAuthors())
   const [hiddenError, setHiddenError] = useState('')
   const [lastHidden, setLastHidden] = useState(null)
@@ -173,12 +171,18 @@ export default function Carousels() {
   const sort = SORTS.has(searchParams.get('sort')) ? searchParams.get('sort') : 'likes'
   const order = searchParams.get('order') === 'asc' ? 'asc' : 'desc'
   const limit = searchParams.get('limit') === '100' ? 100 : 50
-  const rawOffset = Number(searchParams.get('offset'))
-  const offset = Number.isSafeInteger(rawOffset) && rawOffset >= 0 ? rawOffset : 0
   const detailId = searchParams.get('id')
-  const listParams = useMemo(() => ({ author, sort, order, limit, offset, exclude_authors: excludedAuthors }), [author, sort, order, limit, offset, excludedAuthors])
+  const listParams = useMemo(() => ({ author, sort, order, limit, exclude_authors: excludedAuthors }), [author, sort, order, limit, excludedAuthors])
+  const { data, loading, error, loadingMore, moreError, loadMore, refresh, hasMore } = useCarouselFeed(listParams)
 
-  useEffect(() => { setData(null) }, [author, sort, order, limit, offset])
+  useEffect(() => {
+    if (!hasMore || loading || loadingMore || error || moreError || !sentinelRef.current || !('IntersectionObserver' in window)) return undefined
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) loadMore()
+    }, { root: pageRef.current, rootMargin: '600px 0px' })
+    observer.observe(sentinelRef.current)
+    return () => observer.disconnect()
+  }, [hasMore, loading, loadingMore, error, moreError, loadMore])
 
   useEffect(() => {
     if (!loading && data && restoreScroll.current != null) {
@@ -196,24 +200,6 @@ export default function Carousels() {
     navigate({ pathname: location.pathname, search: `?${next}` }, { state: location.state })
   }, [location.pathname, location.search, location.state, navigate])
 
-  useEffect(() => {
-    const controller = new AbortController()
-    setLoading(true)
-    setError('')
-    getCarousels(listParams, controller.signal)
-      .then(result => setData(result))
-      .catch(e => { if (e.name !== 'AbortError') { setData(null); setError(e.message || 'Не удалось загрузить карусели') } })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false) })
-    return () => controller.abort()
-  }, [listParams, refresh])
-
-  useEffect(() => {
-    const status = data?.collection?.status
-    if (!ACTIVE_STATUSES.has(status)) return undefined
-    const timer = window.setInterval(() => setRefresh(value => value + 1), 30000)
-    return () => window.clearInterval(timer)
-  }, [data?.collection?.status])
-
   const changePage = changes => {
     updateQuery(changes)
     pageRef.current?.scrollTo({ top: 0, behavior: 'instant' })
@@ -226,7 +212,7 @@ export default function Carousels() {
       if (current.error) { setHiddenError(current.error); return }
       const next = hide ? hideAuthor(current.authors, username) : restoreAuthor(current.authors, username)
       writeHiddenAuthors(next)
-      restoreScroll.current = offset === 0 ? pageRef.current?.scrollTop || 0 : 0
+      restoreScroll.current = pageRef.current?.scrollTop || 0
       setHidden({ authors: next, error: '' })
       setHiddenError('')
       setLastHidden(hide ? username : null)
@@ -276,7 +262,7 @@ export default function Carousels() {
           <small>19 октября — неполный день. Показан найденный минимум.</small>
           {collection.review_required > 0 && <small role="status">Неполный сбор у {count(collection.review_required)} авторов.</small>}
         </div>}
-        <button type="button" className="carousels-reload" onClick={() => setRefresh(value => value + 1)} disabled={loading}>Обновить</button>
+        <button type="button" className="carousels-reload" onClick={refresh} disabled={loading}>Обновить</button>
       </div>
 
       <div className="carousels-controls">
@@ -293,7 +279,7 @@ export default function Carousels() {
             <option value="asc">Сначала меньше / старые</option>
           </select>
         </label>
-        <label>На странице
+        <label>Подгружать по
           <select value={limit} onChange={event => changePage({ limit: event.target.value, offset: 0 })}>
             <option value="50">50</option>
             <option value="100">100</option>
@@ -318,10 +304,10 @@ export default function Carousels() {
         <button type="button" onClick={() => changeHidden(author, false)}>Вернуть в сетку</button>
       </div>}
 
-      {error && <div className="carousels-error" role="alert">{error}<button type="button" onClick={() => setRefresh(value => value + 1)}>Повторить</button></div>}
+      {error && <div className="carousels-error" role="alert">{error}<button type="button" onClick={refresh}>Повторить</button></div>}
       {loading && !data && <p className="carousels-loading" role="status">Загружаем карусели…</p>}
       {!loading && !error && !items.length && <p className="carousels-empty">{authorUnknown ? 'Данные каруселей этого автора пока недоступны.' : 'Каруселей по выбранному фильтру пока нет.'}</p>}
-      {!error && !!items.length && <div className="carousels-grid">
+      {!!items.length && <div className="carousels-grid">
         {items.map(item => <div className="carousels-tile" key={item.id}><button
           className="carousels-card"
           type="button"
@@ -341,11 +327,15 @@ export default function Carousels() {
         </button></div>)}
       </div>}
 
-      {!error && total != null && total > limit && <nav className="carousels-pagination" aria-label="Страницы каруселей">
-        <button type="button" disabled={offset === 0} onClick={() => changePage({ offset: Math.max(0, offset - limit) })}>← Назад</button>
-        <span>{numberFormat.format(Math.min(offset + 1, total))}–{numberFormat.format(Math.min(offset + limit, total))} из {count(total)}</span>
-        <button type="button" disabled={offset + limit >= total} onClick={() => changePage({ offset: offset + limit })}>Вперёд →</button>
-      </nav>}
+      {data && <div className="carousels-feed-end" ref={sentinelRef} aria-live="polite">
+        <span>{count(items.length)} / {count(total)}</span>
+        {loadingMore && <span role="status">Загружаем следующие карусели…</span>}
+        {moreError && <p role="alert">{moreError}</p>}
+        {hasMore && <button type="button" onClick={loadMore} disabled={loading || loadingMore}>
+          {moreError ? 'Повторить загрузку' : 'Загрузить ещё'}
+        </button>}
+        {!hasMore && !loading && !error && !moreError && items.length > 0 && <span>Все найденные карусели показаны</span>}
+      </div>}
     </div>
     {detailId && <Drawer key={detailId} id={detailId} listItem={listItem} excluded={excluded} onClose={() => updateQuery({ id: null })} />}
   </main>
