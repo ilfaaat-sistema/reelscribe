@@ -126,6 +126,22 @@ def test_detail_queue_resumes_after_budget_and_cooldown(tmp_path):
     assert resumed['collection']['requests'] == 4
 
 
+def test_priority_resumes_existing_checkpoint_without_changing_selection(tmp_path):
+    setup(tmp_path, names=('one', 'two', 'three'), state={
+        'authors': {'one': {'status': 'available', 'scan_complete': True,
+                            'detail_pages': [], 'details': {}}},
+        'requests': 1,
+    })
+    client = Client(page([]), page([]))
+    report = batch(tmp_path, client, priority_authors='three,one')
+    assert report['collection']['status'] == 'finished'
+    assert report['collection']['checked'] == 3
+    assert [entry['username'] for entry in report['profiles']] == ['one', 'two', 'three']
+    assert 'username(three)' in client.calls[0][2]['fields']
+    assert 'username(two)' in client.calls[1][2]['fields']
+    assert json.loads((tmp_path / 'selection.json').read_text())['authors'][0]['username'] == 'one'
+
+
 def test_deadline_before_every_http_and_restart_does_not_duplicate(tmp_path):
     setup(tmp_path)
     first = batch(tmp_path, Client(page([item(1)])), max_requests=1)

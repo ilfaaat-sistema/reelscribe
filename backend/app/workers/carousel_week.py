@@ -55,8 +55,11 @@ def main(argv=None):
             return 0
         with httpx.Client(timeout=45, follow_redirects=False) as client:
             def collect(**limits):
+                first = os.environ.get('CAROUSEL_FIRST_AUTHORS', '')
+                remaining = os.environ.get('CAROUSEL_PRIORITY_AUTHORS', '')
                 return run_batch(args.checkpoint_dir, args.output_report, token=os.environ.get('META_IG_TOKEN'),
-                                 account_id=os.environ.get('META_IG_USER_ID'), api_version='v23.0', client=client, **limits)
+                                 account_id=os.environ.get('META_IG_USER_ID'), api_version='v23.0', client=client,
+                                 priority_authors=','.join(part for part in (first, remaining) if part), **limits)
             def persist(_report):
                 retry(lambda: store.save(args.checkpoint_dir, args.output_report), clock)
             if pilot:

@@ -62,6 +62,16 @@ def _count(value):
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
 
 
+def _processing_order(names, priority_authors):
+    """Change traversal only; preserve selection/report order and existing checkpoints."""
+    priority = list(dict.fromkeys(name.strip().lower().lstrip('@')
+                                  for name in priority_authors.split(',') if name.strip()))
+    if any(name not in names for name in priority):
+        raise ValueError('Некорректный приоритет авторов')
+    prioritized = set(priority)
+    return priority + [name for name in names if name not in prioritized]
+
+
 def _item(raw, username, followers, collected_at, start, end):
     if not isinstance(raw, dict) or raw.get('media_type') != 'CAROUSEL_ALBUM':
         return None
@@ -115,11 +125,12 @@ def _report(selection, names, state, status, clock):
 
 
 def run_batch(checkpoint_dir, output_report, *, token=None, account_id=None, api_version='v23.0',
-              max_seconds=480, max_requests=20, client=None, clock=None):
+              max_seconds=480, max_requests=20, client=None, clock=None, priority_authors=''):
     """Сделать bounded batch. Состояние пишется до HTTP и после каждой страницы."""
     checkpoint_dir, output_report = Path(checkpoint_dir), Path(output_report)
     clock = clock or (lambda: datetime.now(timezone.utc))
     selection, names, start = _selection(checkpoint_dir)
+    processing_names = _processing_order(names, priority_authors)
     end = start + timedelta(days=(datetime.fromisoformat(selection['end_date']).date()
                                    - datetime.fromisoformat(selection['start_date']).date()).days + 1)
     state_path = checkpoint_dir / 'state.json'
@@ -157,7 +168,7 @@ def run_batch(checkpoint_dir, output_report, *, token=None, account_id=None, api
         return publish('permissions_or_request_error')
     url = f'https://graph.facebook.com/{api_version}/{account_id}'
 
-    for username in names:
+    for username in processing_names:
         author = state['authors'].setdefault(username, {})
         if author.get('status') == 'unavailable' or (author.get('scan_complete') and not author.get('detail_pages')):
             continue
