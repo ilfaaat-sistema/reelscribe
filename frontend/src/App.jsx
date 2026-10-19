@@ -6,6 +6,7 @@ import Results from './pages/Results'
 import History from './pages/History'
 import Errors from './pages/Errors'
 import Radar from './pages/Radar'
+import Carousels from './pages/Carousels'
 import ChatBubble from './components/ChatBubble'
 
 // Память последней позиции в каждом разделе. Основное хранилище — sessionStorage
@@ -78,6 +79,7 @@ function Header() {
         </button>
       </nav>
       <div className="spacer" />
+      <button className="btn ghost sm" onClick={() => navigate('/radar/carousels')}>Карусели</button>
       {view !== 'results' && view !== 'radar' && (
         <div className="stepper">
           <div className={`step ${view === 'import' ? 'on' : 'done'}`}>
@@ -123,6 +125,7 @@ export default function App() {
         <Route path="/results" element={<Results />} />
         <Route path="/results/:sessionId" element={<Results />} />
         <Route path="/radar" element={<Radar />} />
+        <Route path="/radar/carousels" element={<Carousels />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <ChatBubble />
