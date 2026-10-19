@@ -103,8 +103,8 @@
 
 /* Переключатели остаются островком поверх прокручиваемого контента. */
 .app:has(.carousels-page) { position: relative; }
-.app:has(.carousels-page) > header.app-header-floating { position: absolute; inset: 0 0 auto; z-index: 20; padding: 6px 12px; border: 0; background: transparent; pointer-events: none; flex-wrap: nowrap; gap: 8px; }
-.app-header-floating .app-header-island { display: flex; align-items: center; gap: 12px; padding: 7px 11px; border: 1px solid var(--line); border-radius: 13px; background: color-mix(in srgb, var(--bg) 94%, transparent); box-shadow: 0 4px 14px #0003; pointer-events: auto; }
+.app:has(.carousels-page) > header.app-header-floating { position: absolute; inset: 0 0 auto; z-index: 20; padding: 0 12px; border: 0; background: transparent; pointer-events: none; flex-wrap: nowrap; align-items: flex-start; gap: 8px; }
+.app-header-floating .app-header-island { display: flex; align-items: center; gap: 12px; padding: 7px 11px; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 13px 13px; background: var(--bg); box-shadow: 0 4px 14px #0003; pointer-events: auto; }
 .app-header-floating > .btn { background: var(--bg); pointer-events: auto; box-shadow: 0 4px 14px #0003; }
 .app-header-floating .app-header-island h1 { white-space: nowrap; }
 .app-header-floating + .carousels-page .carousels-content { padding-top: 68px; }
