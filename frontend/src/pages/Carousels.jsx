@@ -467,7 +467,7 @@ export default function Carousels() {
             <small>{favoritesExpanded ? 'Скрыть' : 'Показать'}</small>
           </button></h2>
           <button type="button" className={`carousels-favorites-reset${!author ? ' is-active' : ''}`}
-            aria-pressed={!author} onClick={() => chooseFavoriteAuthor(null)}>Все избранные</button>
+            aria-pressed={!author} onClick={() => chooseFavoriteAuthor(null)}>{selectedPeriod === '14d' || favoriteOnly ? 'Все избранные' : 'Все авторы'}</button>
         </div>
         <div id="carousels-favorites-content" hidden={!favoritesExpanded}>
         <p className="carousels-muted">Общий список на всех устройствах. Сбор новых авторов начинается автоматически; доступны публичные профессиональные профили.</p>
