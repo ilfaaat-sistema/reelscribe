@@ -13,8 +13,8 @@ import ChatBubble from './components/ChatBubble'
 // Память последней позиции в каждом разделе. Основное хранилище — sessionStorage
 // (ключи rs:last:parser / rs:last:radar), резерв на случай недоступности (приватный
 // режим, заблокированный доступ к хранилищу) — переменная модуля.
-const SECTION_KEYS = { parser: 'rs:last:parser', radar: 'rs:last:radar' }
-const SECTION_DEFAULTS = { parser: '/', radar: '/radar' }
+const SECTION_KEYS = { parser: 'rs:last:parser', radar: 'rs:last:radar', carousels: 'rs:last:carousels' }
+const SECTION_DEFAULTS = { parser: '/', radar: '/radar', carousels: '/radar/carousels?period=14d' }
 const memFallback = {}
 
 function saveLastPath(section, path) {
@@ -26,18 +26,21 @@ function saveLastPath(section, path) {
 }
 
 function loadLastPath(section) {
+  let path
   try {
-    return sessionStorage.getItem(SECTION_KEYS[section]) || memFallback[section] || SECTION_DEFAULTS[section]
+    path = sessionStorage.getItem(SECTION_KEYS[section]) || memFallback[section] || SECTION_DEFAULTS[section]
   } catch {
-    return memFallback[section] || SECTION_DEFAULTS[section]
+    path = memFallback[section] || SECTION_DEFAULTS[section]
   }
+  // Раньше карусели сохранялись в позиции Радара; теперь это отдельный раздел.
+  return section === 'radar' && path.startsWith('/radar/carousels') ? '/radar' : path
 }
 
 function Header() {
   const navigate = useNavigate()
   const location = useLocation()
   const { pathname } = location
-  const section = pathname.startsWith('/radar') ? 'radar' : 'parser'
+  const section = pathname.startsWith('/radar/carousels') ? 'carousels' : pathname.startsWith('/radar') ? 'radar' : 'parser'
   const view = pathname.startsWith('/results')
     ? 'results'
     : pathname.startsWith('/processing')
@@ -56,7 +59,6 @@ function Header() {
   }
 
   const floating = pathname.startsWith('/radar/carousels')
-  const radarHome = pathname === '/radar'
   const primaryControls = (<>
       <div className="logo">
         <i/><i/><i/><i/><i/>
@@ -79,6 +81,14 @@ function Header() {
         >
           Радар
         </button>
+        <button
+          type="button"
+          className={section === 'carousels' ? 'on' : ''}
+          aria-current={section === 'carousels' ? 'page' : undefined}
+          onClick={() => goToSection('carousels')}
+        >
+          Карусели
+        </button>
       </nav>
   </>)
 
@@ -86,10 +96,6 @@ function Header() {
     <header className={floating ? 'app-header-floating' : undefined}>
       {floating ? <div className="app-header-island">{primaryControls}</div> : primaryControls}
       <div className="spacer" />
-      <button type="button" className={`btn sm${radarHome ? '' : ' ghost'}`}
-        onClick={() => navigate(radarHome ? '/radar/carousels?period=14d' : '/radar/carousels')}>
-        {radarHome ? 'Карусели за 14 дней →' : 'Карусели'}
-      </button>
       {view !== 'results' && view !== 'radar' && (
         <div className="stepper">
           <div className={`step ${view === 'import' ? 'on' : 'done'}`}>
