@@ -148,7 +148,8 @@ def _moment(value):
 
 def _state_items(state, start, end, names):
     first, last = start.astimezone(timezone.utc), end.astimezone(timezone.utc)
-    return [row for row in state['items'] if row.get('username') in names
+    return [row for row in state['items'] if isinstance(row, dict) and isinstance(row.get('username'), str)
+            and (names is None or row.get('username') in names)
             and row.get('media_type') == 'CAROUSEL_ALBUM' and (stamp := _moment(row.get('timestamp')))
             and first <= stamp < last]
 
@@ -163,7 +164,7 @@ def _sorted_items(items, sort, order):
 
 
 def live_page(*, author='', sort='likes', order='desc', limit=50, offset=0,
-              exclude_authors=(), include_authors=None, source_account=None):
+              exclude_authors=(), include_authors=None, source_account=None, favorites_only=True, archive_items=()):
     from app.api.carousels import _item
 
     start, end = window()
@@ -171,7 +172,11 @@ def live_page(*, author='', sort='likes', order='desc', limit=50, offset=0,
         state = _read_state(_store(client))
     active = [row for row in state['authors'] if row.get('active', True)]
     names = {row['username'] for row in active}
-    all_items = _state_items(state, start, end, names)
+    raw_items = list(archive_items) + state['items'] if not favorites_only else state['items']
+    in_window = _state_items({'items': raw_items}, start, end, names if favorites_only else None)
+    all_items = list({str(row['id']): row for row in in_window if row.get('id') is not None}.values())
+    if not favorites_only:
+        names = {row['username'] for row in all_items}
     profile_counts = {name: 0 for name in names}
     for row in all_items:
         profile_counts[row['username']] += 1
@@ -189,11 +194,13 @@ def live_page(*, author='', sort='likes', order='desc', limit=50, offset=0,
               'failed' if 'error' in statuses else 'finished')
     checked = sum(value in ('updated', 'unavailable') for value in statuses)
     last_checked = [row['last_checked_at'] for row in active if row.get('last_checked_at')]
+    collected = [row['collected_at'] for row in all_items if _moment(row.get('collected_at'))]
+    latest = max(last_checked + collected, key=_moment, default=None)
     return {
         'start_date': start.date().isoformat(),
         'end_date': (end - timedelta(days=1)).date().isoformat(),
         'timezone': 'Europe/Moscow',
-        'collected_at': max(last_checked, default=None),
+        'collected_at': latest,
         'collection': {'status': status, 'target': len(active), 'checked': checked,
                        'available': sum(value == 'updated' for value in statuses),
                        'unavailable': sum(value == 'unavailable' for value in statuses),
@@ -203,8 +210,9 @@ def live_page(*, author='', sort='likes', order='desc', limit=50, offset=0,
                                              default=None),
                        'review_required': sum(value == 'error' for value in statuses)},
         'totals': {'carousels': len(items)},
-        'profiles': [{'username': row['username'], 'carousels': profile_counts[row['username']]
-                      if row['status'] in ('updated', 'unavailable') else None} for row in active],
+        'profiles': ([{'username': row['username'], 'carousels': profile_counts[row['username']]
+                       if row['status'] in ('updated', 'unavailable') else None} for row in active]
+                     if favorites_only else [{'username': name, 'carousels': profile_counts[name]} for name in sorted(names)]),
         'items': [_item(row) for row in items[offset:offset + limit]],
         'total': len(items),
     }
@@ -216,8 +224,7 @@ def live_detail(media_id: str):
     start, end = window()
     with httpx.Client(timeout=20, follow_redirects=False) as client:
         state = _read_state(_store(client))
-    names = {row['username'] for row in state['authors'] if row.get('active', True)}
-    for row in _state_items(state, start, end, names):
+    for row in _state_items(state, start, end, None):
         if str(row.get('id')) == media_id:
             return {**_item(row), 'start_date': start.date().isoformat(),
                     'end_date': (end - timedelta(days=1)).date().isoformat()}

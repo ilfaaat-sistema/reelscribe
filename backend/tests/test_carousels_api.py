@@ -240,3 +240,39 @@ def test_reports_use_isolated_urls_and_caches_and_validate_dates(monkeypatch):
         else:
             raise AssertionError('Неверные даты приняты')
     asyncio.run(check())
+
+
+def test_rolling_off_sources_and_detail_window_and_archive_failure(monkeypatch):
+    from datetime import datetime, timezone
+    from fastapi import FastAPI, HTTPException
+    from fastapi.testclient import TestClient
+    from app.api import carousels
+    api = carousels.carousel_favorites
+    stamp = datetime.now(timezone.utc).isoformat()
+    calls = []
+    failed = False
+    async def reports(period):
+        calls.append(period)
+        if failed:
+            raise HTTPException(503, 'Архив временно недоступен')
+        return {'items': [{'id': '123', 'username': 'other', 'media_type': 'CAROUSEL_ALBUM', 'timestamp': stamp},
+                          {'id': '124', 'username': 'other', 'media_type': 'CAROUSEL_ALBUM', 'timestamp': '2000-01-01T00:00:00Z'}]}
+    class FakeStore:
+        def read_state(self):
+            return {'authors': [], 'items': []}
+    monkeypatch.setattr(api, '_store', lambda client: FakeStore())
+    monkeypatch.setattr(carousels, '_report', reports)
+    app = FastAPI()
+    app.include_router(carousels.router)
+    client = TestClient(app)
+    url = '/radar/carousels'
+    assert client.get(url + '?period=14d').json()['total'] == 0
+    assert calls == []
+    off = client.post(url, json={'period': '14d', 'favorites_only': False}).json()
+    assert off['total'] == 1 and off['items'][0]['id'] == '123'
+    assert client.get(url + '?period=14d&favorites_only=false').json()['total'] == 1
+    detail = client.get(url + '/123?period=14d')
+    assert detail.status_code == 200 and detail.json()['start_date'] == off['start_date']
+    assert client.get(url + '/124?period=14d').status_code == 404
+    failed = True
+    assert client.post(url, json={'period': '14d', 'favorites_only': False}).status_code == 503

@@ -90,3 +90,28 @@ def test_live_feed_contains_only_active_favorites_and_filters_before_page(monkey
     assert page['total'] == 2 and [item['id'] for item in page['items']] == ['3']
     assert page['collection']['target'] == 2
     assert carousel_favorites.live_page(exclude_authors=['alice'])['total'] == 1
+
+
+def test_all_saved_union_live_wins_and_filters_before_page(monkeypatch):
+    from datetime import datetime, timezone
+    from app.api import carousel_favorites as api
+    now = datetime.now(timezone.utc).isoformat()
+    base = {'timestamp': now, 'collected_at': now, 'media_type': 'CAROUSEL_ALBUM'}
+    state = {'authors': [{'username': 'fav', 'active': True, 'status': 'pending'}],
+             'items': [dict(base, id='1', username='fav', likes=2)]}
+    class FakeStore:
+        def read_state(self):
+            return state
+    monkeypatch.setattr(api, '_store', lambda client: FakeStore())
+    history = [dict(base, id='1', username='fav', likes=100),
+               dict(base, id='2', username='other', likes=10),
+               dict(base, id='3', username='hidden', likes=50),
+               dict(base, id='4', username='other', likes=1000, timestamp='2000-01-01T00:00:00Z')]
+    on = api.live_page(archive_items=history)
+    assert on['total'] == 1
+    off = api.live_page(favorites_only=False, archive_items=history, exclude_authors=['hidden'], limit=1, offset=1)
+    assert off['total'] == 2
+    assert off['items'][0]['id'] == '1' and off['items'][0]['likes'] == 2
+    assert off['collected_at'] == now
+    assert api.live_page(favorites_only=False, archive_items=history, source_account={'other'})['total'] == 1
+    assert api.live_page(favorites_only=False, archive_items=history, author='other')['items'][0]['id'] == '2'

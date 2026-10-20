@@ -130,3 +130,18 @@ test('архив 14 дней имеет отдельный URL и не меня�
     assert.equal(new URL(calls[2], 'https://test.local').searchParams.get('period'), '7d')
   } finally { globalThis.fetch = previous }
 })
+
+test('выключенное избранное передаёт favorites_only=false в тот же 14d API, деталь сохраняет period', async () => {
+  const previous = globalThis.fetch
+  const calls = []
+  globalThis.fetch = async (url, options) => { calls.push([url, options]); return { ok: true, json: async () => ({ items: [] }) } }
+  try {
+    await getCarousels({ period: '14d', favorites_only: false, sort: 'timestamp', exclude_authors: ['hidden'] })
+    const body = JSON.parse(calls[0][1].body)
+    assert.equal(body.period, '14d')
+    assert.equal(body.favorites_only, false)
+    assert.deepEqual(body.exclude_authors, ['hidden'])
+    await getCarousel('123', undefined, '14d')
+    assert.equal(calls[1][0], '/api/radar/carousels/123?period=14d')
+  } finally { globalThis.fetch = previous }
+})

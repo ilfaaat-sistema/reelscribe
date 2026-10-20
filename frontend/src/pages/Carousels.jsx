@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { thumbUrl } from '../api/client'
 import { getCarousel } from '../api/carousels'
+import { favoriteFilterEnabled, toggleFavoriteFilter } from '../api/carouselFilters'
 import { HIDDEN_AUTHORS_KEY, readHiddenAuthors, writeHiddenAuthors, hideAuthor, restoreAuthor } from '../api/hiddenAuthors'
 import { FAVORITES_IMPORT_KEY, readFavoriteAuthors, getFavoriteAuthors, addFavoriteAuthor, removeFavoriteAuthor } from '../api/favoriteAuthors'
 import useSelectedCarousels from '../hooks/useSelectedCarousels'
@@ -220,14 +221,14 @@ export default function Carousels() {
   const author = searchParams.get('author')?.trim() || ''
   useEffect(() => { setSearchDraft(author) }, [author])
   const period = ['7d', '14d', 'archive14d'].includes(searchParams.get('period')) ? searchParams.get('period') : null
-  const favoriteOnly = searchParams.get('favorite') === '1'
+  const favoriteOnly = favoriteFilterEnabled(searchParams)
   const sourceAccount = searchParams.get('source') === 'neyro_set7' ? 'neyro_set7' : null
   const sort = SORTS.has(searchParams.get('sort')) ? searchParams.get('sort') : 'likes'
   const order = searchParams.get('order') === 'asc' ? 'asc' : 'desc'
   const limit = searchParams.get('limit') === '100' ? 100 : 50
   const detailId = searchParams.get('id')
-  const includeAuthors = favoriteOnly ? favorites.authors : null
-  const listParams = useMemo(() => ({ period, author, sort, order, limit, exclude_authors: excludedAuthors, include_authors: includeAuthors, source_account: sourceAccount }), [period, author, sort, order, limit, excludedAuthors, includeAuthors, sourceAccount])
+  const includeAuthors = period !== '14d' && favoriteOnly ? favorites.authors : null
+  const listParams = useMemo(() => ({ period, favorites_only: favoriteOnly, author, sort, order, limit, exclude_authors: excludedAuthors, include_authors: includeAuthors, source_account: sourceAccount }), [period, favoriteOnly, author, sort, order, limit, excludedAuthors, includeAuthors, sourceAccount])
   const { data, loading, error, loadingMore, moreError, loadMore, refresh, hasMore } = useCarouselFeed(listParams)
 
   useEffect(() => {
@@ -282,7 +283,14 @@ export default function Carousels() {
     setSearchFocused(false)
     setSearchError('')
     restoreScroll.current = pageRef.current?.scrollTop || 0
-    updateQuery({ author: username || null, id: null, offset: 0 })
+    updateQuery({ author: username || null, favorite: '1', id: null, offset: 0 })
+  }
+  const toggleAllFavorites = () => {
+    setSearchDraft('')
+    setSearchFocused(false)
+    setSearchError('')
+    restoreScroll.current = pageRef.current?.scrollTop || 0
+    updateQuery(toggleFavoriteFilter(searchParams))
   }
   const toggleFavoritesExpanded = () => {
     const expanded = !favoritesExpanded
@@ -380,7 +388,7 @@ export default function Carousels() {
       <header className="carousels-heading">
         <div>
           <span className="carousels-eyebrow">Радар · карусели</span>
-          <h1>{author ? `Карусели @${author}` : sourceAccount ? 'Карусели NEYRO_SET7' : selectedPeriod === '14d' ? 'Карусели избранных' : 'Все карусели'}</h1>
+          <h1>{author ? `Карусели @${author}` : sourceAccount ? 'Карусели NEYRO_SET7' : selectedPeriod === '14d' && favoriteOnly ? 'Карусели избранных' : 'Все карусели'}</h1>
           <p>{data?.start_date && data?.end_date ? `${periodDateFormat.format(new Date(`${data.start_date}T12:00:00+03:00`))} — ${periodDateFormat.format(new Date(`${data.end_date}T12:00:00+03:00`))} · время Москвы` : 'Период загружается…'}</p>
         </div>
         <div className="carousels-heading-actions">
@@ -394,7 +402,7 @@ export default function Carousels() {
           <strong>{authorUnknown ? '—' : count(total)}</strong>
           <span>{authorUnknown ? (isPartial ? 'Данные автора ещё не получены' : 'Данные автора недоступны') : 'найдено каруселей'}</span>
         </div>
-        {collection && <div className="carousels-progress">
+        {collection && !(selectedPeriod === '14d' && !favoriteOnly) && <div className="carousels-progress">
           <span>{STATUS_LABELS[collection.status] || 'Статус сбора неизвестен'}</span>
           <b>{count(checked)} / {count(target)} авторов проверено</b>
           {target > 0 && checked != null && <div className="carousels-progress-track"><i style={{ width: `${Math.min(100, Math.max(0, checked / target * 100))}%` }} /></div>}
@@ -468,8 +476,8 @@ export default function Carousels() {
             <span aria-hidden="true">{favoritesExpanded ? '▾' : '▸'}</span> Избранные авторы ({favorites.authors.length})
             <small>{favoritesExpanded ? 'Скрыть' : 'Показать'}</small>
           </button></h2>
-          <button type="button" className={`carousels-favorites-reset${!author ? ' is-active' : ''}`}
-            aria-pressed={!author} onClick={() => chooseFavoriteAuthor(null)}>{selectedPeriod === '14d' || favoriteOnly ? 'Все избранные' : 'Все авторы'}</button>
+          <button type="button" className={`carousels-favorites-reset${favoriteOnly ? ' is-active' : ''}`}
+            aria-pressed={favoriteOnly} onClick={toggleAllFavorites}>Все избранные</button>
         </div>
         <div id="carousels-favorites-content" hidden={!favoritesExpanded}>
         <p className="carousels-muted">Общий список на всех устройствах. Сбор новых авторов начинается автоматически; доступны публичные профессиональные профили.</p>
@@ -519,7 +527,8 @@ export default function Carousels() {
 
       {error && <div className="carousels-error" role="alert">{error}<button type="button" onClick={refresh}>Повторить</button></div>}
       {loading && !data && <p className="carousels-loading" role="status">Загружаем карусели…</p>}
-      {!loading && !error && !items.length && <p className="carousels-empty">{period === '14d' ? favoriteLoading ? 'Проверяем общий список избранных…' : !favorites.authors.length ? 'Добавьте профиль в общий список избранных.' : favoriteRows.some(row => (!author || row.username === author.toLowerCase()) && !row.last_checked_at) ? 'Автор ещё не проверен. Сбор начнётся автоматически; статус доступен выше.' : 'Авторы проверены. За выбранный период и с текущими фильтрами каруселей нет.' : favoriteOnly && !favorites.authors.length ? 'Список избранных авторов пуст. Добавьте авторов звёздой на карточках.' : authorUnknown ? 'Данные каруселей этого автора пока недоступны.' : 'Каруселей по выбранному фильтру пока нет.'}</p>}
+      {!loading && !error && !items.length && <p className="carousels-empty">{period === '14d' && favoriteOnly ? favoriteLoading ? 'Проверяем общий список избранных…' : !favorites.authors.length ? 'Добавьте профиль в общий список избранных.' : favoriteRows.some(row => (!author || row.username === author.toLowerCase()) && !row.last_checked_at) ? 'Автор ещё не проверен. Сбор начнётся автоматически; статус доступен выше.' : 'Авторы проверены. За выбранный период и с текущими фильтрами каруселей нет.' : favoriteOnly && !favorites.authors.length ? 'Список избранных авторов пуст. Добавьте авторов звёздой на карточках.' : authorUnknown ? 'Данные каруселей этого автора пока недоступны.' : 'Каруселей по выбранному фильтру пока нет.'}</p>}
+      {period === '14d' && !favoriteOnly && <p className="carousels-muted">Уже собранные карусели всех авторов за текущее окно. Новый сбор по всем авторам не запускается.</p>}
       {!!items.length && <div className="carousels-grid">
         {items.map(item => <div className="carousels-tile" key={item.id}><button
           className="carousels-card"
