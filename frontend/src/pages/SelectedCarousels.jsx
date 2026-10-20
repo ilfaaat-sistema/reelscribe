@@ -1,0 +1,139 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
+import useSelectedCarousels from '../hooks/useSelectedCarousels'
+import './selected-carousels.css'
+
+const number = value => value == null || !Number.isFinite(Number(value)) ? '—' : new Intl.NumberFormat('ru-RU').format(Number(value))
+const date = value => value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' }) : '—'
+const safeReturn = value => {
+  try {
+    const url = new URL(value, window.location.origin)
+    return url.origin === window.location.origin && url.pathname === '/radar/carousels' ? url.pathname + url.search : '/radar/carousels?period=14d'
+  } catch { return '/radar/carousels?period=14d' }
+}
+const instagram = item => {
+  if (/^[\w-]+$/.test(item?.shortcode || '')) return `https://www.instagram.com/p/${item.shortcode}/`
+  try {
+    const url = new URL(item?.permalink)
+    if (url.protocol === 'https:' && ['instagram.com', 'www.instagram.com'].includes(url.hostname)) return url.href
+  } catch { /* Ссылка могла исчезнуть из отчёта. */ }
+  return null
+}
+
+function Cover({ snapshot }) {
+  const [failed, setFailed] = useState(false)
+  const source = snapshot.thumbnail_url || snapshot.media_url
+  useEffect(() => { setFailed(false) }, [source])
+  return <div className="selected-cover">{!failed && /^https:\/\//.test(source || '')
+    ? <img src={source} alt="" loading="lazy" onError={() => setFailed(true)} />
+    : <span>▧<br />Обложка недоступна</span>}</div>
+}
+
+function Drawer({ item, selected, busy, onToggle, onClose }) {
+  const panel = useRef(null)
+  const snapshot = item.snapshot
+  const link = instagram(snapshot)
+  const canEmbed = /^[\w-]+$/.test(snapshot.shortcode || '')
+  useEffect(() => {
+    const previous = document.activeElement
+    panel.current?.querySelector('button')?.focus()
+    const onKey = event => {
+      if (event.key === 'Escape') onClose()
+      if (event.key !== 'Tab') return
+      const controls = [...panel.current.querySelectorAll('button:not(:disabled), a[href], iframe')]
+      const first = controls[0]
+      const last = controls.at(-1)
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => { window.removeEventListener('keydown', onKey); previous?.focus() }
+  }, [onClose])
+  return <div className="selected-overlay" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
+    <aside ref={panel} className="selected-drawer" role="dialog" aria-modal="true" aria-label={`Карусель @${snapshot.username || 'автор неизвестен'}`}>
+      <button type="button" className="selected-close" onClick={onClose} aria-label="Закрыть просмотр">✕</button>
+      <h2>@{snapshot.username || 'Автор неизвестен'}</h2>
+      <button type="button" disabled={busy} aria-pressed={selected} onClick={() => onToggle(item)}>{selected ? '♥ Убрать из отобранных' : '♡ Отобрать снова'}</button>
+      <p className="selected-muted">Опубликовано: {date(snapshot.timestamp)} · Отобрано: {date(item.selected_at)}</p>
+      <p>♥ {number(snapshot.likes)} лайков Instagram · {number(snapshot.comments)} комментариев</p>
+      {canEmbed ? <iframe src={`https://www.instagram.com/p/${snapshot.shortcode}/embed/`} title={`Карусель @${snapshot.username || ''} в Instagram`} loading="lazy" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen /> : <Cover snapshot={snapshot} />}
+      <p className="selected-muted">Слайды показывает Instagram. Если просмотр недоступен, сохранённый текст и ссылка остаются ниже.</p>
+      {link && <a href={link} target="_blank" rel="noopener noreferrer">Открыть в Instagram ↗</a>}
+      <h3>Сохранённый текст</h3><p className="selected-caption">{snapshot.caption || 'Описание отсутствует.'}</p>
+    </aside>
+  </div>
+}
+
+function sortValue(item, key) {
+  const value = key === 'selected_at' ? item.selected_at : item.snapshot[key]
+  if (value == null) return null
+  if (key === 'selected_at' || key === 'timestamp') {
+    const parsed = Date.parse(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+export default function SelectedCarousels() {
+  const location = useLocation()
+  const [params, setParams] = useSearchParams()
+  const { items, loading, error, busy, refresh, setSelected } = useSelectedCarousels()
+  const [undo, setUndo] = useState(null)
+  const [drawer, setDrawer] = useState(null)
+  const closeDrawer = useCallback(() => setDrawer(null), [])
+  const [shown, setShown] = useState(50)
+  const q = (params.get('q') || '').slice(0, 200)
+  const sort = ['selected_at', 'timestamp', 'likes', 'comments'].includes(params.get('sort')) ? params.get('sort') : 'selected_at'
+  const order = params.get('order') === 'asc' ? 'asc' : 'desc'
+
+  useEffect(() => { setShown(50) }, [q, sort, order])
+
+  const change = (key, value) => setParams(previous => {
+    const next = new URLSearchParams(previous)
+    if (value) next.set(key, value)
+    else next.delete(key)
+    return next
+  }, { replace: true })
+  const toggle = async item => {
+    const selected = items.some(entry => entry.id === item.id)
+    if (await setSelected(item.snapshot, item.source_period, !selected)) setUndo(selected ? item : null)
+  }
+  const restore = async () => {
+    if (undo && await setSelected(undo.snapshot, undo.source_period, true)) setUndo(null)
+  }
+
+  const results = useMemo(() => {
+    const needle = q.trim().replace(/^@/, '').toLocaleLowerCase('ru-RU')
+    const filtered = items.filter(item => !needle || String(item.snapshot.username || '').toLocaleLowerCase('ru-RU').includes(needle) || String(item.snapshot.caption || '').toLocaleLowerCase('ru-RU').includes(needle))
+    filtered.sort((a, b) => {
+      const x = sortValue(a, sort); const y = sortValue(b, sort)
+      if (x == null || y == null) return x == null && y == null ? a.id.localeCompare(b.id) : x == null ? 1 : -1
+      return x === y ? a.id.localeCompare(b.id) : (x < y ? -1 : 1) * (order === 'asc' ? 1 : -1)
+    })
+    return filtered
+  }, [items, q, sort, order])
+  const visible = results.slice(0, shown)
+  const back = safeReturn(params.get('returnTo'))
+  const selectedInDrawer = drawer && items.some(item => item.id === drawer.id)
+
+  return <main className="selected-page">
+    <Link className="selected-back" to={back} state={{ carouselScrollTop: location.state?.carouselScrollTop }}>← Все карусели</Link>
+    <div className="selected-heading"><span className="selected-eyebrow">Подборка</span><h1>Отобранные карусели <span>({number(items.length)})</span></h1><p className="selected-muted">Ваши отметки доступны с телефона и ноутбука.</p></div>
+    <div className="selected-filters">
+      <label>Поиск по автору и тексту<input type="search" maxLength={200} value={q} onChange={event => change('q', event.target.value)} placeholder="Автор или фраза из описания" /></label>
+      <label>Сортировка<select value={sort} onChange={event => change('sort', event.target.value)}><option value="selected_at">Дата отбора</option><option value="timestamp">Дата публикации</option><option value="likes">Лайки Instagram</option><option value="comments">Комментарии</option></select></label>
+      <label>Порядок<select value={order} onChange={event => change('order', event.target.value)}><option value="desc">По убыванию</option><option value="asc">По возрастанию</option></select></label>
+    </div>
+    {error && <p className="selected-error" role="alert">{error} <button type="button" onClick={refresh}>Повторить</button></p>}
+    {loading && <p className="selected-muted" role="status">Загрузка подборки…</p>}
+    {undo && <p className="selected-notice" role="status">Отметка снята. <button type="button" disabled={busy.has(undo.id)} onClick={restore}>Отменить</button></p>}
+    <p className="selected-muted" aria-live="polite">Показано {visible.length} / найдено {results.length} · Всего отобрано {items.length}</p>
+    {!loading && !error && !results.length && <div className="selected-empty"><h2>{q ? 'Совпадений нет' : 'Пока нет отобранных каруселей'}</h2><p>{q ? 'Попробуйте другой запрос.' : 'Нажмите ♥ на отдельной карусели в общей сетке.'}</p>{q && <button type="button" onClick={() => change('q', '')}>Сбросить поиск</button>}</div>}
+    <div className="selected-grid">{visible.map(item => <article className="selected-card" key={item.id}>
+      <button type="button" className="selected-open" onClick={() => setDrawer(item)} aria-label={`Открыть карусель @${item.snapshot.username || 'автор неизвестен'}`}><Cover snapshot={item.snapshot} /><div className="selected-card-copy"><strong>@{item.snapshot.username || 'Автор неизвестен'}</strong><p>{item.snapshot.caption || 'Без описания'}</p><span>♥ {number(item.snapshot.likes)} · Комментарии: {number(item.snapshot.comments)}</span><small>Отобрано: {date(item.selected_at)}</small></div></button>
+      <button type="button" className="selected-remove" disabled={busy.has(item.id)} aria-pressed="true" onClick={() => toggle(item)}>♥ Убрать из отобранных</button>
+    </article>)}</div>
+    {visible.length < results.length && <button type="button" className="selected-more" onClick={() => setShown(value => value + 50)}>Показать ещё 50</button>}
+    {drawer && <Drawer item={drawer} selected={!!selectedInDrawer} busy={busy.has(drawer.id)} onToggle={toggle} onClose={closeDrawer} />}
+  </main>
+}

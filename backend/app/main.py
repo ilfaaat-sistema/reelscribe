@@ -5,6 +5,7 @@ from app.api import (
     chat,
     carousel_favorites,
     carousels,
+    carousel_likes,
     translation,
     errors,
     export_,
@@ -47,6 +48,7 @@ app.include_router(radar_refresh.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
 app.include_router(carousel_favorites.router, prefix="/api")
 app.include_router(carousels.router, prefix="/api")
+app.include_router(carousel_likes.router, prefix="/api")
 app.include_router(translation.router, prefix="/api")
 
 
