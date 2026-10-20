@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { thumbUrl } from '../api/client'
-import { getCarousel } from '../api/carousels'
+import { getCarousel, translateCarousel } from '../api/carousels'
 import { favoriteFilterEnabled, isLiveCarouselPeriod, toggleFavoriteFilter } from '../api/carouselFilters'
 import useHiddenAuthors from '../hooks/useHiddenAuthors'
 import { FAVORITES_IMPORT_KEY, readFavoriteAuthors, getFavoriteAuthors, addFavoriteAuthor, removeFavoriteAuthor } from '../api/favoriteAuthors'
 import useSelectedCarousels from '../hooks/useSelectedCarousels'
 import useCarouselFeed from '../hooks/useCarouselFeed'
+import { carouselCaptionView, isCurrentCarouselRequest, isCurrentCarouselTranslation } from './carouselTranslation'
 import './carousels.css'
 
 const numberFormat = new Intl.NumberFormat('ru-RU')
@@ -90,16 +91,159 @@ function Drawer({ period, id, listItem, onClose, excluded, selected, selectionBu
   const [item, setItem] = useState(listItem || null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  const [showTranslation, setShowTranslation] = useState(true)
+  const [translationBusy, setTranslationBusy] = useState(false)
+  const [translationError, setTranslationError] = useState('')
+  const [translationRefreshRequired, setTranslationRefreshRequired] = useState(false)
+  const [translationRefreshBusy, setTranslationRefreshBusy] = useState(false)
   const closeRef = useRef(null)
+  const initialItemRef = useRef(listItem || null)
+  const itemRef = useRef(item)
+  const detailSequenceRef = useRef(0)
+  const translationRequestRef = useRef(null)
+  const translationRefreshRef = useRef(null)
+  const drawerKey = `${String(id)}\u0000${period || ''}`
+  const drawerKeyRef = useRef(drawerKey)
+  drawerKeyRef.current = drawerKey
+
+  const applyDetails = useCallback(data => {
+    itemRef.current = data
+    setItem(data)
+    setShowTranslation(data?.caption_translation?.state === 'ready')
+    setTranslationRefreshRequired(false)
+  }, [])
+
+  const refreshDetails = useCallback(async signal => {
+    const key = `${String(id)}\u0000${period || ''}`
+    const sequence = ++detailSequenceRef.current
+    const data = await getCarousel(id, signal, period)
+    if (signal?.aborted || sequence !== detailSequenceRef.current || drawerKeyRef.current !== key) return null
+    applyDetails(data)
+    setError('')
+    return data
+  }, [applyDetails, id, period])
 
   useEffect(() => {
     const controller = new AbortController()
-    getCarousel(id, controller.signal, period)
-      .then(data => { setItem(data); setError('') })
+    itemRef.current = initialItemRef.current
+    setItem(initialItemRef.current)
+    setLoading(true)
+    setShowTranslation(true)
+    setTranslationBusy(false)
+    setTranslationError('')
+    setTranslationRefreshRequired(false)
+    setTranslationRefreshBusy(false)
+    translationRequestRef.current?.controller.abort()
+    translationRequestRef.current?.refreshController?.abort()
+    translationRefreshRef.current?.abort()
+    translationRequestRef.current = null
+    translationRefreshRef.current = null
+    refreshDetails(controller.signal)
       .catch(e => { if (e.name !== 'AbortError') setError(e.message || 'Не удалось загрузить публикацию') })
       .finally(() => { if (!controller.signal.aborted) setLoading(false) })
-    return () => controller.abort()
-  }, [id, period])
+    return () => {
+      controller.abort()
+      detailSequenceRef.current += 1
+      translationRequestRef.current?.controller.abort()
+      translationRequestRef.current?.refreshController?.abort()
+      translationRefreshRef.current?.abort()
+      translationRequestRef.current = null
+      translationRefreshRef.current = null
+    }
+  }, [id, period, refreshDetails])
+
+  async function requestTranslation() {
+    const current = itemRef.current
+    const metadata = current?.caption_translation
+    if (!current || metadata?.state !== 'available' || !metadata.source_hash || translationRequestRef.current) return
+
+    const request = {
+      key: drawerKeyRef.current,
+      id: String(current.id ?? id),
+      period: period || null,
+      sourceHash: metadata.source_hash,
+      controller: new AbortController(),
+    }
+    translationRequestRef.current = request
+    setTranslationBusy(true)
+    setTranslationError('')
+    try {
+      const result = await translateCarousel(id, { period: request.period, sourceHash: request.sourceHash }, request.controller.signal)
+      const translation = result?.caption_translation
+      const latest = itemRef.current
+      const requestIsCurrent = isCurrentCarouselRequest({
+        item: latest,
+        requestId: request.id,
+        sourceHash: request.sourceHash,
+        requestKey: request.key,
+        currentKey: drawerKeyRef.current,
+      })
+      if (!requestIsCurrent) return
+      if (!isCurrentCarouselTranslation({
+        result,
+        item: latest,
+        requestId: request.id,
+        sourceHash: request.sourceHash,
+        requestKey: request.key,
+        currentKey: drawerKeyRef.current,
+      })) throw new Error('Сервер вернул некорректный ответ')
+      const next = { ...latest, caption_translation: translation }
+      itemRef.current = next
+      setItem(next)
+      setShowTranslation(true)
+    } catch (requestError) {
+      if (requestError?.name === 'AbortError' || drawerKeyRef.current !== request.key) return
+      if (requestError?.code === 'source_changed' || requestError?.code === 'source_missing') {
+        const refreshController = new AbortController()
+        request.refreshController = refreshController
+        try { await refreshDetails(refreshController.signal) }
+        catch (refreshError) {
+          if (refreshError?.name !== 'AbortError' && translationRequestRef.current === request) {
+            setError(refreshError.message || 'Не удалось обновить публикацию')
+            setTranslationRefreshRequired(true)
+          }
+        }
+      } else if (requestError?.code === 'translation_not_needed' && translationRequestRef.current === request) {
+        const latest = itemRef.current
+        if (latest?.caption_translation?.source_hash === request.sourceHash) {
+          const next = { ...latest, caption_translation: { ...latest.caption_translation, state: 'not_needed', translation: null } }
+          itemRef.current = next
+          setItem(next)
+          setShowTranslation(false)
+        }
+      }
+      if (translationRequestRef.current === request && drawerKeyRef.current === request.key) {
+        setTranslationError(requestError.message || 'Не удалось перевести текст')
+      }
+    } finally {
+      if (translationRequestRef.current === request) {
+        translationRequestRef.current = null
+        setTranslationBusy(false)
+      }
+    }
+  }
+
+  async function retryDetailsRefresh() {
+    if (translationRefreshRef.current) return
+    const controller = new AbortController()
+    translationRefreshRef.current = controller
+    setTranslationRefreshBusy(true)
+    setTranslationError('')
+    try {
+      const data = await refreshDetails(controller.signal)
+      if (data) setError('')
+    } catch (refreshError) {
+      if (refreshError?.name !== 'AbortError') {
+        setError(refreshError.message || 'Не удалось обновить публикацию')
+        setTranslationError('Не удалось обновить текст. Попробуйте ещё раз.')
+      }
+    } finally {
+      if (translationRefreshRef.current === controller) {
+        translationRefreshRef.current = null
+        setTranslationRefreshBusy(false)
+      }
+    }
+  }
 
   useEffect(() => {
     closeRef.current?.focus()
@@ -111,6 +255,7 @@ function Drawer({ period, id, listItem, onClose, excluded, selected, selectionBu
   const isHidden = excluded?.has(item?.username?.toLowerCase())
   const link = instagramUrl(item)
   const canEmbed = /^[\w-]+$/.test(item?.shortcode || '')
+  const { hasTranslation, displayedCaption, canRequest, unavailable: translationUnavailable } = carouselCaptionView(item, { detailsLoaded: !loading, showTranslation, refreshRequired: translationRefreshRequired })
 
   return (
     <div className="carousels-overlay" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
@@ -146,10 +291,26 @@ function Drawer({ period, id, listItem, onClose, excluded, selected, selectionBu
             </div>
           </div>
           <div className="carousels-detail">
-            <h2>Текст публикации</h2>
+            <div className="carousels-translation-heading">
+              <h2>Текст публикации</h2>
+              <div className="carousels-translation-actions">
+                {hasTranslation && <div className="carousels-translation-switch" role="group" aria-label="Язык текста публикации">
+                  <button type="button" aria-pressed={!showTranslation} onClick={() => setShowTranslation(false)}>Оригинал</button>
+                  <button type="button" aria-pressed={showTranslation} onClick={() => setShowTranslation(true)}>Русский</button>
+                </div>}
+                {canRequest && <button className="carousels-translation-request" type="button" disabled={translationBusy} onClick={requestTranslation}>
+                  {translationBusy ? 'Переводим…' : 'Перевести'}
+                </button>}
+                {translationRefreshRequired && <button className="carousels-translation-refresh" type="button" disabled={translationRefreshBusy} onClick={retryDetailsRefresh}>
+                  {translationRefreshBusy ? 'Обновляем…' : 'Обновить текст'}
+                </button>}
+              </div>
+            </div>
             {item.caption
-              ? <p className="carousels-caption">{item.caption}</p>
+              ? <p className="carousels-caption">{displayedCaption}</p>
               : <p className="carousels-muted">Текст публикации не получен.</p>}
+            {translationUnavailable && <p className="carousels-translation-status">Перевод сейчас недоступен.</p>}
+            {translationError && <p className="carousels-translation-error" role="alert">{translationError}</p>}
             {!canEmbed && <p className="carousels-muted">Просмотр Instagram недоступен для этой публикации.</p>}
           </div>
         </div>}

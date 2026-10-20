@@ -91,9 +91,19 @@
   .carousels-detail { min-height: 0; padding: 8px 16px 16px; overflow: auto; }
   .carousels-head-stats .carousels-metric b { overflow-wrap: anywhere; }
 }
-.carousels-detail h2 { display: flex; align-items: center; min-height: 36px; padding-right: 44px; font-size: 13px; font-weight: 650; margin: 0 0 5px; }
+.carousels-detail h2 { display: flex; align-items: center; min-height: 36px; font-size: 13px; font-weight: 650; margin: 0; }
 .carousels-caption { margin: 0; padding: 14px 16px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; border: 1px solid var(--line); border-left: 3px solid var(--teal); border-radius: 9px; background: var(--bg); }
 .carousels-muted { color: var(--mut); font-size: 12px; }
+.carousels-translation-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; min-height: 36px; margin: 0 0 5px; padding-right: 44px; }
+.carousels-translation-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.carousels-translation-switch { display: flex; gap: 4px; }
+.carousels-translation-switch button, .carousels-translation-request, .carousels-translation-refresh { min-height: 28px; padding: 3px 9px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--tx); font: inherit; font-size: 11px; }
+.carousels-translation-switch button[aria-pressed="true"] { border-color: var(--teal); background: var(--teal); color: #071211; }
+.carousels-translation-request:hover:not(:disabled), .carousels-translation-refresh:hover:not(:disabled), .carousels-translation-switch button:hover { border-color: var(--teal); }
+.carousels-translation-request:disabled, .carousels-translation-refresh:disabled { opacity: .55; cursor: wait; }
+.carousels-translation-status, .carousels-translation-error { margin: 8px 2px 0; font-size: 12px; line-height: 1.45; }
+.carousels-translation-status { color: var(--mut); }
+.carousels-translation-error { color: var(--rose); }
 
 @media (min-width: 520px) { .carousels-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (min-width: 800px) { .carousels-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 15px; } }
@@ -110,6 +120,8 @@
   .carousels-media { border-right: 0; border-bottom: 1px solid var(--line); padding: 12px; }
   .carousels-media iframe { width: min(100%, 440px); }
   .carousels-detail { padding: 18px; }
+  .carousels-translation-heading { align-items: flex-start; flex-direction: column; padding-right: 44px; }
+  .carousels-translation-actions { justify-content: flex-start; }
 }
 @media (max-width: 390px) { .carousels-heading { align-items: flex-start; flex-direction: column; } .carousels-pagination { gap: 7px; font-size: 10px; } }
 

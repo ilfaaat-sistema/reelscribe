@@ -9,7 +9,7 @@ from typing import Literal, Optional
 from urllib.parse import urlsplit
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, Field, field_validator
 
 from app.api import carousel_favorites
@@ -250,8 +250,7 @@ async def filtered_carousels(query: CarouselQuery):
     return page(await _selected_report(period), **filters)
 
 
-@router.get('/{media_id}')
-async def detail(media_id: str, period: Optional[Literal['', '7d', '14d', '30d', 'archive14d']] = None):
+async def resolve_detail(media_id: str, period=None):
     if not re.fullmatch(r'[0-9]{1,40}', media_id):
         raise HTTPException(422, 'Некорректный ID карусели')
     if period in ('14d', '30d'):
@@ -268,3 +267,14 @@ async def detail(media_id: str, period: Optional[Literal['', '7d', '14d', '30d',
             if str(raw.get('id')) == media_id and raw.get('media_type') == 'CAROUSEL_ALBUM':
                 return {**_item(raw), 'start_date': weekly['start_date'], 'end_date': weekly['end_date']}
     raise HTTPException(404, 'Карусель не найдена в выбранном сборе')
+
+
+@router.get('/{media_id}')
+async def detail(media_id: str, period: Optional[Literal['', '7d', '14d', '30d', 'archive14d']] = None,
+                 response: Response = None):
+    from app.services.carousel_translation import detail_translation
+
+    item = await resolve_detail(media_id, period)
+    if response is not None:
+        response.headers['Cache-Control'] = 'no-store'
+    return {**item, 'caption_translation': await detail_translation(item)}

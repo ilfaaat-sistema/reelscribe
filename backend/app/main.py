@@ -6,6 +6,7 @@ from app.api import (
     carousel_favorites,
     carousels,
     carousel_likes,
+    carousel_translation,
     hidden_authors,
     translation,
     errors,
@@ -52,6 +53,7 @@ app.include_router(carousels.router, prefix="/api")
 app.include_router(carousel_likes.router, prefix="/api")
 app.include_router(hidden_authors.router, prefix="/api")
 app.include_router(translation.router, prefix="/api")
+app.include_router(carousel_translation.router, prefix="/api")
 
 
 # /api/health — публичный адрес: на Vercel в бэкенд-сервис уходит только префикс /api,
