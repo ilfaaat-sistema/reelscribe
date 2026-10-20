@@ -5,6 +5,7 @@ import { getCarousel } from '../api/carousels'
 import { HIDDEN_AUTHORS_KEY, readHiddenAuthors, writeHiddenAuthors, hideAuthor, restoreAuthor } from '../api/hiddenAuthors'
 import { FAVORITE_AUTHORS_KEY, readFavoriteAuthors, writeFavoriteAuthors, toggleFavoriteAuthor } from '../api/favoriteAuthors'
 import useCarouselFeed from '../hooks/useCarouselFeed'
+import useCarouselSelections from '../hooks/useCarouselSelections'
 import './carousels.css'
 
 const numberFormat = new Intl.NumberFormat('ru-RU')
@@ -83,7 +84,7 @@ function Metric({ label, value }) {
   return <span className="carousels-metric"><b>{count(value)}</b><small>{label}</small></span>
 }
 
-function Drawer({ period, id, listItem, onClose, excluded }) {
+function Drawer({ period, id, listItem, onClose, excluded, selected, selectionBusy, selectionLoading, onToggleSelection }) {
   const [item, setItem] = useState(listItem || null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -116,6 +117,9 @@ function Drawer({ period, id, listItem, onClose, excluded }) {
         {error && <p className="carousels-error" role="alert">{error}</p>}
         {loading && !item && <p className="carousels-loading" role="status">Загружаем публикацию…</p>}
         {isHidden && <p className="carousels-muted">Этот автор скрыт. Вернуть его можно в списке «Скрытые авторы».</p>}
+        {item && <button type="button" className="carousels-select-drawer"
+          aria-pressed={!!selected} disabled={selectionBusy || selectionLoading}
+          onClick={() => onToggleSelection(item.id)}>{selectionBusy ? 'Сохраняем…' : selected ? '▣ Отобрано · снять отметку' : '▢ Отобрать карусель'}</button>}
         {item && !isHidden && <div className="carousels-drawer-body">
           <div className="carousels-media">
             <div className="carousels-drawer-head">
@@ -214,6 +218,13 @@ export default function Carousels() {
     }
   }, [data, loading])
 
+  useEffect(() => {
+    if (!loading && data && Number.isFinite(location.state?.carouselScrollTop)) {
+      if (pageRef.current) pageRef.current.scrollTop = location.state.carouselScrollTop
+      navigate(location.pathname + location.search, { replace: true, state: { ...location.state, carouselScrollTop: null } })
+    }
+  }, [data, loading, location.pathname, location.search, location.state, navigate])
+
   const updateQuery = useCallback((changes) => {
     const next = new URLSearchParams(location.search)
     Object.entries(changes).forEach(([key, value]) => {
@@ -286,6 +297,9 @@ export default function Carousels() {
   const authorUnknown = author && authorCount == null
   const items = (data?.items || []).filter(item => !excluded.has(item.username?.toLowerCase()))
   const listItem = items.find(item => String(item.id) === detailId)
+  const selectionIds = useMemo(() => [...items.map(item => String(item.id)), ...(detailId ? [detailId] : [])], [items, detailId])
+  const selections = useCarouselSelections(selectionIds, selectedPeriod || period || '14d', navigate, location)
+  const toggleSelection = id => selections.toggle(id, selectedPeriod || period || '14d')
 
   return <main className="carousels-page" ref={pageRef}>
     <div className="carousels-content">
@@ -296,8 +310,14 @@ export default function Carousels() {
           <h1>{author ? `Карусели @${author}` : sourceAccount ? 'Карусели NEYRO_SET7' : 'Все карусели'}</h1>
           <p>{data?.start_date && data?.end_date ? `${periodDateFormat.format(new Date(`${data.start_date}T12:00:00+03:00`))} — ${periodDateFormat.format(new Date(`${data.end_date}T12:00:00+03:00`))} · время Москвы` : 'Период загружается…'}</p>
         </div>
-        {(author || sourceAccount) && <button type="button" className="carousels-all" onClick={() => changePage({ author: null, source: null, offset: 0 })}>Все карусели</button>}
+        <div className="carousels-heading-actions">
+          {(author || sourceAccount) && <button type="button" className="carousels-all" onClick={() => changePage({ author: null, source: null, offset: 0 })}>Все карусели</button>}
+          <button type="button" className="carousels-all" onClick={() => navigate(`/radar/carousels/selected?${new URLSearchParams({ returnTo: location.pathname + location.search })}`, { state: { carouselScrollTop: pageRef.current?.scrollTop || 0 } })}>
+            Отобранные карусели {selections.total == null ? '' : `(${count(selections.total)})`}
+          </button>
+        </div>
       </header>
+      {selections.error && <p className="carousels-error" role="alert">{selections.error}<button type="button" onClick={() => selections.refresh().catch(() => {})}>Повторить</button></p>}
 
       <div className="carousels-summary" aria-live="polite">
         <div className="carousels-summary-count">
@@ -409,6 +429,12 @@ export default function Carousels() {
             <small>{date(item.timestamp)} МСК</small>
             <span className="carousels-card-stats"><span>♥ {count(item.likes)}</span><span>◌ {count(item.comments)}</span></span>
           </span>
+        </button><button type="button" className={`carousels-select${selections.states[String(item.id)]?.selected ? ' is-selected' : ''}`}
+          aria-pressed={!!selections.states[String(item.id)]?.selected}
+          aria-label={selections.states[String(item.id)]?.selected ? `Снять отметку с карусели @${item.username}` : `Отобрать карусель @${item.username}`}
+          title={selections.states[String(item.id)]?.selected ? 'Снять отметку с карусели' : 'Отобрать карусель'}
+          disabled={selections.busy[String(item.id)] || (selections.loading && selections.owner)}
+          onClick={() => toggleSelection(item.id)}><span aria-hidden="true">{selections.states[String(item.id)]?.selected ? '▣' : '▢'}</span>
         </button><button type="button" className="carousels-hide-author"
           aria-label={`Скрыть автора @${item.username}`} title={`Скрыть все карусели @${item.username}`}
           onClick={() => changeHidden(item.username, true)}>
@@ -432,6 +458,9 @@ export default function Carousels() {
         {!hasMore && !loading && !error && !moreError && items.length > 0 && <span>Все найденные карусели показаны</span>}
       </div>}
     </div>
-    {detailId && <Drawer period={period} key={`${period || 'auto'}-${detailId}`} id={detailId} listItem={listItem} excluded={excluded} onClose={() => updateQuery({ id: null })} />}
+    {detailId && <Drawer period={period} key={`${period || 'auto'}-${detailId}`} id={detailId} listItem={listItem} excluded={excluded}
+      selected={selections.states[String(detailId)]?.selected} selectionBusy={selections.busy[String(detailId)]}
+      selectionLoading={selections.loading && !!selections.owner} onToggleSelection={toggleSelection}
+      onClose={() => updateQuery({ id: null })} />}
   </main>
 }

@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import Import from './pages/Import'
 import Processing from './pages/Processing'
@@ -7,6 +7,9 @@ import History from './pages/History'
 import Errors from './pages/Errors'
 import Radar from './pages/Radar'
 import Carousels from './pages/Carousels'
+import SelectedCarousels from './pages/SelectedCarousels'
+import SignIn from './pages/SignIn'
+import { useAuth } from './auth/useAuth'
 import ChatBubble from './components/ChatBubble'
 
 // Память последней позиции в каждом разделе. Основное хранилище — sessionStorage
@@ -117,9 +120,23 @@ function Header() {
   )
 }
 
+function PendingSelectionCleanup() {
+  const location = useLocation()
+  const { user } = useAuth()
+  const previousPath = useRef(location.pathname)
+  useEffect(() => {
+    if (previousPath.current === '/sign-in' && location.pathname !== '/sign-in' && !user) {
+      try { sessionStorage.removeItem('reels-radar.pending-carousel-selection.v1') } catch { /* Хранилище может быть закрыто. */ }
+    }
+    previousPath.current = location.pathname
+  }, [location.pathname, user])
+  return null
+}
+
 export default function App() {
   return (
     <div className="app">
+      <PendingSelectionCleanup />
       <Header />
       <Routes>
         <Route path="/" element={<Import />} />
@@ -131,6 +148,8 @@ export default function App() {
         <Route path="/results/:sessionId" element={<Results />} />
         <Route path="/radar" element={<Radar />} />
         <Route path="/radar/carousels" element={<Carousels />} />
+        <Route path="/radar/carousels/selected" element={<SelectedCarousels />} />
+        <Route path="/sign-in" element={<SignIn />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <ChatBubble />

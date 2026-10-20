@@ -118,10 +118,18 @@
 }
 
 .carousels-tile { position: relative; min-width: 0; }
+.carousels-heading-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.carousels-select, .carousels-favorite-author, .carousels-hide-author { min-width: 44px; min-height: 44px; }
+.carousels-select { position: absolute; z-index: 1; top: 8px; left: 58px; display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid #ffffff88; border-radius: 9px; background: #111d; color: #fff; font-size: 24px; line-height: 1; }
+.carousels-select:hover, .carousels-select.is-selected { color: #75f0d3; border-color: #75f0d3; background: #112522; }
+.carousels-select:disabled { opacity: .55; cursor: wait; }
+.carousels-select:focus-visible, .carousels-select-drawer:focus-visible { outline: 2px solid var(--iris); outline-offset: 2px; }
+.carousels-select-drawer { display: block; margin: 14px 20px 0; padding: 10px 14px; min-height: 44px; border: 1px solid var(--teal); border-radius: 8px; background: var(--panel2); color: var(--tx); font-size: 13px; }
+.carousels-select-drawer[aria-pressed="true"] { color: #75f0d3; }
 .carousels-tile .carousels-card { width: 100%; height: 100%; }
 .carousels-hide-author { position: absolute; z-index: 1; top: 8px; left: 8px; display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid #ffffff55; border-radius: 8px; background: #111c; color: white; }
 .carousels-hide-author:hover { background: #873146; border-color: #ffc2cc; }
-.carousels-favorite-author { position: absolute; z-index: 1; top: 50px; right: 8px; display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid #ffffff55; border-radius: 8px; background: #111c; color: #fff; font-size: 21px; line-height: 1; }
+.carousels-favorite-author { position: absolute; z-index: 1; top: 58px; right: 8px; display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid #ffffff55; border-radius: 8px; background: #111c; color: #fff; font-size: 21px; line-height: 1; }
 .carousels-favorite-author:hover, .carousels-favorite-author.is-favorite { color: #ffe07a; border-color: #ffe07a99; background: #111d; }
 .carousels-favorite-author:focus-visible, .carousels-hide-author:focus-visible { outline: 2px solid var(--iris); outline-offset: 2px; }
 .carousels-favorites-list { margin: 10px 0; color: var(--mut); font-size: 12px; }

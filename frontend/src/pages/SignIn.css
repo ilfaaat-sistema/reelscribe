@@ -1,0 +1,11 @@
+.sign-in{width:100%;padding:40px 20px;overflow:auto;display:flex;justify-content:center}
+.sign-in-card{width:100%;max-width:440px;padding:28px;background:var(--panel);border:1px solid var(--line);border-radius:16px;align-self:flex-start}
+.sign-in-card h1{margin:8px 0;font-size:26px}
+.sign-in-card p{color:var(--mut);overflow-wrap:anywhere}
+.sign-in-card form{display:flex;flex-direction:column;gap:12px;margin-top:24px}
+.sign-in-card label{font-weight:600}
+.sign-in-card input{width:100%;padding:12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--tx);font:inherit}
+.sign-in-card input:focus-visible{outline:2px solid var(--iris);outline-offset:2px}
+.sign-in-card button:disabled{opacity:.55;cursor:wait}
+.sign-in-error{color:var(--rose)}
+@media(max-width:480px){.sign-in{padding:24px 12px}.sign-in-card{padding:20px}}
