@@ -31,3 +31,31 @@ test('ошибки чтения и записи видимы вызывающе�
   assert.match(readFavoriteAuthors(broken).error, /Не удалось прочитать/)
   assert.throws(() => writeFavoriteAuthors([], broken), /Не удалось сохранить/)
 })
+
+test('профиль принимает URL и @username, отклоняет публикации и чужие домены', async () => {
+  const { parseFavoriteProfile } = await import('./favoriteAuthors.js')
+  assert.equal(parseFavoriteProfile(' https://www.instagram.com/Alice/?igsh=abc '), 'alice')
+  assert.equal(parseFavoriteProfile('@Bob'), 'bob')
+  for (const value of ['https://evil.test/alice/', 'https://instagram.com/p/abc/', 'http://instagram.com/alice/', 'https://instagram.com@evil.test/alice/', 'alice', 'https://instagram.com/reels/']) {
+    assert.throws(() => parseFavoriteProfile(value), /Вставьте ссылку/)
+  }
+})
+
+test('серверное избранное читает статусы, записывает нормализованное имя и удаляет без JSON', async () => {
+  const { getFavoriteAuthors, addFavoriteAuthor, removeFavoriteAuthor } = await import('./favoriteAuthors.js')
+  const previous = globalThis.fetch
+  const calls = []
+  globalThis.fetch = async (url, options) => {
+    calls.push([url, options])
+    return options.method === 'DELETE' ? { ok: true, status: 204 } : { ok: true, json: async () => options.method === 'POST' ? { username: 'alice', status: 'pending' } : { authors: [{ username: 'alice', status: 'updated' }] } }
+  }
+  try {
+    assert.equal((await getFavoriteAuthors()).authors[0].status, 'updated')
+    assert.equal((await addFavoriteAuthor('https://instagram.com/Alice/')).status, 'pending')
+    assert.deepEqual(JSON.parse(calls[1][1].body), { profile: '@alice' })
+    assert.equal(await removeFavoriteAuthor('Alice'), null)
+    assert.equal(calls[2][0], '/api/radar/carousels/favorites/alice')
+    globalThis.fetch = async () => ({ ok: false, status: 429, json: async () => ({ detail: 'Список переполнен' }) })
+    await assert.rejects(addFavoriteAuthor('@alice'), /Список переполнен/)
+  } finally { globalThis.fetch = previous }
+})

@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
     chat,
+    carousel_favorites,
     carousels,
     translation,
     errors,
@@ -44,6 +45,7 @@ app.include_router(radar.router, prefix="/api")
 app.include_router(radar_intel.router, prefix="/api")
 app.include_router(radar_refresh.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
+app.include_router(carousel_favorites.router, prefix="/api")
 app.include_router(carousels.router, prefix="/api")
 app.include_router(translation.router, prefix="/api")
 

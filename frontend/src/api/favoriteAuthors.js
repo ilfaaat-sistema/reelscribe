@@ -49,3 +49,43 @@ export function toggleFavoriteAuthor(authors, username) {
   username = normalizeFavoriteAuthor(username)
   return authors.includes(username) ? authors.filter(author => author !== username) : [...authors, username]
 }
+
+const FAVORITES_BASE = (import.meta.env?.VITE_API_URL || '') + '/api/radar/carousels/favorites'
+export const FAVORITES_IMPORT_KEY = 'rs:carousels:favorite-authors:imported:v1'
+
+export function parseFavoriteProfile(value) {
+  const input = String(value || '').trim()
+  if (/^@[a-z0-9._]{1,30}$/i.test(input)) return normalizeFavoriteAuthor(input)
+  try {
+    const url = new URL(input)
+    if (url.protocol !== 'https:' || !['instagram.com', 'www.instagram.com'].includes(url.hostname) || url.port || url.username || url.password) throw new Error()
+    const match = url.pathname.match(/^\/([a-z0-9._]{1,30})\/?$/i)
+    if (!match || ['p', 'reel', 'reels', 'stories', 'explore', 'accounts', 'direct'].includes(match[1].toLowerCase())) throw new Error()
+    return normalizeFavoriteAuthor(match[1])
+  } catch { throw new Error('Вставьте ссылку на профиль Instagram или @username, а не ссылку на публикацию.') }
+}
+
+async function favoritesRequest(path = '', options = {}, signal) {
+  let response
+  try { response = await fetch(FAVORITES_BASE + path, { ...options, signal }) }
+  catch (error) {
+    if (error?.name === 'AbortError') throw error
+    throw new Error('Нет соединения с сервером. Избранное не изменено.')
+  }
+  if (!response.ok) {
+    let message = `Не удалось обновить избранное (${response.status})`
+    try {
+      const body = await response.json()
+      if (typeof body?.detail === 'string') message = body.detail
+    } catch { /* Ответ может не содержать JSON. */ }
+    throw new Error(message)
+  }
+  return response.status === 204 ? null : response.json()
+}
+
+export const getFavoriteAuthors = signal => favoritesRequest('', {}, signal)
+export const addFavoriteAuthor = profile => {
+  const username = parseFavoriteProfile(profile)
+  return favoritesRequest('', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profile: '@' + username }) })
+}
+export const removeFavoriteAuthor = username => favoritesRequest('/' + encodeURIComponent(normalizeFavoriteAuthor(username)), { method: 'DELETE' })
