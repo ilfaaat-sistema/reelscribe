@@ -11,7 +11,7 @@ export default function useCarouselFeed(query) {
   const [version, setVersion] = useState(0)
   const queryKey = JSON.stringify(query)
   const stableQuery = useMemo(() => JSON.parse(queryKey), [queryKey])
-  const baseKey = JSON.stringify([stableQuery.author, stableQuery.sort, stableQuery.order,
+  const baseKey = JSON.stringify([stableQuery.period, stableQuery.author, stableQuery.sort, stableQuery.order,
                                   stableQuery.limit, stableQuery.include_authors, stableQuery.source_account])
   const previousBase = useRef(null)
   const generation = useRef(0)
