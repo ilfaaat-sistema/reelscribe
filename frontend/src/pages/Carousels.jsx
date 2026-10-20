@@ -409,6 +409,13 @@ export default function Carousels() {
             <option value="archive14d">Архив 6–19 октября</option>
           </select>
         </label>
+        <button type="button"
+          className={`carousels-archive-shortcut${selectedPeriod === 'archive14d' && !favoriteOnly && !author && !sourceAccount ? ' is-active' : ''}`}
+          aria-pressed={selectedPeriod === 'archive14d' && !favoriteOnly && !author && !sourceAccount}
+          title="Карусели 586 авторов за 6–19 октября"
+          onClick={() => changePage({ period: 'archive14d', favorite: '0', author: null, source: null, id: null, offset: 0 })}>
+          Архив · 586 авторов
+        </button>
         <form className="carousels-author-search" onSubmit={submitAuthor}
           onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setSearchFocused(false) }}>
           <input aria-label="Поиск автора" placeholder="Сердитов или serditov" autoComplete="off"

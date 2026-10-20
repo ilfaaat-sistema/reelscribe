@@ -28,6 +28,8 @@
 .carousels-progress-track i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--iris), var(--teal)); }
 .carousels-progress small { grid-column: 1 / -1; }
 .carousels-controls { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0; }
+.carousels-archive-shortcut { min-height: 36px; padding: 8px 12px; border: 1px solid var(--iris); border-radius: 8px; background: var(--panel); color: var(--iris); font-size: 12px; font-weight: 600; }
+.carousels-archive-shortcut:hover, .carousels-archive-shortcut.is-active { background: var(--iris); color: #fff; }
 .carousels-page-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
 .carousels-author-search { position: relative; display: flex; align-items: center; flex: 0 1 225px; min-width: 180px; min-height: 36px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
 .carousels-author-search:focus-within { border-color: var(--iris); }
