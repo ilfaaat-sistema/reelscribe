@@ -58,3 +58,14 @@ test('некорректный ID, период и неявное состоян
   await assert.rejects(setCarouselSelected('123', '30d', true, fetcher), /период/)
   await assert.rejects(setCarouselSelected('123', '7d', undefined, fetcher), /состояние/)
 })
+
+test('архивный период сохраняется и читается в общей подборке', async () => {
+  const archived = { ...item('123'), source_period: 'archive14d' }
+  const result = await setCarouselSelected('123', 'archive14d', true, async (_, options) => {
+    assert.deepEqual(JSON.parse(options.body), { period: 'archive14d' })
+    return ok({ item: archived })
+  })
+  assert.equal(result.source_period, 'archive14d')
+  const data = await fetchSelectedCarousels(undefined, async () => ok({ items: [archived], total: 1 }))
+  assert.equal(data.items[0].source_period, 'archive14d')
+})

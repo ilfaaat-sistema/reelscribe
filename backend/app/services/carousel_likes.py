@@ -92,7 +92,7 @@ async def list_likes():
 async def select(media_id, period):
     validate_id(media_id)
     failure = None
-    for candidate in (period, '14d' if period == '7d' else '7d'):
+    for candidate in dict.fromkeys((period, '7d', '14d', 'archive14d')):
         try:
             value = snapshot(await carousels.detail(media_id, candidate), media_id)
         except HTTPException as error:
