@@ -28,6 +28,7 @@
 .carousels-progress-track i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--iris), var(--teal)); }
 .carousels-progress small { grid-column: 1 / -1; }
 .carousels-controls { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0; }
+.carousels-page-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
 .carousels-author-search { position: relative; display: flex; align-items: center; flex: 0 1 225px; min-width: 180px; min-height: 36px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
 .carousels-author-search:focus-within { border-color: var(--iris); }
 .carousels-author-search input { flex: 1; min-width: 0; padding: 8px 9px; border: 0; outline: 0; background: transparent; color: var(--tx); font: inherit; font-size: 12px; }

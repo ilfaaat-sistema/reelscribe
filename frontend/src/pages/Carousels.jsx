@@ -385,7 +385,6 @@ export default function Carousels() {
         </div>
         <div className="carousels-heading-actions">
           {(author || sourceAccount) && <button type="button" className="carousels-all" onClick={() => changePage({ author: null, source: null, offset: 0 })}>Все карусели</button>}
-          <button type="button" className="carousels-all" onClick={() => navigate(`/radar/carousels/selected?${new URLSearchParams({ returnTo: location.pathname + location.search })}`, { state: { carouselScrollTop: pageRef.current?.scrollTop || 0 } })}>Отобранные карусели ({selected.loading ? '…' : count(selected.items.length)})</button>
         </div>
       </header>
       {selected.error && <p className="carousels-error" role="alert">{selected.error}<button type="button" onClick={selected.refresh}>Повторить</button></p>}
@@ -451,12 +450,15 @@ export default function Carousels() {
             <option value="asc">Сначала меньше / старые</option>
           </select>
         </label>
+        <div className="carousels-page-actions">
         <label>Подгружать по
           <select value={limit} onChange={event => changePage({ limit: event.target.value, offset: 0 })}>
             <option value="50">50</option>
             <option value="100">100</option>
           </select>
         </label>
+          <button type="button" className="carousels-all" onClick={() => navigate(`/radar/carousels/selected?${new URLSearchParams({ returnTo: location.pathname + location.search })}`, { state: { carouselScrollTop: pageRef.current?.scrollTop || 0 } })}>Отобранные карусели ({selected.loading ? '…' : count(selected.items.length)})</button>
+        </div>
       </div>
 
       <section className="carousels-favorites-list" aria-label="Избранные авторы">
