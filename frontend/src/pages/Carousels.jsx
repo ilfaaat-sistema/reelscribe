@@ -173,6 +173,9 @@ export default function Carousels() {
   const [favoriteError, setFavoriteError] = useState('')
   const [favoriteNotice, setFavoriteNotice] = useState('')
   const [profileDraft, setProfileDraft] = useState('')
+  const [favoritesExpanded, setFavoritesExpanded] = useState(() => {
+    try { return localStorage.getItem('reelscribe:carousels:favorites-collapsed') !== '1' } catch { return true }
+  })
   const [legacy] = useState(() => readFavoriteAuthors())
   const [importDone, setImportDone] = useState(() => { try { return localStorage.getItem(FAVORITES_IMPORT_KEY) === '1' } catch { return false } })
   const applyFavorites = useCallback(rows => {
@@ -273,6 +276,18 @@ export default function Carousels() {
     setSearchFocused(false)
     setSearchError('')
     changePage({ author: username || null, id: null, offset: 0 })
+  }
+  const chooseFavoriteAuthor = username => {
+    setSearchDraft(username || '')
+    setSearchFocused(false)
+    setSearchError('')
+    restoreScroll.current = pageRef.current?.scrollTop || 0
+    updateQuery({ author: username || null, id: null, offset: 0 })
+  }
+  const toggleFavoritesExpanded = () => {
+    const expanded = !favoritesExpanded
+    setFavoritesExpanded(expanded)
+    try { localStorage.setItem('reelscribe:carousels:favorites-collapsed', expanded ? '0' : '1') } catch { /* Сворачивание работает и без локального сохранения. */ }
   }
   const submitAuthor = event => {
     event.preventDefault()
@@ -445,7 +460,16 @@ export default function Carousels() {
       </div>
 
       <section className="carousels-favorites-list" aria-label="Избранные авторы">
-        <h2>Избранные авторы ({favorites.authors.length})</h2>
+        <div className="carousels-favorites-heading">
+          <h2><button type="button" className="carousels-favorites-toggle" aria-expanded={favoritesExpanded}
+            aria-controls="carousels-favorites-content" onClick={toggleFavoritesExpanded}>
+            <span aria-hidden="true">{favoritesExpanded ? '▾' : '▸'}</span> Избранные авторы ({favorites.authors.length})
+            <small>{favoritesExpanded ? 'Скрыть' : 'Показать'}</small>
+          </button></h2>
+          <button type="button" className={`carousels-favorites-reset${!author ? ' is-active' : ''}`}
+            aria-pressed={!author} onClick={() => chooseFavoriteAuthor(null)}>Все избранные</button>
+        </div>
+        <div id="carousels-favorites-content" hidden={!favoritesExpanded}>
         <p className="carousels-muted">Общий список на всех устройствах. Сбор новых авторов начинается автоматически; доступны публичные профессиональные профили.</p>
         <form className="carousels-profile-form" onSubmit={submitFavorite}>
           <label htmlFor="favorite-profile">Ссылка на профиль Instagram или @username</label>
@@ -453,8 +477,13 @@ export default function Carousels() {
             placeholder="https://www.instagram.com/username/" value={profileDraft} onChange={event => setProfileDraft(event.target.value)} />
           <button type="submit" disabled={favoriteBusy || favoriteLoading || !profileDraft.trim()}>Добавить</button></div>
         </form>
-        {favoriteLoading ? <p role="status">Загружаем общий список…</p> : favoriteRows.length ? <ul>{favoriteRows.map(row => <li key={row.username}>
-          <span>@{row.username}<small>{FAVORITE_STATUS[row.status] || 'Ожидает'}{row.last_checked_at ? ` · ${date(row.last_checked_at)} МСК` : ' · ещё не проверен'}</small>{row.error && <small>{row.error}</small>}</span>
+        {favoriteLoading ? <p role="status">Загружаем общий список…</p> : favoriteRows.length ? <ul>{favoriteRows.map(row => <li key={row.username}
+          className={author.toLowerCase().replace(/^@/, '') === row.username ? 'is-active' : undefined}>
+          <button type="button" className="carousels-favorite-filter"
+            aria-pressed={author.toLowerCase().replace(/^@/, '') === row.username}
+            aria-label={`Показать карусели @${row.username}`} onClick={() => chooseFavoriteAuthor(row.username)}>
+            <span>@{row.username}</span><small>{FAVORITE_STATUS[row.status] || 'Ожидает'}{row.last_checked_at ? ` · ${date(row.last_checked_at)} МСК` : ' · ещё не проверен'}</small>{row.error && <small>{row.error}</small>}
+          </button>
           <button type="button" disabled={favoriteBusy} onClick={() => changeFavorite(row.username)} aria-label={`Убрать @${row.username} из избранного`}>Убрать</button>
         </li>)}</ul> : <p>Список пуст. Вставьте ссылку на профиль выше.</p>}
         {!favoriteLoading && !importDone && legacyCandidates.length > 0 && <details>
@@ -466,6 +495,7 @@ export default function Carousels() {
         {legacy.error && <p role="alert">{legacy.error}</p>}
         {favoriteNotice && <p role="status">{favoriteNotice}</p>}
         {favoriteError && <p className="carousels-error" role="alert">{favoriteError}<button type="button" onClick={() => syncFavorites()}>Повторить</button></p>}
+        </div>
       </section>
 
       <details className="carousels-hidden-list">
