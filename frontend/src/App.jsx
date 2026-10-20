@@ -55,6 +55,7 @@ function Header() {
   }
 
   const floating = pathname.startsWith('/radar/carousels')
+  const radarHome = pathname === '/radar'
   const primaryControls = (<>
       <div className="logo">
         <i/><i/><i/><i/><i/>
@@ -84,7 +85,10 @@ function Header() {
     <header className={floating ? 'app-header-floating' : undefined}>
       {floating ? <div className="app-header-island">{primaryControls}</div> : primaryControls}
       <div className="spacer" />
-      <button className="btn ghost sm" onClick={() => navigate('/radar/carousels')}>Карусели</button>
+      <button type="button" className={`btn sm${radarHome ? '' : ' ghost'}`}
+        onClick={() => navigate(radarHome ? '/radar/carousels?period=14d' : '/radar/carousels')}>
+        {radarHome ? 'Карусели за 14 дней →' : 'Карусели'}
+      </button>
       {view !== 'results' && view !== 'radar' && (
         <div className="stepper">
           <div className={`step ${view === 'import' ? 'on' : 'done'}`}>
