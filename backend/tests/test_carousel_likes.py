@@ -186,3 +186,56 @@ def test_long_caption_is_preserved_and_offline_reports_restore_saved(setup, monk
     client.delete(URL + '/123')
     assert client.put(URL + '/123', json={'period': '14d'}).json()['item']['snapshot']['caption'] == caption
     assert client.put(URL + '/456', json={'period': '14d'}).status_code == 503
+
+
+@pytest.mark.parametrize('requested,expected', [
+    ('7d', ['7d', '14d', 'archive14d']),
+    ('14d', ['14d', '7d', 'archive14d']),
+    ('archive14d', ['archive14d', '7d', '14d']),
+])
+def test_fallback_checks_every_report_once_before_saved_restore(setup, monkeypatch, requested, expected):
+    client, db = setup
+    row = saved(active=False)
+    row['source_period'] = 'archive14d'
+    db.rows = [row]
+    periods = []
+    async def detail(identity, period):
+        periods.append(period)
+        raise HTTPException(404, 'Нет в отчёте')
+    monkeypatch.setattr(service.carousels, 'detail', detail)
+    response = client.put(URL + '/123', json={'period': requested})
+    assert response.status_code == 200
+    assert periods == expected
+    assert response.json()['item']['source_period'] == 'archive14d'
+    assert db.calls[-1][1]['p_period'] == 'archive14d'
+
+
+@pytest.mark.parametrize('requested', ['7d', '14d', 'archive14d'])
+def test_select_and_read_archive_snapshot(setup, monkeypatch, requested):
+    client, db = setup
+    periods = []
+    async def detail(identity, period):
+        periods.append(period)
+        if period != 'archive14d':
+            raise HTTPException(404, 'Нет в отчёте')
+        return saved(identity)['snapshot']
+    monkeypatch.setattr(service.carousels, 'detail', detail)
+    response = client.put(URL + '/123', json={'period': requested})
+    assert response.status_code == 200
+    assert response.json()['item']['source_period'] == 'archive14d'
+    assert periods[0] == requested
+    assert len(periods) == len(set(periods))
+    assert db.calls[-1][1]['p_period'] == 'archive14d'
+    assert client.get(URL).json()['items'][0]['source_period'] == 'archive14d'
+
+
+def test_fallback_keeps_unavailable_report_error_when_other_reports_miss(setup, monkeypatch):
+    client, db = setup
+    periods = []
+    async def detail(identity, period):
+        periods.append(period)
+        raise HTTPException(503 if period == 'archive14d' else 404, 'Отчёт недоступен')
+    monkeypatch.setattr(service.carousels, 'detail', detail)
+    assert client.put(URL + '/123', json={'period': 'archive14d'}).status_code == 503
+    assert periods == ['archive14d', '7d', '14d']
+    assert not any(call[0] == 'rpc' for call in db.calls)
