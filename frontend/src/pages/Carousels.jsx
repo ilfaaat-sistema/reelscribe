@@ -4,6 +4,7 @@ import { thumbUrl } from '../api/client'
 import { getCarousel } from '../api/carousels'
 import { HIDDEN_AUTHORS_KEY, readHiddenAuthors, writeHiddenAuthors, hideAuthor, restoreAuthor } from '../api/hiddenAuthors'
 import { FAVORITE_AUTHORS_KEY, readFavoriteAuthors, writeFavoriteAuthors, toggleFavoriteAuthor } from '../api/favoriteAuthors'
+import useSelectedCarousels from '../hooks/useSelectedCarousels'
 import useCarouselFeed from '../hooks/useCarouselFeed'
 import './carousels.css'
 
@@ -83,7 +84,7 @@ function Metric({ label, value }) {
   return <span className="carousels-metric"><b>{count(value)}</b><small>{label}</small></span>
 }
 
-function Drawer({ period, id, listItem, onClose, excluded }) {
+function Drawer({ period, id, listItem, onClose, excluded, selected, selectionBusy, onToggleSelection }) {
   const [item, setItem] = useState(listItem || null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -113,6 +114,7 @@ function Drawer({ period, id, listItem, onClose, excluded }) {
     <div className="carousels-overlay" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
       <aside className="carousels-drawer" role="dialog" aria-modal="true" aria-label="Карусель Instagram">
         <button ref={closeRef} type="button" className="carousels-close" onClick={onClose} aria-label="Закрыть">✕</button>
+        {item && <button type="button" className="carousels-select-drawer" disabled={selectionBusy} aria-pressed={selected} onClick={() => onToggleSelection(item)}>{selectionBusy ? 'Сохраняем…' : selected ? '♥ Отобрано · снять отметку' : '♡ Отобрать карусель'}</button>}
         {error && <p className="carousels-error" role="alert">{error}</p>}
         {loading && !item && <p className="carousels-loading" role="status">Загружаем публикацию…</p>}
         {isHidden && <p className="carousels-muted">Этот автор скрыт. Вернуть его можно в списке «Скрытые авторы».</p>}
@@ -163,6 +165,7 @@ export default function Carousels() {
   const sentinelRef = useRef(null)
   const [hidden, setHidden] = useState(() => readHiddenAuthors())
   const [favorites, setFavorites] = useState(() => readFavoriteAuthors())
+  const selected = useSelectedCarousels()
   const [favoriteError, setFavoriteError] = useState(() => readFavoriteAuthors().error)
   const [hiddenError, setHiddenError] = useState('')
   const [lastHidden, setLastHidden] = useState(null)
@@ -213,6 +216,13 @@ export default function Carousels() {
       restoreScroll.current = null
     }
   }, [data, loading])
+
+  useEffect(() => {
+    if (!loading && data && Number.isFinite(location.state?.carouselScrollTop)) {
+      if (pageRef.current) pageRef.current.scrollTop = location.state.carouselScrollTop
+      navigate(location.pathname + location.search, { replace: true, state: { ...location.state, carouselScrollTop: null } })
+    }
+  }, [data, loading, location.pathname, location.search, location.state, navigate])
 
   const updateQuery = useCallback((changes) => {
     const next = new URLSearchParams(location.search)
@@ -271,6 +281,10 @@ export default function Carousels() {
     } catch (e) { setFavoriteError(e.message) }
   }
 
+  const changeSelected = item => {
+    selected.setSelected(item, selectedPeriod || period || '14d', !selected.items.some(entry => entry.id === String(item.id)))
+  }
+
   const backPath = safeAuthorsReturn(location.state?.authorsReturnTo)
   const backToRadar = () => navigate(backPath || '/radar', {
     state: backPath ? { authorsScrollTop: location.state?.authorsScrollTop } : undefined,
@@ -286,6 +300,7 @@ export default function Carousels() {
   const authorUnknown = author && authorCount == null
   const items = (data?.items || []).filter(item => !excluded.has(item.username?.toLowerCase()))
   const listItem = items.find(item => String(item.id) === detailId)
+  const selectedIds = new Set(selected.items.map(item => item.id))
 
   return <main className="carousels-page" ref={pageRef}>
     <div className="carousels-content">
@@ -296,8 +311,12 @@ export default function Carousels() {
           <h1>{author ? `Карусели @${author}` : sourceAccount ? 'Карусели NEYRO_SET7' : 'Все карусели'}</h1>
           <p>{data?.start_date && data?.end_date ? `${periodDateFormat.format(new Date(`${data.start_date}T12:00:00+03:00`))} — ${periodDateFormat.format(new Date(`${data.end_date}T12:00:00+03:00`))} · время Москвы` : 'Период загружается…'}</p>
         </div>
-        {(author || sourceAccount) && <button type="button" className="carousels-all" onClick={() => changePage({ author: null, source: null, offset: 0 })}>Все карусели</button>}
+        <div className="carousels-heading-actions">
+          {(author || sourceAccount) && <button type="button" className="carousels-all" onClick={() => changePage({ author: null, source: null, offset: 0 })}>Все карусели</button>}
+          <button type="button" className="carousels-all" onClick={() => navigate(`/radar/carousels/selected?${new URLSearchParams({ returnTo: location.pathname + location.search })}`, { state: { carouselScrollTop: pageRef.current?.scrollTop || 0 } })}>Отобранные карусели ({selected.loading ? '…' : count(selected.items.length)})</button>
+        </div>
       </header>
+      {selected.error && <p className="carousels-error" role="alert">{selected.error}<button type="button" onClick={selected.refresh}>Повторить</button></p>}
 
       <div className="carousels-summary" aria-live="polite">
         <div className="carousels-summary-count">
@@ -409,6 +428,12 @@ export default function Carousels() {
             <small>{date(item.timestamp)} МСК</small>
             <span className="carousels-card-stats"><span>♥ {count(item.likes)}</span><span>◌ {count(item.comments)}</span></span>
           </span>
+        </button><button type="button" className={`carousels-select${selectedIds.has(String(item.id)) ? ' is-selected' : ''}`}
+          disabled={selected.loading || selected.busy.has(String(item.id))}
+          aria-pressed={selectedIds.has(String(item.id))}
+          aria-label={selectedIds.has(String(item.id)) ? `Убрать карусель @${item.username} из отобранных` : `Отобрать карусель @${item.username}`}
+          title={selectedIds.has(String(item.id)) ? 'Убрать карусель из отобранных' : 'Отобрать карусель'}
+          onClick={() => changeSelected(item)}><span aria-hidden="true">{selectedIds.has(String(item.id)) ? '♥' : '♡'}</span>
         </button><button type="button" className="carousels-hide-author"
           aria-label={`Скрыть автора @${item.username}`} title={`Скрыть все карусели @${item.username}`}
           onClick={() => changeHidden(item.username, true)}>
@@ -432,6 +457,6 @@ export default function Carousels() {
         {!hasMore && !loading && !error && !moreError && items.length > 0 && <span>Все найденные карусели показаны</span>}
       </div>}
     </div>
-    {detailId && <Drawer period={period} key={`${period || 'auto'}-${detailId}`} id={detailId} listItem={listItem} excluded={excluded} onClose={() => updateQuery({ id: null })} />}
+    {detailId && <Drawer period={period} key={`${period || 'auto'}-${detailId}`} id={detailId} listItem={listItem} excluded={excluded} selected={selectedIds.has(String(detailId))} selectionBusy={selected.loading || selected.busy.has(String(detailId))} onToggleSelection={changeSelected} onClose={() => updateQuery({ id: null })} />}
   </main>
 }

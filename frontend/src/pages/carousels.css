@@ -124,6 +124,13 @@
 .carousels-favorite-author { position: absolute; z-index: 1; top: 50px; right: 8px; display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid #ffffff55; border-radius: 8px; background: #111c; color: #fff; font-size: 21px; line-height: 1; }
 .carousels-favorite-author:hover, .carousels-favorite-author.is-favorite { color: #ffe07a; border-color: #ffe07a99; background: #111d; }
 .carousels-favorite-author:focus-visible, .carousels-hide-author:focus-visible { outline: 2px solid var(--iris); outline-offset: 2px; }
+.carousels-heading-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.carousels-select { position: absolute; z-index: 1; top: 8px; left: 50px; display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid #ffffff88; border-radius: 9px; background: #111d; color: #fff; font-size: 28px; line-height: 1; }
+.carousels-select:hover, .carousels-select.is-selected { color: #ff9eb0; border-color: #ff9eb0; background: #27151ccc; }
+.carousels-select:focus-visible, .carousels-select-drawer:focus-visible { outline: 2px solid var(--iris); outline-offset: 2px; }
+.carousels-select-drawer { display: block; min-height: 44px; margin: 14px 20px 0; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel2); color: var(--tx); }
+.carousels-select-drawer[aria-pressed="true"] { color: #ff9eb0; }
+@media (max-width: 540px) { .carousels-heading-actions { justify-content: flex-start; } }
 .carousels-favorites-list { margin: 10px 0; color: var(--mut); font-size: 12px; }
 .carousels-favorites-list summary { width: fit-content; cursor: pointer; color: var(--tx); }
 .carousels-favorites-list ul { display: flex; flex-wrap: wrap; gap: 7px; padding: 0; margin: 8px 0; list-style: none; }

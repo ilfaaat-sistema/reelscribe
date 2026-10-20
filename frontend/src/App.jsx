@@ -7,6 +7,7 @@ import History from './pages/History'
 import Errors from './pages/Errors'
 import Radar from './pages/Radar'
 import Carousels from './pages/Carousels'
+import SelectedCarousels from './pages/SelectedCarousels'
 import ChatBubble from './components/ChatBubble'
 
 // Память последней позиции в каждом разделе. Основное хранилище — sessionStorage
@@ -135,6 +136,7 @@ export default function App() {
         <Route path="/results/:sessionId" element={<Results />} />
         <Route path="/radar" element={<Radar />} />
         <Route path="/radar/carousels" element={<Carousels />} />
+        <Route path="/radar/carousels/selected" element={<SelectedCarousels />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <ChatBubble />
