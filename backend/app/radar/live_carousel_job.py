@@ -28,8 +28,9 @@ def run(store, client, *, token, account_id, api_version='v23.0', max_requests=3
     if any(stamp and stamp > now for stamp in pauses):
         return {'requests': 0, 'status': 'meta_paused'}
     store.prune(start)
-    authors.sort(key=lambda row: (bool(row.get('last_checked_at')), row.get('added_at', ''), row['username']))
+    authors.sort(key=lambda row: (row.get('last_attempt_at') or '', row.get('added_at', ''), row['username']))
     requests = 0
+    unfinished = False
     for row in authors:
         username = row['username']
         due = _stamp(row.get('next_check_at'))
@@ -45,24 +46,34 @@ def run(store, client, *, token, account_id, api_version='v23.0', max_requests=3
         checkpoint.setdefault('seen', [])
         checkpoint.setdefault('ids', [])
         scan_start = max(start, _stamp(checkpoint['start']) or start)
-        while requests < max_requests:
+        author_requests = 0
+        author_unfinished = True
+        def update(*, _username=username, **values):
+            store.update(_username, last_attempt_at=clock().isoformat(), **values)
+
+        def pause(until, reason, _username=username):
+            store.pause(until, reason, username=_username, last_attempt_at=clock().isoformat())
+
+        while requests < max_requests and author_requests < 5:
             if not store.active(username):
                 break
-            store.update(username, status='collecting', error=None, checkpoint=checkpoint)
+            if hasattr(store, 'can_request_meta') and not store.can_request_meta():
+                return {'requests': requests, 'status': 'running'}
             after = checkpoint.get('after')
-            if after and not re.fullmatch(r'[A-Za-z0-9_\-=]+', after):
-                store.update(username, status='error', error='invalid_cursor', checkpoint={},
+            if after and not re.fullmatch(r'[A-Za-z0-9_\-=/+]+', after):
+                update(status='error', error='invalid_cursor', checkpoint={},
                              next_check_at=(now + timedelta(hours=1)).isoformat())
                 break
             media = 'media.limit(50)' + (f'.after({after})' if after else '') + '{' + DETAIL_FIELDS + '}'
             fields = f'business_discovery.username({username}){{followers_count,{media}}}'
             requests += 1
+            author_requests += 1
             try:
                 response = client.get(f'https://graph.facebook.com/{api_version}/{account_id}',
                     headers={'Authorization': f'Bearer {token}'}, params={'fields': fields}, timeout=45)
                 payload = response.json()
             except (httpx.TransportError, ValueError):
-                store.update(username, status='error', error='temporary_transport_error',
+                update(status='error', error='temporary_transport_error',
                              next_check_at=(now + timedelta(minutes=15)).isoformat())
                 break
             error = payload.get('error', {}) if isinstance(payload, dict) else {}
@@ -70,25 +81,25 @@ def run(store, client, *, token, account_id, api_version='v23.0', max_requests=3
             usage = max(_usage(response.headers).values(), default=0)
             if response.status_code == 429 or code in LIMIT_CODES or code == 190:
                 seconds = max(900 if code != 190 else 3600, _retry_after(response.headers, now))
-                store.pause((now + timedelta(seconds=seconds)).isoformat(),
+                pause((now + timedelta(seconds=seconds)).isoformat(),
                             'authentication_required' if code == 190 else 'meta_rate_limit')
                 return {'requests': requests, 'status': 'meta_paused'}
             discovery = payload.get('business_discovery') if isinstance(payload, dict) else None
             if usage >= 85 and (error or response.status_code >= 400 or not isinstance(discovery, dict)):
-                store.pause((now + timedelta(minutes=15)).isoformat(), 'meta_usage_85')
+                pause((now + timedelta(minutes=15)).isoformat(), 'meta_usage_85')
                 return {'requests': requests, 'status': 'meta_paused'}
             if response.status_code >= 500:
-                store.update(username, status='error', error='temporary_meta_error',
+                update(status='error', error='temporary_meta_error',
                              next_check_at=(now + timedelta(minutes=15)).isoformat())
                 break
             if error or not isinstance(discovery, dict):
-                store.update(username, status='unavailable', error='profile_unavailable', checkpoint={},
-                             last_checked_at=now.isoformat(), next_check_at=(now + timedelta(hours=6)).isoformat())
+                update(status='unavailable', error='profile_unavailable', checkpoint={},
+                             next_check_at=(now + timedelta(hours=6)).isoformat())
                 break
             page = discovery.get('media', {})
             batch = page.get('data') if isinstance(page, dict) else None
             if not isinstance(batch, list):
-                store.update(username, status='error', error='invalid_meta_response',
+                update(status='error', error='invalid_meta_response',
                              next_check_at=(now + timedelta(minutes=15)).isoformat())
                 break
             items = [_item(raw, username, discovery.get('followers_count'), now.isoformat(), scan_start, end)
@@ -102,20 +113,25 @@ def run(store, client, *, token, account_id, api_version='v23.0', max_requests=3
             old_tail = len(stamps) >= 5 and all(stamp < scan_start for stamp in stamps[-5:])
             finished = not cursor or not batch or old_tail
             if repeated:
-                store.update(username, status='error', error='pagination_stalled', checkpoint={},
-                             next_check_at=(now + timedelta(hours=1)).isoformat())
+                values = {'status': 'error', 'error': 'pagination_stalled', 'checkpoint': {},
+                          'next_check_at': (now + timedelta(hours=1)).isoformat()}
             elif finished:
-                store.update(username, status='updated', error=None, checkpoint={},
-                             last_checked_at=now.isoformat(), next_check_at=(now + timedelta(minutes=15)).isoformat())
+                values = {'status': 'updated', 'error': None, 'checkpoint': {},
+                          'last_checked_at': now.isoformat(),
+                          'next_check_at': (now + timedelta(minutes=60)).isoformat()}
             else:
                 checkpoint.update(after=cursor, seen=checkpoint['seen'] + [cursor],
                                   ids=list(set(checkpoint['ids']).union(ids)))
-                store.update(username, checkpoint=checkpoint)
+                values = {'status': 'collecting', 'error': None, 'checkpoint': checkpoint}
             if usage >= 85:
-                store.pause((now + timedelta(minutes=15)).isoformat(), 'meta_usage_85')
+                values.update(pause_until=(now + timedelta(minutes=15)).isoformat(), pause_reason='meta_usage_85')
+            update(**values)
+            if usage >= 85:
                 return {'requests': requests, 'status': 'meta_paused'}
             if finished or repeated:
+                author_unfinished = False
                 break
+        unfinished = unfinished or author_unfinished
         if requests >= max_requests:
             break
-    return {'requests': requests, 'status': 'running' if requests >= max_requests else 'finished'}
+    return {'requests': requests, 'status': 'running' if requests >= max_requests or unfinished else 'finished'}

@@ -158,7 +158,7 @@ def test_cooldown_survives_removing_all_previous_authors():
     for row in git.state['authors']:
         row['active'] = False
     git.state['authors'].append(dict(initial_state()['authors'][0], username='new_author'))
-    rows = worker.authors()
+    rows = WorkerStore(git).authors()
     assert len(rows) == 1
     assert rows[0]['status'] == 'meta_paused'
     assert rows[0]['next_check_at'] == until
@@ -188,3 +188,83 @@ def test_prune_without_expired_items_does_not_write():
     git = MemoryGit()
     WorkerStore(git).prune(datetime.now(timezone.utc))
     assert git.writes == 0
+
+
+def test_worker_cache_one_load_and_one_commit_per_page():
+    git = MemoryGit()
+    loads = []
+    original = git.load
+    def load():
+        loads.append(1)
+        return original()
+    git.load = load
+    worker = WorkerStore(git)
+    worker.authors()
+    worker.active('alex_magnier')
+    worker.prune(__import__('datetime').datetime.now(__import__('datetime').timezone.utc))
+    worker.save([])
+    worker.update('alex_magnier', status='updated')
+    worker.active('alex_magnier')
+    worker.update('artemiy.miller', status='updated')
+    assert len(loads) == 1
+    assert git.writes == 2
+
+
+def test_contents_large_file_uses_object_media_type_and_blob_fallback():
+    state = initial_state()
+    state['padding'] = 'x' * (1024 * 1024 + 10)
+    calls = []
+    def handler(request):
+        calls.append(request)
+        if '/contents/' in request.url.path:
+            assert request.headers['accept'] == 'application/vnd.github.object+json'
+            return httpx.Response(200, json={'type': 'file', 'encoding': 'none', 'sha': 'blob'})
+        assert request.url.path.endswith('/git/blobs/blob')
+        return httpx.Response(200, json={'encoding': 'base64', 'content':
+            base64.b64encode(json.dumps(state).encode()).decode()})
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        assert LiveFavoritesStore(client).read_state() == state
+    assert len(calls) == 2
+
+
+def test_github_remaining_header_is_tracked_for_reserve():
+    def handler(request):
+        return httpx.Response(404, headers={'x-ratelimit-remaining': '14'})
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        store = LiveFavoritesStore(client, 'dummy')
+        worker = WorkerStore(store)
+        assert worker.can_request_meta() is False
+        assert store.remaining == 14
+
+
+def test_http_cache_saves_three_github_requests_per_page():
+    calls = []
+    def handler(request):
+        calls.append(request)
+        if request.method == 'GET':
+            return httpx.Response(404, headers={'x-ratelimit-remaining': '200'})
+        if request.url.path.endswith('/git/trees'):
+            return httpx.Response(201, json={'sha': 'tree'})
+        if request.url.path.endswith('/git/commits'):
+            return httpx.Response(201, json={'sha': 'new'})
+        return httpx.Response(200, json={})
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        worker = WorkerStore(LiveFavoritesStore(client, 'dummy'))
+        worker.authors()
+        for name in ('alex_magnier', 'artemiy.miller'):
+            assert worker.active(name)
+            assert worker.can_request_meta()
+            worker.save([])
+            worker.update(name, status='updated')
+        assert len([r for r in calls if r.method == 'GET']) == 1
+        assert len([r for r in calls if r.method != 'GET']) == 6
+
+
+def test_success_page_and_usage_pause_commit_together():
+    git = MemoryGit()
+    worker = WorkerStore(git)
+    worker.update('alex_magnier', checkpoint={'after': 'next'},
+                  pause_until='2099-01-01T00:00:00+00:00', pause_reason='meta_usage_85')
+    assert git.writes == 1
+    assert git.state['authors'][0]['checkpoint'] == {'after': 'next'}
+    assert git.state['authors'][0]['status'] == 'meta_paused'

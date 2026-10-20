@@ -48,7 +48,7 @@ def validate_state(state):
             raise ValueError('Некорректное состояние автора')
         if not isinstance(row.get('checkpoint', {}), dict):
             raise ValueError('Некорректная контрольная точка')  # noqa: TRY004 — единый тип ошибки данных.
-        for field in ('added_at', 'last_checked_at', 'next_check_at'):
+        for field in ('added_at', 'last_checked_at', 'last_attempt_at', 'next_check_at'):
             if row.get(field) is not None and _stamp(row[field]) is None:
                 raise ValueError('Некорректная дата автора')
     for item in items:
@@ -72,13 +72,22 @@ def validate_state(state):
 class LiveFavoritesStore:
     def __init__(self, client, token=None):
         self.client, self.token = client, token
+        self.remaining = None
         self.base = f'https://api.github.com/repos/{REPOSITORY}/'
 
-    def request(self, method, path, *, missing=False, conflict=False, **kwargs):
-        headers = {'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28'}
+    def request(self, method, path, *, missing=False, conflict=False, accept='application/vnd.github+json', **kwargs):
+        headers = {'Accept': accept, 'X-GitHub-Api-Version': '2022-11-28'}
         if self.token:
             headers['Authorization'] = f'Bearer {self.token}'
         response = self.client.request(method, self.base + path, headers=headers, timeout=45, **kwargs)
+        remaining = response.headers.get('x-ratelimit-remaining')
+        if remaining is not None:
+            try:
+                self.remaining = max(0, int(remaining))
+            except ValueError:
+                self.remaining = 0
+        elif self.remaining is not None:
+            self.remaining = max(0, self.remaining - 1)
         if missing and response.status_code == 404:
             return None
         if conflict and response.status_code in (409, 422):
@@ -123,13 +132,22 @@ class LiveFavoritesStore:
         return state, sha
 
     def read_state(self):
-        """Один запрос для публичного просмотра; запись всегда идёт через load с marker/CAS."""
-        value = self.request('GET', 'contents/state.json?ref=' + BRANCH, missing=True)
+        """Быстрое чтение для просмотра; запись всегда идёт через load с marker/CAS."""
+        value = self.request('GET', 'contents/state.json?ref=' + BRANCH, missing=True, accept='application/vnd.github.object+json')
         if value is None:
             return initial_state()
-        if value.get('type') != 'file' or value.get('encoding') != 'base64':
+        if value.get('type') != 'file':
             raise ValueError('Неизвестный формат живого отчёта')
-        raw = base64.b64decode(value['content'])
+        if value.get('encoding') == 'base64':
+            raw = base64.b64decode(value['content'])
+        elif value.get('encoding') == 'none' and value.get('sha'):
+            # Contents API после 1 MiB не отдаёт содержимое, но возвращает SHA.
+            blob = self.request('GET', 'git/blobs/' + value['sha'])
+            if blob.get('encoding') != 'base64':
+                raise ValueError('Неизвестная кодировка живого отчёта')
+            raw = base64.b64decode(blob['content'])
+        else:
+            raise ValueError('Неизвестная кодировка живого отчёта')
         if len(raw) > MAX_BYTES:
             raise ValueError('Превышен размер живого отчёта')
         state = json.loads(raw)
@@ -165,22 +183,38 @@ class WorkerStore:
     def __init__(self, store):
         self.store = store
         self.pending_items = []
+        self.state = None
+        self.sha = None
+
+    def ensure_loaded(self):
+        if self.state is None:
+            self.state, self.sha = self.store.load()
+
+    def can_request_meta(self):
+        self.ensure_loaded()
+        remaining = getattr(self.store, 'remaining', None)
+        return remaining is None or remaining >= 15
 
     def mutate(self, operation):
         for attempt in range(3):
-            state, sha = self.store.load()
+            self.ensure_loaded()
+            state, sha = deepcopy(self.state), self.sha
             previous = deepcopy(state)
             operation(state)
             if previous == state:
                 return sha
             try:
-                return self.store.save(state, sha)
+                self.sha = self.store.save(state, sha)
+                self.state = state
+                return self.sha
             except Conflict:
                 if attempt == 2:
                     raise
+                self.state, self.sha = self.store.load()
 
     def authors(self):
-        state, _ = self.store.load()
+        self.ensure_loaded()
+        state = self.state
         rows = [deepcopy(row) for row in state['authors'] if row['active']]
         until = _stamp(state.get('meta_cooldown_until'))
         if until and until > datetime.now(timezone.utc):
@@ -196,7 +230,7 @@ class WorkerStore:
         # Карточки и курсор страницы отправляются одним атомарным коммитом update.
         self.pending_items = deepcopy(items)
 
-    def update(self, username, **values):
+    def update(self, username, *, pause_until=None, pause_reason=None, **values):
         items = deepcopy(self.pending_items)
         def operation(state):
             row = next((row for row in state['authors'] if row['username'] == username and row['active']), None)
@@ -206,16 +240,25 @@ class WorkerStore:
             existing = {item['id']: item for item in state['items']}
             existing.update({item['id']: item for item in items})
             state['items'] = list(existing.values())
+            if pause_until:
+                self.apply_pause(state, pause_until, pause_reason)
         self.mutate(operation)
         self.pending_items = []
 
-    def pause(self, until, reason):
+    @staticmethod
+    def apply_pause(state, until, reason):
+        state['meta_cooldown_until'] = until
+        state['meta_cooldown_reason'] = reason
+        for row in state['authors']:
+            if row['active']:
+                row.update(status='meta_paused', next_check_at=until, error=reason)
+
+    def pause(self, until, reason, *, username=None, last_attempt_at=None):
         def operation(state):
-            state['meta_cooldown_until'] = until
-            state['meta_cooldown_reason'] = reason
+            self.apply_pause(state, until, reason)
             for row in state['authors']:
-                if row['active']:
-                    row.update(status='meta_paused', next_check_at=until, error=reason)
+                if row['username'] == username:
+                    row['last_attempt_at'] = last_attempt_at
         self.mutate(operation)
 
     def prune(self, start):

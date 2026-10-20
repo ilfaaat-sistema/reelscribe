@@ -21,14 +21,17 @@ class MemoryStore:
         return any(row['username'] == name for row in self.rows)
 
     def update(self, name, **values):
+        until, reason = values.pop('pause_until', None), values.pop('pause_reason', None)
         for row in self.rows:
             if row['username'] == name:
                 row.update(deepcopy(values))
+        if until:
+            self.pause(until, reason)
 
     def save(self, items):
         self.items.update({item['id']: item for item in items})
 
-    def pause(self, until, reason):
+    def pause(self, until, reason, **kwargs):
         for row in self.rows:
             row.update(status='meta_paused', next_check_at=until, error=reason)
 
@@ -63,7 +66,7 @@ def test_checkpoint_resume_and_dedup():
 
 
 def test_new_author_priority():
-    store = MemoryStore([{'username': 'old', 'added_at': '1', 'last_checked_at': NOW.isoformat()},
+    store = MemoryStore([{'username': 'old', 'added_at': '1', 'last_checked_at': NOW.isoformat(), 'last_attempt_at': NOW.isoformat()},
                          {'username': 'new', 'added_at': '2'}])
     client = Client(page([]))
     collect(store, client, max_requests=1)
@@ -120,4 +123,44 @@ def test_repeated_cursor_and_retryable_server_error():
 def test_deleted_author_is_not_requested():
     store = MemoryStore()
     store.active = lambda name: False
+    assert collect(store, Client())['requests'] == 0
+
+
+def test_five_pages_per_author_then_next_and_fair_next_run():
+    store = MemoryStore([{'username': 'one'}, {'username': 'two'}])
+    client = Client(*[page([detail(str(i))], after=f'next{i}') for i in range(5)], page([]))
+    result = collect(store, client)
+    assert result['status'] == 'running'
+    assert len(client.calls) == 6
+    assert '.username(two)' in client.calls[-1][2]['fields']
+    assert store.rows[0]['checkpoint']['after'] == 'next4'
+    store.rows[1]['next_check_at'] = None
+    store.rows[0]['last_attempt_at'] = (NOW + timedelta(seconds=1)).isoformat()
+    client = Client(page([]))
+    collect(store, client, max_requests=1)
+    assert '.username(two)' in client.calls[0][2]['fields']
+
+
+def test_unavailable_does_not_shorten_first_successful_scan():
+    store = MemoryStore()
+    collect(store, Client(Response({'error': {'code': 100}}, 400)))
+    assert store.rows[0].get('last_checked_at') is None
+    assert store.rows[0]['last_attempt_at'] == NOW.isoformat()
+    store.rows[0]['next_check_at'] = None
+    collect(store, Client(page([detail('older', timestamp='2026-10-10T12:00:00+0000')])))
+    assert 'older' in store.items
+
+
+def test_low_github_budget_stops_before_meta():
+    store = MemoryStore()
+    store.can_request_meta = lambda: False
+    client = Client()
+    assert collect(store, client) == {'requests': 0, 'status': 'running'}
+    assert client.calls == []
+
+
+def test_completed_author_checked_hourly():
+    store = MemoryStore()
+    collect(store, Client(page([])))
+    assert store.rows[0]['next_check_at'] == (NOW + timedelta(hours=1)).isoformat()
     assert collect(store, Client())['requests'] == 0
