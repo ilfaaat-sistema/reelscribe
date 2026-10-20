@@ -142,16 +142,16 @@ def test_period_selection_dates_detail_and_filters(monkeypatch):
     assert client.get(url).json()['start_date'] == '2026-10-13'
     assert calls == ['14d', '7d']
     assert client.get(url + '?period=').json()['start_date'] == '2026-10-13'
-    assert client.get(url + '?period=14d').status_code == 503
-    assert client.get(url + '/1?period=14d').status_code == 503
+    assert client.get(url + '?period=archive14d').status_code == 503
+    assert client.get(url + '/1?period=archive14d').status_code == 503
     available = True
     assert client.get(url).json()['start_date'] == '2026-10-06'
     assert client.get(url + '?period=7d').json()['start_date'] == '2026-10-13'
-    detail = client.get(url + '/1?period=14d').json()
+    detail = client.get(url + '/1?period=archive14d').json()
     assert detail['start_date'] == '2026-10-06'
     assert detail['end_date'] == '2026-10-19'
     assert detail['timestamp'] == '2026-10-06T00:01:00+03:00'
-    filtered = client.post(url, json={'period': '14d', 'include_authors': ['alice'], 'exclude_authors': ['bob']}).json()
+    filtered = client.post(url, json={'period': 'archive14d', 'include_authors': ['alice'], 'exclude_authors': ['bob']}).json()
     assert filtered['total'] == 3 and filtered['collection']['target'] == 586
     assert filtered['start_date'] == '2026-10-06'
     assert client.get(url + '?period=30d').status_code == 422
@@ -177,7 +177,29 @@ def test_old_detail_link_without_period_falls_back_to_week(monkeypatch):
     app.include_router(carousels.router)
     client = TestClient(app)
     assert client.get('/radar/carousels/4').json()['start_date'] == '2026-10-13'
-    assert client.get('/radar/carousels/4?period=14d').status_code == 404
+    assert client.get('/radar/carousels/4?period=archive14d').status_code == 404
+
+
+def test_live_period_is_separate_from_archived_report(monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from app.api import carousels
+
+    seen = []
+    def live_page(**kwargs):
+        seen.append(kwargs)
+        return {'start_date': '2026-10-07', 'end_date': '2026-10-20', 'items': [], 'total': 0}
+    def live_detail(media_id):
+        return {'id': media_id, 'start_date': '2026-10-07'}
+    monkeypatch.setattr(carousels.carousel_favorites, 'live_page', live_page)
+    monkeypatch.setattr(carousels.carousel_favorites, 'live_detail', live_detail)
+    app = FastAPI()
+    app.include_router(carousels.router)
+    client = TestClient(app)
+    response = client.post('/radar/carousels', json={'period': '14d', 'include_authors': ['alice']})
+    assert response.status_code == 200 and response.json()['start_date'] == '2026-10-07'
+    assert seen[0]['include_authors'] == ['alice']
+    assert client.get('/radar/carousels/1?period=14d').json()['id'] == '1'
 
 
 def test_reports_use_isolated_urls_and_caches_and_validate_dates(monkeypatch):

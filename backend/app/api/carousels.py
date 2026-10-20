@@ -11,6 +11,7 @@ import httpx
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 
+from app.api import carousel_favorites
 from app.core.db import get_db
 
 router = APIRouter(prefix='/radar/carousels', tags=['carousels'])
@@ -86,6 +87,8 @@ async def _report(period='7d'):
 
 
 async def _selected_report(period=None):
+    if period == 'archive14d':
+        return await _report('14d')
     if period:
         return await _report(period)
     try:
@@ -164,14 +167,17 @@ async def list_carousels(author: str = Query('', pattern=r'^@?[A-Za-z0-9._]{0,30
                          sort: Literal['likes', 'comments', 'timestamp'] = 'likes',
                          order: Literal['desc', 'asc'] = 'desc',
                          limit: int = Query(50, ge=50, le=100), offset: int = Query(0, ge=0),
-                         period: Optional[Literal['', '7d', '14d']] = None):
+                         period: Optional[Literal['', '7d', '14d', 'archive14d']] = None):
     if limit not in (50, 100):
         raise HTTPException(422, 'Размер страницы: 50 или 100')
+    if period == '14d':
+        return await asyncio.to_thread(carousel_favorites.live_page, author=author, sort=sort,
+                                       order=order, limit=limit, offset=offset)
     return page(await _selected_report(period), author, sort, order, limit, offset)
 
 
 class CarouselQuery(BaseModel):
-    period: Optional[Literal['', '7d', '14d']] = None
+    period: Optional[Literal['', '7d', '14d', 'archive14d']] = None
     author: str = Field('', pattern=r'^@?[A-Za-z0-9._]{0,30}$')
     sort: Literal['likes', 'comments', 'timestamp'] = 'likes'
     order: Literal['desc', 'asc'] = 'desc'
@@ -202,6 +208,12 @@ async def filtered_carousels(query: CarouselQuery):
     filters = query.model_dump()
     source = filters.pop('source_account')
     period = filters.pop('period')
+    if period == '14d':
+        if source == 'neyro_set7':
+            filters['source_account'] = await _neyro_source_authors()
+        else:
+            filters['source_account'] = None
+        return await asyncio.to_thread(carousel_favorites.live_page, **filters)
     if source == 'neyro_set7':
         allowed = await _neyro_source_authors()
         included = filters['include_authors']
@@ -210,9 +222,11 @@ async def filtered_carousels(query: CarouselQuery):
 
 
 @router.get('/{media_id}')
-async def detail(media_id: str, period: Optional[Literal['', '7d', '14d']] = None):
+async def detail(media_id: str, period: Optional[Literal['', '7d', '14d', 'archive14d']] = None):
     if not re.fullmatch(r'[0-9]{1,40}', media_id):
         raise HTTPException(422, 'Некорректный ID карусели')
+    if period == '14d':
+        return await asyncio.to_thread(carousel_favorites.live_detail, media_id)
     report = await _selected_report(period)
     for raw in report['items']:
         if str(raw.get('id')) == media_id and raw.get('media_type') == 'CAROUSEL_ALBUM':

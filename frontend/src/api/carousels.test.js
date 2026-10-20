@@ -102,7 +102,8 @@ test('период передаётся списку GET, фильтрам POST 
   }
   try {
     const data = await getCarousels({ period: '14d', author: 'alice', sort: 'timestamp' })
-    assert.equal(new URL(calls[0][0], 'https://example.test').searchParams.get('period'), '14d')
+    assert.equal(calls[0][1].method, 'POST')
+    assert.equal(JSON.parse(calls[0][1].body).period, '14d')
     assert.equal(data.start_date, '2026-10-06')
     assert.equal(data.end_date, '2026-10-19')
     await getCarousels({ period: '7d', include_authors: ['alice'], exclude_authors: ['bob'] })
@@ -112,5 +113,20 @@ test('период передаётся списку GET, фильтрам POST 
     assert.deepEqual(body.exclude_authors, ['bob'])
     await getCarousel('123', undefined, '14d')
     assert.equal(calls[2][0], '/api/radar/carousels/123?period=14d')
+  } finally { globalThis.fetch = previous }
+})
+
+
+test('архив 14 дней имеет отдельный URL и не меняет исторический 7d', async () => {
+  const previous = globalThis.fetch
+  const calls = []
+  globalThis.fetch = async url => { calls.push(url); return { ok: true, json: async () => ({ items: [] }) } }
+  try {
+    await getCarousels({ period: 'archive14d' })
+    await getCarousel('123', undefined, 'archive14d')
+    await getCarousels({ period: '7d' })
+    assert.equal(new URL(calls[0], 'https://test.local').searchParams.get('period'), 'archive14d')
+    assert.equal(calls[1], '/api/radar/carousels/123?period=archive14d')
+    assert.equal(new URL(calls[2], 'https://test.local').searchParams.get('period'), '7d')
   } finally { globalThis.fetch = previous }
 })

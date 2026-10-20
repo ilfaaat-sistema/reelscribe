@@ -164,3 +164,17 @@
   .app-header-floating .appswitch button { padding: 5px 8px; font-size: 12px; }
   .app-header-floating > .btn { padding: 7px 8px; font-size: 11px; }
 }
+
+/* Форма допускает штатную вставку и не увеличивает страницу на телефоне. */
+.carousels-favorites-list h2 { margin: 0; color: var(--tx); font-size: 15px; }
+.carousels-profile-form { max-width: 640px; margin: 12px 0; }
+.carousels-profile-form label { display: block; margin-bottom: 6px; color: var(--tx); }
+.carousels-profile-form > div { display: flex; gap: 8px; }
+.carousels-profile-form input { flex: 1; min-width: 0; min-height: 44px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--tx); font: inherit; font-size: 16px; }
+.carousels-profile-form input:focus-visible { outline: 2px solid var(--iris); outline-offset: 2px; }
+.carousels-profile-form button { min-height: 44px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 8px; color: var(--tx); }
+.carousels-favorites-list li { max-width: 100%; border-radius: 10px; align-items: flex-start; }
+.carousels-favorites-list li > span { min-width: 0; overflow-wrap: anywhere; }
+.carousels-favorites-list li small { display: block; margin-top: 4px; color: var(--mut); }
+.carousels-favorites-list button:disabled, .carousels-favorite-author:disabled { opacity: .5; cursor: default; }
+@media (max-width: 390px) { .carousels-profile-form > div { flex-wrap: wrap; } .carousels-profile-form input { flex-basis: 100%; } }
