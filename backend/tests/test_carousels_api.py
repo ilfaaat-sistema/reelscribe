@@ -154,9 +154,9 @@ def test_period_selection_dates_detail_and_filters(monkeypatch):
     filtered = client.post(url, json={'period': 'archive14d', 'include_authors': ['alice'], 'exclude_authors': ['bob']}).json()
     assert filtered['total'] == 3 and filtered['collection']['target'] == 586
     assert filtered['start_date'] == '2026-10-06'
-    assert client.get(url + '?period=30d').status_code == 422
-    assert client.get(url + '/1?period=30d').status_code == 422
-    assert client.post(url, json={'period': '30d'}).status_code == 422
+    assert client.get(url + '?period=60d').status_code == 422
+    assert client.get(url + '/1?period=60d').status_code == 422
+    assert client.post(url, json={'period': '60d'}).status_code == 422
 
 
 def test_old_detail_link_without_period_falls_back_to_week(monkeypatch):
@@ -189,7 +189,7 @@ def test_live_period_is_separate_from_archived_report(monkeypatch):
     def live_page(**kwargs):
         seen.append(kwargs)
         return {'start_date': '2026-10-07', 'end_date': '2026-10-20', 'items': [], 'total': 0}
-    def live_detail(media_id):
+    def live_detail(media_id, history_days=14):
         return {'id': media_id, 'start_date': '2026-10-07'}
     monkeypatch.setattr(carousels.carousel_favorites, 'live_page', live_page)
     monkeypatch.setattr(carousels.carousel_favorites, 'live_detail', live_detail)
@@ -256,7 +256,9 @@ def test_rolling_off_sources_and_detail_window_and_archive_failure(monkeypatch):
         if failed:
             raise HTTPException(503, 'Архив временно недоступен')
         return {'items': [{'id': '123', 'username': 'other', 'media_type': 'CAROUSEL_ALBUM', 'timestamp': stamp, 'likes': 10 if period == '7d' else 99},
-                          {'id': '124', 'username': 'other', 'media_type': 'CAROUSEL_ALBUM', 'timestamp': '2000-01-01T00:00:00Z'}]}
+                          {'id': '124', 'username': 'other', 'media_type': 'CAROUSEL_ALBUM', 'timestamp': '2000-01-01T00:00:00Z'},
+                          {'id': '125', 'username': 'other', 'media_type': 'CAROUSEL_ALBUM',
+                           'timestamp': (datetime.now(timezone.utc) - carousels.timedelta(days=20)).isoformat()}]}
     class FakeStore:
         def read_state(self):
             return {'authors': [], 'items': []}
@@ -275,5 +277,9 @@ def test_rolling_off_sources_and_detail_window_and_archive_failure(monkeypatch):
     assert detail.status_code == 200 and detail.json()['start_date'] == off['start_date']
     assert detail.json()['likes'] == off['items'][0]['likes']
     assert client.get(url + '/124?period=14d').status_code == 404
+    month = client.post(url, json={'period': '30d', 'favorites_only': False}).json()
+    assert month['total'] == 2 and month['start_date'] != off['start_date']
+    assert client.get(url + '/125?period=30d').status_code == 200
+    assert client.get(url + '/125?period=14d').status_code == 404
     failed = True
     assert client.post(url, json={'period': '14d', 'favorites_only': False}).status_code == 503

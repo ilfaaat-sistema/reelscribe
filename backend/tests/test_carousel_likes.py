@@ -146,7 +146,7 @@ def test_validation_and_unknown_item_never_write(setup):
     for identity in ('abc', '1' * 41, '１２３'):
         assert client.put(URL + '/' + identity, json={'period': '7d'}).status_code == 422
         assert client.delete(URL + '/' + identity).status_code == 422
-    for body in ({'period': '7d', 'snapshot': {}}, {'period': '30d'}, {}):
+    for body in ({'period': '7d', 'snapshot': {}}, {'period': '60d'}, {}):
         assert client.put(URL + '/123', json=body).status_code == 422
     assert client.put(URL + '/123', json={'period': '7d'}).status_code == 404
     assert not any(call[0] == 'rpc' for call in db.calls)
@@ -189,9 +189,9 @@ def test_long_caption_is_preserved_and_offline_reports_restore_saved(setup, monk
 
 
 @pytest.mark.parametrize('requested,expected', [
-    ('7d', ['7d', '14d', 'archive14d']),
-    ('14d', ['14d', '7d', 'archive14d']),
-    ('archive14d', ['archive14d', '7d', '14d']),
+    ('7d', ['7d', '14d', 'archive14d', '30d']),
+    ('14d', ['14d', '7d', 'archive14d', '30d']),
+    ('archive14d', ['archive14d', '7d', '14d', '30d']),
 ])
 def test_fallback_checks_every_report_once_before_saved_restore(setup, monkeypatch, requested, expected):
     client, db = setup
@@ -210,7 +210,7 @@ def test_fallback_checks_every_report_once_before_saved_restore(setup, monkeypat
     assert db.calls[-1][1]['p_period'] == 'archive14d'
 
 
-@pytest.mark.parametrize('requested', ['7d', '14d', 'archive14d'])
+@pytest.mark.parametrize('requested', ['7d', '14d', 'archive14d', '30d'])
 def test_select_and_read_archive_snapshot(setup, monkeypatch, requested):
     client, db = setup
     periods = []
@@ -237,5 +237,23 @@ def test_fallback_keeps_unavailable_report_error_when_other_reports_miss(setup, 
         raise HTTPException(503 if period == 'archive14d' else 404, 'Отчёт недоступен')
     monkeypatch.setattr(service.carousels, 'detail', detail)
     assert client.put(URL + '/123', json={'period': 'archive14d'}).status_code == 503
-    assert periods == ['archive14d', '7d', '14d']
+    assert periods == ['archive14d', '7d', '14d', '30d']
     assert not any(call[0] == 'rpc' for call in db.calls)
+
+
+def test_month_snapshot_uses_legacy_live_bucket_and_survives_undo(setup, monkeypatch):
+    client, db = setup
+    raw = dict(saved()['snapshot'], timestamp='2026-09-25T12:00:00+00:00', caption='Месячный текст без изменений')
+    async def month(identity, period):
+        if period != '30d':
+            raise HTTPException(404, 'Не входит в короткое окно')
+        return raw
+    monkeypatch.setattr(service.carousels, 'detail', month)
+    response = client.put('/api/radar/carousel-likes/123', json={'period': '30d'})
+    assert response.status_code == 200
+    item = response.json()['item']
+    assert item['source_period'] == '14d'
+    assert item['snapshot']['timestamp'] == raw['timestamp'] and item['snapshot']['caption'] == raw['caption']
+    assert db.calls[-1][1]['p_period'] == '14d'
+    assert client.delete('/api/radar/carousel-likes/123').status_code == 200
+    assert client.put('/api/radar/carousel-likes/123', json={'period': item['source_period']}).json()['item']['snapshot'] == item['snapshot']

@@ -55,7 +55,7 @@ test('ошибки сети, статуса и некорректные данн
 test('некорректный ID, период и неявное состояние не отправляются на сервер', async () => {
   const fetcher = () => { assert.fail('Запрос не должен выполняться') }
   await assert.rejects(setCarouselSelected('x', '7d', true, fetcher), /ID/)
-  await assert.rejects(setCarouselSelected('123', '30d', true, fetcher), /период/)
+  await assert.rejects(setCarouselSelected('123', '60d', true, fetcher), /период/)
   await assert.rejects(setCarouselSelected('123', '7d', undefined, fetcher), /состояние/)
 })
 
@@ -68,4 +68,17 @@ test('архивный период сохраняется и читается �
   assert.equal(result.source_period, 'archive14d')
   const data = await fetchSelectedCarousels(undefined, async () => ok({ items: [archived], total: 1 }))
   assert.equal(data.items[0].source_period, 'archive14d')
+})
+
+test('30d запрос сохраняет исходный snapshot через совместимый live bucket', async () => {
+  const saved = item('123')
+  saved.source_period = '14d'
+  saved.snapshot.timestamp = '2026-09-25T12:00:00+00:00'
+  saved.snapshot.caption = 'Месячная карточка'
+  const result = await setCarouselSelected('123', '30d', true, async (_, options) => {
+    assert.deepEqual(JSON.parse(options.body), { period: '30d' })
+    return ok({ item: saved })
+  })
+  assert.equal(result.snapshot.timestamp, saved.snapshot.timestamp)
+  assert.equal(result.snapshot.caption, saved.snapshot.caption)
 })

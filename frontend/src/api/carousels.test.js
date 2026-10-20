@@ -145,3 +145,16 @@ test('выключенное избранное передаёт favorites_only=
     assert.equal(calls[1][0], '/api/radar/carousels/123?period=14d')
   } finally { globalThis.fetch = previous }
 })
+
+test('30d сохраняется в API, деталях и выключении ограничения', async () => {
+  const previous = globalThis.fetch
+  const calls = []
+  globalThis.fetch = async (url, options) => { calls.push([url, options]); return { ok: true, json: async () => ({ items: [] }) } }
+  try {
+    await getCarousels({ period: '30d', favorites_only: false })
+    assert.equal(JSON.parse(calls[0][1].body).period, '30d')
+    assert.equal(JSON.parse(calls[0][1].body).favorites_only, false)
+    await getCarousel('123', undefined, '30d')
+    assert.equal(calls[1][0], '/api/radar/carousels/123?period=30d')
+  } finally { globalThis.fetch = previous }
+})

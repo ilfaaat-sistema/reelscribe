@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getCarousels } from '../api/carousels'
-import { carouselFeedBaseKey, mergeCarouselItems, readCarouselPrefix, sameCarouselSnapshot } from '../api/carouselFeed'
+import { carouselFeedBaseKey, carouselRefreshInterval, mergeCarouselItems, readCarouselPrefix, sameCarouselSnapshot } from '../api/carouselFeed'
 
 export default function useCarouselFeed(query) {
   const [data, setData] = useState(null)
@@ -20,6 +20,7 @@ export default function useCarouselFeed(query) {
   const moreBusy = useRef(false)
   const appendController = useRef(null)
   const currentData = useRef(null)
+  const lastAutomaticRefresh = useRef(0)
   currentData.current = data
   const refresh = useCallback(() => setVersion(value => value + 1), [])
 
@@ -90,10 +91,24 @@ export default function useCarouselFeed(query) {
   }, [stableQuery, refresh])
 
   useEffect(() => {
-    if (!['running', 'cooldown'].includes(data?.collection?.status)) return undefined
-    const timer = window.setInterval(() => { if (!busy.current && !moreBusy.current) refresh() }, 30000)
-    return () => window.clearInterval(timer)
-  }, [data?.collection?.status, refresh])
+    const interval = carouselRefreshInterval(stableQuery.period, data?.collection?.status)
+    if (!interval) return undefined
+    const refreshVisible = () => {
+      const now = Date.now()
+      if (document.visibilityState === 'hidden' || busy.current || moreBusy.current || now - lastAutomaticRefresh.current < 1000) return
+      lastAutomaticRefresh.current = now
+      refresh()
+    }
+    const timer = window.setInterval(refreshVisible, interval)
+    window.addEventListener('focus', refreshVisible)
+    document.addEventListener('visibilitychange', refreshVisible)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('focus', refreshVisible)
+      document.removeEventListener('visibilitychange', refreshVisible)
+    }
+  }, [stableQuery.period, data?.collection?.status, refresh])
+
 
   return { data, loading, error, loadingMore, moreError, loadMore, refresh,
     hasMore: Boolean(data && cursor.current < data.total) }

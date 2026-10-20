@@ -115,3 +115,34 @@ def test_all_saved_union_live_wins_and_filters_before_page(monkeypatch):
     assert off['collected_at'] == now
     assert api.live_page(favorites_only=False, archive_items=history, source_account={'other'})['total'] == 1
     assert api.live_page(favorites_only=False, archive_items=history, author='other')['items'][0]['id'] == '2'
+
+
+def test_worker_api_windows_match_14_30_at_moscow_midnight():
+    from datetime import datetime, timezone
+    from app.api.carousel_favorites import window as api_window
+    from app.radar.live_carousel_job import window as worker_window
+    for hour, expected in [(20, '2026-09-20'), (21, '2026-09-21')]:
+        now = datetime(2026, 10, 19, hour, 59, tzinfo=timezone.utc)
+        for days in (14, 30):
+            first, last = api_window(days, now)
+            assert (first, last) == worker_window(now, days)
+            assert (last - first).days == days
+            if days == 30:
+                assert first.date().isoformat() == expected
+
+
+def test_30_day_feed_and_detail_include_older_live_without_changing_14_day(monkeypatch):
+    from datetime import datetime, timezone
+    from fastapi import HTTPException
+    from app.api import carousel_favorites as api
+    stamp = (datetime.now(timezone.utc) - timedelta(days=20)).isoformat()
+    row = {'id': '901', 'username': 'alice', 'media_type': 'CAROUSEL_ALBUM', 'timestamp': stamp, 'caption': 'Месячная история'}
+    class FakeStore:
+        def read_state(self):
+            return {'authors': [{'username': 'alice', 'active': True, 'status': 'updated'}], 'items': [row]}
+    monkeypatch.setattr(api, '_store', lambda client: FakeStore())
+    assert api.live_page()['total'] == 0
+    assert api.live_page(history_days=30)['total'] == 1
+    assert api.live_detail('901', history_days=30)['caption'] == row['caption']
+    with pytest.raises(HTTPException):
+        api.live_detail('901')

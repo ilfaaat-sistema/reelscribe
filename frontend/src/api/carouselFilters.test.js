@@ -35,3 +35,12 @@ test('архив: toggle меняет ограничение избранным�
   assert.equal(favoriteFilterEnabled(params), false)
   assert.equal(params.get('period'), 'archive14d')
 })
+
+test('30d по умолчанию включает избранное и toggle сохраняет месяц', () => {
+  const params = new URLSearchParams('period=30d&favorite=1')
+  toggle(params)
+  assert.equal(favoriteFilterEnabled(params), false)
+  assert.equal(params.get('period'), '30d')
+  toggle(params)
+  assert.equal(favoriteFilterEnabled(params), true)
+})

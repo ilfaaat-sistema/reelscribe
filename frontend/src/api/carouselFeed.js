@@ -43,3 +43,9 @@ export async function readCarouselPrefix(fetchPage, query, wanted, signal) {
   }
   throw new Error('Коллекция обновляется. Повторите обновление через несколько секунд.')
 }
+
+
+export function carouselRefreshInterval(period, status) {
+  if (status === 'running' || status === 'cooldown') return 30000
+  return period === '14d' || period === '30d' ? 60000 : null
+}

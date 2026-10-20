@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from app.radar.live_favorites_store import Conflict, LiveFavoritesStore
+from app.radar.carousel_window import rolling_window
 
 router = APIRouter(prefix='/radar/carousels/favorites', tags=['carousels'])
 NAME = re.compile(r'[a-z0-9._]{1,30}\Z')
@@ -132,11 +133,8 @@ def remove_favorite(username: str):
     return Response(status_code=204)
 
 
-def window():
-    today = datetime.now(MOSCOW).date()
-    start = datetime.combine(today - timedelta(days=13), datetime.min.time(), MOSCOW)
-    end = datetime.combine(today + timedelta(days=1), datetime.min.time(), MOSCOW)
-    return start, end
+def window(history_days=14, now=None):
+    return rolling_window(now or datetime.now(MOSCOW), history_days)
 
 
 def _moment(value):
@@ -164,10 +162,10 @@ def _sorted_items(items, sort, order):
 
 
 def live_page(*, author='', sort='likes', order='desc', limit=50, offset=0,
-              exclude_authors=(), include_authors=None, source_account=None, favorites_only=True, archive_items=()):
+              exclude_authors=(), include_authors=None, source_account=None, favorites_only=True, archive_items=(), history_days=14):
     from app.api.carousels import _item
 
-    start, end = window()
+    start, end = window(history_days)
     with httpx.Client(timeout=20, follow_redirects=False) as client:
         state = _read_state(_store(client))
     active = [row for row in state['authors'] if row.get('active', True)]
@@ -218,10 +216,10 @@ def live_page(*, author='', sort='likes', order='desc', limit=50, offset=0,
     }
 
 
-def live_detail(media_id: str):
+def live_detail(media_id: str, history_days=14):
     from app.api.carousels import _item
 
-    start, end = window()
+    start, end = window(history_days)
     with httpx.Client(timeout=20, follow_redirects=False) as client:
         state = _read_state(_store(client))
     for row in _state_items(state, start, end, None):

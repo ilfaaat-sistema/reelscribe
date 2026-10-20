@@ -3,17 +3,20 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
 
 import httpx
 
 from app.radar.activity_job import LIMIT_CODES, USERNAME, _retry_after, _stamp, _usage
 from app.radar.carousel_job import DETAIL_FIELDS, _item
+from app.radar.carousel_window import rolling_window
 
 
-def window(now):
-    today = now.astimezone(ZoneInfo('Europe/Moscow')).replace(hour=0, minute=0, second=0, microsecond=0)
-    return today - timedelta(days=13), today + timedelta(days=1)
+HISTORY_DAYS = 30
+COVERAGE_VERSION = 2
+
+
+def window(now, days=HISTORY_DAYS):
+    return rolling_window(now, days)
 
 
 def run(store, client, *, token, account_id, api_version='v23.0', max_requests=30, clock=None):
@@ -33,14 +36,19 @@ def run(store, client, *, token, account_id, api_version='v23.0', max_requests=3
     unfinished = False
     for row in authors:
         username = row['username']
+        needs_history = row.get('history_days', 0) < HISTORY_DAYS or row.get('coverage_version') != COVERAGE_VERSION
         due = _stamp(row.get('next_check_at'))
-        if due and due > now or not USERNAME.fullmatch(username):
+        if (due and due > now and not (needs_history and row.get('status') == 'updated')) or not USERNAME.fullmatch(username):
             continue
         checkpoint = dict(row.get('checkpoint') or {})
+        if checkpoint.get('version') != COVERAGE_VERSION or checkpoint.get('history_days') != HISTORY_DAYS:
+            checkpoint = {}
+        checkpoint.update(version=COVERAGE_VERSION, history_days=HISTORY_DAYS)
+        checkpoint.setdefault('full_history', needs_history)
         # Завершённые проверки начинают с головы: это находит новые публикации.
         # Первый обход берёт всё окно. После него перечитываем лишь недавний хвост
         # с небольшим перекрытием на задержанную публикацию и нестабильный порядок Meta.
-        previous = _stamp(row.get('last_checked_at'))
+        previous = _stamp(row.get('last_checked_at')) if not needs_history else None
         incremental_start = max(start, previous - timedelta(days=1)) if previous else start
         checkpoint.setdefault('start', incremental_start.isoformat())
         checkpoint.setdefault('seen', [])
@@ -79,10 +87,11 @@ def run(store, client, *, token, account_id, api_version='v23.0', max_requests=3
             error = payload.get('error', {}) if isinstance(payload, dict) else {}
             code = error.get('code')
             usage = max(_usage(response.headers).values(), default=0)
-            if response.status_code == 429 or code in LIMIT_CODES or code == 190:
-                seconds = max(900 if code != 190 else 3600, _retry_after(response.headers, now))
+            if response.status_code == 429 or code in LIMIT_CODES or code in (190, 10, 200, 294):
+                seconds = max(3600 if code in (190, 10, 200, 294) else 900, _retry_after(response.headers, now))
                 pause((now + timedelta(seconds=seconds)).isoformat(),
-                            'authentication_required' if code == 190 else 'meta_rate_limit')
+                            'authentication_required' if code == 190 else
+                            'permissions_required' if code in (10, 200, 294) else 'meta_rate_limit')
                 return {'requests': requests, 'status': 'meta_paused'}
             discovery = payload.get('business_discovery') if isinstance(payload, dict) else None
             if usage >= 85 and (error or response.status_code >= 400 or not isinstance(discovery, dict)):
@@ -117,12 +126,13 @@ def run(store, client, *, token, account_id, api_version='v23.0', max_requests=3
                           'next_check_at': (now + timedelta(hours=1)).isoformat()}
             elif finished:
                 values = {'status': 'updated', 'error': None, 'checkpoint': {},
-                          'last_checked_at': now.isoformat(),
+                          'last_checked_at': now.isoformat(), 'history_days': HISTORY_DAYS,
+                          'coverage_version': COVERAGE_VERSION,
                           'next_check_at': (now + timedelta(minutes=60)).isoformat()}
             else:
                 checkpoint.update(after=cursor, seen=checkpoint['seen'] + [cursor],
                                   ids=list(set(checkpoint['ids']).union(ids)))
-                values = {'status': 'collecting', 'error': None, 'checkpoint': checkpoint}
+                values = {'status': 'collecting', 'error': None, 'checkpoint': checkpoint, 'next_check_at': None}
             if usage >= 85:
                 values.update(pause_until=(now + timedelta(minutes=15)).isoformat(), pause_reason='meta_usage_85')
             update(**values)

@@ -67,3 +67,11 @@ test('on/off избранного меняет ключ сброса загру�
   assert.notEqual(carouselFeedBaseKey(on), carouselFeedBaseKey(off))
   assert.equal(carouselFeedBaseKey(on), carouselFeedBaseKey({ ...on, exclude_authors: ['hidden'] }))
 })
+
+test('живые 14d/30d продолжают обновляться после finished, архив не опрашивается', async () => {
+  const { carouselRefreshInterval } = await import('./carouselFeed.js')
+  assert.equal(carouselRefreshInterval('30d', 'finished'), 60000)
+  assert.equal(carouselRefreshInterval('14d', 'finished'), 60000)
+  assert.equal(carouselRefreshInterval('30d', 'running'), 30000)
+  assert.equal(carouselRefreshInterval('archive14d', 'finished'), null)
+})

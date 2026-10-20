@@ -1,3 +1,5 @@
+import { isLiveCarouselPeriod } from './carouselFilters.js'
+
 const BASE = (import.meta.env?.VITE_API_URL || '') + '/api/radar/carousels'
 
 async function readJson(url, signal, options = {}) {
@@ -23,10 +25,10 @@ async function readJson(url, signal, options = {}) {
 }
 
 export function getCarousels({ period = null, author = '', sort = 'likes', order = 'desc', limit = 50, offset = 0, exclude_authors = [], include_authors = null, source_account = null, favorites_only = true } = {}, signal) {
-  if (period === '14d' || include_authors != null || exclude_authors.length || source_account === 'neyro_set7') {
+  if (isLiveCarouselPeriod(period) || include_authors != null || exclude_authors.length || source_account === 'neyro_set7') {
     return readJson(BASE, signal, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...(period ? { period } : {}), ...(period === '14d' ? { favorites_only } : {}), author, sort, order, limit, offset, exclude_authors, ...(include_authors == null ? {} : { include_authors }), ...(source_account === 'neyro_set7' ? { source_account } : {}) }),
+      body: JSON.stringify({ ...(period ? { period } : {}), ...(isLiveCarouselPeriod(period) ? { favorites_only } : {}), author, sort, order, limit, offset, exclude_authors, ...(include_authors == null ? {} : { include_authors }), ...(source_account === 'neyro_set7' ? { source_account } : {}) }),
     })
   }
   const query = new URLSearchParams({ sort, order, limit: String(limit), offset: String(offset) })

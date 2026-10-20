@@ -163,23 +163,23 @@ def page(report, author='', sort='likes', order='desc', limit=50, offset=0,
     return result
 
 
-async def _rolling_page(*, favorites_only=True, **filters):
+async def _rolling_page(*, favorites_only=True, history_days=14, **filters):
     archives = []
     if not favorites_only:
         reports = await asyncio.gather(_report('7d'), _report('14d'))
         archives = [item for report in reports for item in report['items']]
     return await asyncio.to_thread(carousel_favorites.live_page, favorites_only=favorites_only,
-                                   archive_items=archives, **filters)
+                                   archive_items=archives, history_days=history_days, **filters)
 
 
-async def _rolling_detail(media_id):
+async def _rolling_detail(media_id, history_days=14):
     try:
-        return await asyncio.to_thread(carousel_favorites.live_detail, media_id)
+        return await asyncio.to_thread(carousel_favorites.live_detail, media_id, history_days=history_days)
     except HTTPException as error:
         if error.status_code != 404:
             raise
     reports = await asyncio.gather(_report('7d'), _report('14d'))
-    start, end = carousel_favorites.window()
+    start, end = carousel_favorites.window(history_days)
     for report in reversed(reports):
         for row in reversed(carousel_favorites._state_items(report, start, end, None)):
             if str(row.get('id')) == media_id:
@@ -193,19 +193,19 @@ async def list_carousels(author: str = Query('', pattern=r'^@?[A-Za-z0-9._]{0,30
                          sort: Literal['likes', 'comments', 'timestamp'] = 'likes',
                          order: Literal['desc', 'asc'] = 'desc',
                          limit: int = Query(50, ge=50, le=100), offset: int = Query(0, ge=0),
-                         period: Optional[Literal['', '7d', '14d', 'archive14d']] = None,
+                         period: Optional[Literal['', '7d', '14d', '30d', 'archive14d']] = None,
                          favorites_only: bool = True):
     if limit not in (50, 100):
         raise HTTPException(422, 'Размер страницы: 50 или 100')
-    if period == '14d':
-        return await _rolling_page(favorites_only=favorites_only, author=author, sort=sort,
+    if period in ('14d', '30d'):
+        return await _rolling_page(history_days=30 if period == '30d' else 14, favorites_only=favorites_only, author=author, sort=sort,
                                    order=order, limit=limit, offset=offset)
     return page(await _selected_report(period), author, sort, order, limit, offset)
 
 
 class CarouselQuery(BaseModel):
     favorites_only: bool = True
-    period: Optional[Literal['', '7d', '14d', 'archive14d']] = None
+    period: Optional[Literal['', '7d', '14d', '30d', 'archive14d']] = None
     author: str = Field('', pattern=r'^@?[A-Za-z0-9._]{0,30}$')
     sort: Literal['likes', 'comments', 'timestamp'] = 'likes'
     order: Literal['desc', 'asc'] = 'desc'
@@ -237,12 +237,12 @@ async def filtered_carousels(query: CarouselQuery):
     source = filters.pop('source_account')
     period = filters.pop('period')
     favorites_only = filters.pop('favorites_only')
-    if period == '14d':
+    if period in ('14d', '30d'):
         if source == 'neyro_set7':
             filters['source_account'] = await _neyro_source_authors()
         else:
             filters['source_account'] = None
-        return await _rolling_page(favorites_only=favorites_only, **filters)
+        return await _rolling_page(history_days=30 if period == '30d' else 14, favorites_only=favorites_only, **filters)
     if source == 'neyro_set7':
         allowed = await _neyro_source_authors()
         included = filters['include_authors']
@@ -251,11 +251,11 @@ async def filtered_carousels(query: CarouselQuery):
 
 
 @router.get('/{media_id}')
-async def detail(media_id: str, period: Optional[Literal['', '7d', '14d', 'archive14d']] = None):
+async def detail(media_id: str, period: Optional[Literal['', '7d', '14d', '30d', 'archive14d']] = None):
     if not re.fullmatch(r'[0-9]{1,40}', media_id):
         raise HTTPException(422, 'Некорректный ID карусели')
-    if period == '14d':
-        return await _rolling_detail(media_id)
+    if period in ('14d', '30d'):
+        return await _rolling_detail(media_id, history_days=30 if period == '30d' else 14)
     report = await _selected_report(period)
     for raw in report['items']:
         if str(raw.get('id')) == media_id and raw.get('media_type') == 'CAROUSEL_ALBUM':

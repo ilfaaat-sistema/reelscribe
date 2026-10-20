@@ -45,10 +45,10 @@ def collect(store, client, **kwargs):
 
 def test_moscow_window_and_filter():
     start, end = window(datetime(2026, 10, 19, 22, tzinfo=timezone.utc))
-    assert start.isoformat() == '2026-10-07T00:00:00+03:00'
+    assert start.isoformat() == '2026-09-21T00:00:00+03:00'
     assert end.isoformat() == '2026-10-21T00:00:00+03:00'
     store = MemoryStore()
-    collect(store, Client(page([detail('1'), detail('2', timestamp='2026-10-01T12:00:00+0000')])))
+    collect(store, Client(page([detail('1'), detail('2', timestamp='2026-09-01T12:00:00+0000')])))
     assert set(store.items) == {'1'}
     assert store.rows[0]['status'] == 'updated'
     assert store.rows[0]['checkpoint'] == {}
@@ -75,7 +75,7 @@ def test_new_author_priority():
 
 def test_regular_check_reads_only_recent_overlap():
     store = MemoryStore([{'username': 'one', 'added_at': '1',
-                          'last_checked_at': (NOW - timedelta(minutes=15)).isoformat()}])
+                          'last_checked_at': (NOW - timedelta(minutes=15)).isoformat(), 'history_days': 30, 'coverage_version': 2}])
     collect(store, Client(page([detail('old', timestamp='2026-10-18T12:00:00+0000')])))
     assert store.items == {}
     assert store.rows[0]['status'] == 'updated'
@@ -164,3 +164,32 @@ def test_completed_author_checked_hourly():
     collect(store, Client(page([])))
     assert store.rows[0]['next_check_at'] == (NOW + timedelta(hours=1)).isoformat()
     assert collect(store, Client())['requests'] == 0
+
+
+def test_expand_old_14_day_checkpoint_and_checked_author_backfills_before_coverage():
+    previous = (NOW - timedelta(minutes=15)).isoformat()
+    store = MemoryStore([{'username': 'one', 'status': 'updated', 'last_checked_at': previous,
+                         'next_check_at': (NOW + timedelta(hours=1)).isoformat(), 'history_days': 14,
+                         'checkpoint': {'version': 1, 'history_days': 14, 'after': 'old14',
+                                        'start': previous, 'seen': ['old14'], 'ids': ['old']}}])
+    client = Client(page([detail('older', timestamp='2026-09-25T12:00:00+0000')], after='more30'))
+    collect(store, client, max_requests=1)
+    assert '.after(old14)' not in client.calls[0][2]['fields']
+    assert 'older' in store.items
+    assert store.rows[0]['history_days'] == 14
+    assert store.rows[0]['last_checked_at'] == previous
+    checkpoint = store.rows[0]['checkpoint']
+    assert checkpoint['version'] == 2 and checkpoint['history_days'] == 30 and checkpoint['full_history']
+    client = Client(page([]))
+    collect(store, client)
+    assert '.after(more30)' in client.calls[0][2]['fields']
+    assert store.rows[0]['history_days'] == 30 and store.rows[0]['coverage_version'] == 2
+    assert store.rows[0]['status'] == 'updated' and store.rows[0]['checkpoint'] == {}
+
+
+def test_permissions_stop_all_authors_without_marking_profile_unavailable():
+    store = MemoryStore([{'username': 'one'}, {'username': 'two'}])
+    client = Client(Response({'error': {'code': 200}}, 400))
+    result = collect(store, client)
+    assert result['status'] == 'meta_paused' and len(client.calls) == 1
+    assert all(row['error'] == 'permissions_required' for row in store.rows)
