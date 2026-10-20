@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { thumbUrl } from '../api/client'
 import { getCarousel } from '../api/carousels'
-import { HIDDEN_AUTHORS_KEY, readHiddenAuthors, writeHiddenAuthors, hideAuthor, restoreAuthor } from '../api/hiddenAuthors'
+import useHiddenAuthors from '../hooks/useHiddenAuthors'
 import { FAVORITES_IMPORT_KEY, readFavoriteAuthors, getFavoriteAuthors, addFavoriteAuthor, removeFavoriteAuthor } from '../api/favoriteAuthors'
 import useSelectedCarousels from '../hooks/useSelectedCarousels'
 import useCarouselFeed from '../hooks/useCarouselFeed'
@@ -164,7 +164,7 @@ export default function Carousels() {
   const pageRef = useRef(null)
   const restoreScroll = useRef(null)
   const sentinelRef = useRef(null)
-  const [hidden, setHidden] = useState(() => readHiddenAuthors())
+  const hidden = useHiddenAuthors()
   const [favorites, setFavorites] = useState({ authors: [] })
   const selected = useSelectedCarousels()
   const [favoriteRows, setFavoriteRows] = useState([])
@@ -201,21 +201,12 @@ export default function Carousels() {
     window.addEventListener('focus', onFocus)
     return () => { controller.abort(); clearInterval(timer); window.removeEventListener('focus', onFocus) }
   }, [syncFavorites])
-  const [hiddenError, setHiddenError] = useState('')
   const [lastHidden, setLastHidden] = useState(null)
   const [searchDraft, setSearchDraft] = useState(() => searchParams.get('author') || '')
   const [searchFocused, setSearchFocused] = useState(false)
   const [searchError, setSearchError] = useState('')
   const excludedAuthors = useMemo(() => hidden.authors.map(item => item.username), [hidden.authors])
   const excluded = useMemo(() => new Set(excludedAuthors), [excludedAuthors])
-
-  useEffect(() => {
-    const sync = event => {
-      if (event.key === HIDDEN_AUTHORS_KEY || event.key === null) setHidden(readHiddenAuthors())
-    }
-    window.addEventListener('storage', sync)
-    return () => window.removeEventListener('storage', sync)
-  }, [])
 
   const author = searchParams.get('author')?.trim() || ''
   useEffect(() => { setSearchDraft(author) }, [author])
@@ -298,19 +289,13 @@ export default function Carousels() {
     else setSearchError('Автор не найден в сохранённой истории.')
   }
 
-  const changeHidden = (username, hide) => {
-    try {
-      // Успех показываем только после записи: при отказе localStorage список не меняется.
-      const current = readHiddenAuthors()
-      if (current.error) { setHiddenError(current.error); return }
-      const next = hide ? hideAuthor(current.authors, username) : restoreAuthor(current.authors, username)
-      writeHiddenAuthors(next)
-      restoreScroll.current = pageRef.current?.scrollTop || 0
-      setHidden({ authors: next, error: '' })
-      setHiddenError('')
+  const changeHidden = async (username, hide) => {
+    const scrollTop = pageRef.current?.scrollTop || 0
+    if (await hidden.setHidden(username, hide)) {
+      restoreScroll.current = scrollTop
       setLastHidden(hide ? username : null)
       updateQuery({ offset: 0, id: null })
-    } catch (e) { setHiddenError(e.message) }
+    }
   }
 
   const changeFavorite = async (username, forceAdd = false) => {
@@ -370,7 +355,7 @@ export default function Carousels() {
   const authorCount = profile?.carousels
   const isPartial = collection && collection.status !== 'finished'
   const authorUnknown = author && authorCount == null
-  const items = (data?.items || []).filter(item => !excluded.has(item.username?.toLowerCase()))
+  const items = (hidden.loading ? [] : data?.items || []).filter(item => !excluded.has(item.username?.toLowerCase()))
   const listItem = items.find(item => String(item.id) === detailId)
   const selectedIds = new Set(selected.items.map(item => item.id))
 
@@ -502,24 +487,25 @@ export default function Carousels() {
 
       <details className="carousels-hidden-list">
         <summary>Скрытые авторы ({hidden.authors.length})</summary>
-        <p className="carousels-muted">Сохранено в этом браузере. Обновление страницы и очистка кэша сохраняют список; очистка данных сайта удаляет его.</p>
-        {hidden.authors.length ? <ul>{hidden.authors.map(item => <li key={item.username}>
+        <p className="carousels-muted">Общий список на всех устройствах.</p>
+        {hidden.loading ? <p role="status">Загружаем общий список…</p> : hidden.authors.length ? <ul>{hidden.authors.map(item => <li key={item.username}>
           <span>@{item.username}</span><small>{date(item.hidden_at)}</small>
-          <button type="button" onClick={() => changeHidden(item.username, false)}>Вернуть в сетку</button>
+          <button type="button" disabled={hidden.loading || hidden.busy.has(item.username)} onClick={() => changeHidden(item.username, false)}>Вернуть в сетку</button>
         </li>)}</ul> : <p className="carousels-muted">Скрытых авторов пока нет.</p>}
       </details>
-      {(hidden.error || hiddenError) && <p className="carousels-error" role="alert">{hiddenError || hidden.error}</p>}
+      {hidden.warning && <p className="carousels-error" role="alert">{hidden.warning}</p>}
+      {hidden.error && <p className="carousels-error" role="alert">{hidden.error}<button type="button" onClick={hidden.refresh}>Повторить</button></p>}
       {lastHidden && <div className="carousels-hide-notice" role="status">Автор @{lastHidden} скрыт.
-        <button type="button" onClick={() => changeHidden(lastHidden, false)}>Отменить</button>
+        <button type="button" disabled={hidden.loading || hidden.busy.has(lastHidden.toLowerCase())} onClick={() => changeHidden(lastHidden, false)}>Отменить</button>
       </div>}
       {author && excluded.has(author.toLowerCase().replace(/^@/, '')) && <div className="carousels-hide-notice">
         Автор @{author.replace(/^@/, '')} в списке скрытых.
-        <button type="button" onClick={() => changeHidden(author, false)}>Вернуть в сетку</button>
+        <button type="button" disabled={hidden.loading || hidden.busy.has(author.toLowerCase().replace(/^@/, ''))} onClick={() => changeHidden(author, false)}>Вернуть в сетку</button>
       </div>}
 
       {error && <div className="carousels-error" role="alert">{error}<button type="button" onClick={refresh}>Повторить</button></div>}
-      {loading && !data && <p className="carousels-loading" role="status">Загружаем карусели…</p>}
-      {!loading && !error && !items.length && <p className="carousels-empty">{period === '14d' ? favoriteLoading ? 'Проверяем общий список избранных…' : !favorites.authors.length ? 'Добавьте профиль в общий список избранных.' : favoriteRows.some(row => (!author || row.username === author.toLowerCase()) && !row.last_checked_at) ? 'Автор ещё не проверен. Сбор начнётся автоматически; статус доступен выше.' : 'Авторы проверены. За выбранный период и с текущими фильтрами каруселей нет.' : favoriteOnly && !favorites.authors.length ? 'Список избранных авторов пуст. Добавьте авторов звёздой на карточках.' : authorUnknown ? 'Данные каруселей этого автора пока недоступны.' : 'Каруселей по выбранному фильтру пока нет.'}</p>}
+      {(hidden.loading || (loading && !data)) && <p className="carousels-loading" role="status">Загружаем карусели…</p>}
+      {!hidden.loading && !loading && !error && !items.length && <p className="carousels-empty">{period === '14d' ? favoriteLoading ? 'Проверяем общий список избранных…' : !favorites.authors.length ? 'Добавьте профиль в общий список избранных.' : favoriteRows.some(row => (!author || row.username === author.toLowerCase()) && !row.last_checked_at) ? 'Автор ещё не проверен. Сбор начнётся автоматически; статус доступен выше.' : 'Авторы проверены. За выбранный период и с текущими фильтрами каруселей нет.' : favoriteOnly && !favorites.authors.length ? 'Список избранных авторов пуст. Добавьте авторов звёздой на карточках.' : authorUnknown ? 'Данные каруселей этого автора пока недоступны.' : 'Каруселей по выбранному фильтру пока нет.'}</p>}
       {!!items.length && <div className="carousels-grid">
         {items.map(item => <div className="carousels-tile" key={item.id}><button
           className="carousels-card"
@@ -541,7 +527,7 @@ export default function Carousels() {
           onClick={() => changeSelected(item)}><span aria-hidden="true">{selectedIds.has(String(item.id)) ? '♥' : '♡'}</span>
         </button><button type="button" className="carousels-hide-author"
           aria-label={`Скрыть автора @${item.username}`} title={`Скрыть все карусели @${item.username}`}
-          onClick={() => changeHidden(item.username, true)}>
+          disabled={hidden.loading || hidden.busy.has(item.username?.toLowerCase())} onClick={() => changeHidden(item.username, true)}>
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M3 3l18 18M10.6 10.6a2 2 0 002.8 2.8M9.2 4.5A10 10 0 0112 4c5.5 0 9.5 8 9.5 8a19 19 0 01-3.1 4.3M6 6a21 21 0 00-3.5 6s4 8 9.5 8a10 10 0 005-1.4" /></svg>
         </button><button type="button" className={`carousels-favorite-author${favorites.authors.includes(item.username?.toLowerCase()) ? ' is-favorite' : ''}`}
           aria-pressed={favorites.authors.includes(item.username?.toLowerCase())}
