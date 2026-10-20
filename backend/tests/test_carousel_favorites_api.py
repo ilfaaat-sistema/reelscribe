@@ -146,3 +146,18 @@ def test_30_day_feed_and_detail_include_older_live_without_changing_14_day(monke
     assert api.live_detail('901', history_days=30)['caption'] == row['caption']
     with pytest.raises(HTTPException):
         api.live_detail('901')
+
+
+def test_old_updated_fourteen_day_is_pending_for_month_only(monkeypatch):
+    from app.api import carousel_favorites as api
+    row = {'username': 'alice', 'active': True, 'status': 'updated', 'history_days': 14}
+    class FakeStore:
+        def read_state(self):
+            return {'authors': [row], 'items': []}
+    monkeypatch.setattr(api, '_store', lambda client: FakeStore())
+    short, month = api.live_page(), api.live_page(history_days=30)
+    assert short['collection']['checked'] == 1 and short['profiles'][0]['carousels'] == 0
+    assert month['collection']['checked'] == 0 and month['collection']['pending'] == 1
+    assert month['profiles'][0]['carousels'] is None
+    row.update(history_days=30, coverage_version=2)
+    assert api.live_page(history_days=30)['collection']['checked'] == 1

@@ -478,7 +478,7 @@ export default function Carousels() {
           <button type="button" className="carousels-favorite-filter"
             aria-pressed={author.toLowerCase().replace(/^@/, '') === row.username}
             aria-label={`Показать карусели @${row.username}`} onClick={() => chooseFavoriteAuthor(row.username)}>
-            <span>@{row.username}</span><small>{FAVORITE_STATUS[row.status] || 'Ожидает'}{row.last_checked_at ? ` · ${date(row.last_checked_at)} МСК` : ' · ещё не проверен'}</small>{row.error && <small>{row.error}</small>}
+            <span>@{row.username}</span><small>{selectedPeriod === '30d' && row.status === 'updated' && (row.history_days !== 30 || row.coverage_version !== 2) ? 'Ожидает историю 30 дней' : FAVORITE_STATUS[row.status] || 'Ожидает'}{row.last_checked_at ? ` · ${date(row.last_checked_at)} МСК` : ' · ещё не проверен'}</small>{row.error && <small>{row.error}</small>}
           </button>
           <button type="button" disabled={favoriteBusy} onClick={() => changeFavorite(row.username)} aria-label={`Убрать @${row.username} из избранного`}>Убрать</button>
         </li>)}</ul> : <p>Список пуст. Вставьте ссылку на профиль выше.</p>}
@@ -514,7 +514,7 @@ export default function Carousels() {
 
       {error && <div className="carousels-error" role="alert">{error}<button type="button" onClick={refresh}>Повторить</button></div>}
       {(hidden.loading || (loading && !data)) && <p className="carousels-loading" role="status">Загружаем карусели…</p>}
-      {!hidden.loading && !loading && !error && !items.length && <p className="carousels-empty">{isLiveCarouselPeriod(period) && favoriteOnly ? favoriteLoading ? 'Проверяем общий список избранных…' : !favorites.authors.length ? 'Добавьте профиль в общий список избранных.' : favoriteRows.some(row => (!author || row.username === author.toLowerCase()) && !row.last_checked_at) ? 'Автор ещё не проверен. Сбор начнётся автоматически; статус доступен выше.' : 'Авторы проверены. За выбранный период и с текущими фильтрами каруселей нет.' : favoriteOnly && !favorites.authors.length ? 'Список избранных авторов пуст. Добавьте авторов звёздой на карточках.' : authorUnknown ? 'Данные каруселей этого автора пока недоступны.' : 'Каруселей по выбранному фильтру пока нет.'}</p>}
+      {!hidden.loading && !loading && !error && !items.length && <p className="carousels-empty">{isLiveCarouselPeriod(period) && favoriteOnly ? favoriteLoading ? 'Проверяем общий список избранных…' : !favorites.authors.length ? 'Добавьте профиль в общий список избранных.' : favoriteRows.some(row => (!author || row.username === author.toLowerCase()) && (!row.last_checked_at || (period === '30d' && (row.history_days !== 30 || row.coverage_version !== 2)))) ? 'Автор ещё не проверен. Сбор начнётся автоматически; статус доступен выше.' : 'Авторы проверены. За выбранный период и с текущими фильтрами каруселей нет.' : favoriteOnly && !favorites.authors.length ? 'Список избранных авторов пуст. Добавьте авторов звёздой на карточках.' : authorUnknown ? 'Данные каруселей этого автора пока недоступны.' : 'Каруселей по выбранному фильтру пока нет.'}</p>}
       {isLiveCarouselPeriod(period) && !favoriteOnly && <p className="carousels-muted">Уже собранные карусели всех авторов за текущее окно. Новый сбор по всем авторам не запускается.</p>}
       {!!items.length && <div className="carousels-grid">
         {items.map(item => <div className="carousels-tile" key={item.id}><button

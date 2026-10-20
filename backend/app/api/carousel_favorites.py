@@ -18,7 +18,7 @@ router = APIRouter(prefix='/radar/carousels/favorites', tags=['carousels'])
 NAME = re.compile(r'[a-z0-9._]{1,30}\Z')
 RESERVED = {'p', 'reel', 'reels', 'stories', 'explore', 'accounts', 'direct'}
 MOSCOW = ZoneInfo('Europe/Moscow')
-PUBLIC_FIELDS = ('username', 'status', 'last_checked_at', 'next_check_at', 'error')
+PUBLIC_FIELDS = ('username', 'status', 'last_checked_at', 'next_check_at', 'error', 'history_days', 'coverage_version')
 
 
 def _store(client):
@@ -186,7 +186,12 @@ def live_page(*, author='', sort='likes', order='desc', limit=50, offset=0,
     if source_account is not None:
         selected &= set(source_account)
     items = _sorted_items([row for row in all_items if row['username'] in selected], sort, order)
-    statuses = [row['status'] for row in active]
+    def coverage_status(row):
+        if history_days == 30 and row['status'] == 'updated' and (row.get('history_days', 0) < 30 or row.get('coverage_version') != 2):
+            return 'pending'
+        return row['status']
+
+    statuses = [coverage_status(row) for row in active]
     status = ('cooldown' if 'meta_paused' in statuses else
               'running' if any(value in ('pending', 'collecting') for value in statuses) else
               'failed' if 'error' in statuses else 'finished')
@@ -209,7 +214,7 @@ def live_page(*, author='', sort='likes', order='desc', limit=50, offset=0,
                        'review_required': sum(value == 'error' for value in statuses)},
         'totals': {'carousels': len(items)},
         'profiles': ([{'username': row['username'], 'carousels': profile_counts[row['username']]
-                       if row['status'] in ('updated', 'unavailable') else None} for row in active]
+                       if coverage_status(row) in ('updated', 'unavailable') else None} for row in active]
                      if favorites_only else [{'username': name, 'carousels': profile_counts[name]} for name in sorted(names)]),
         'items': [_item(row) for row in items[offset:offset + limit]],
         'total': len(items),
