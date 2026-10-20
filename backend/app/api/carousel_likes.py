@@ -12,7 +12,7 @@ router = APIRouter(prefix='/radar/carousel-likes', tags=['carousel-likes'])
 
 class SelectCarousel(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    period: Literal['7d', '14d']
+    period: Literal['7d', '14d', 'archive14d']
 
 
 def _response(value):
