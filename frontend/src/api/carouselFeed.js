@@ -1,3 +1,7 @@
+export function carouselFeedBaseKey(query) {
+  return JSON.stringify([query.period, query.favorites_only, query.author, query.sort, query.order, query.limit, query.include_authors, query.source_account])
+}
+
 // Сохраняем глобальный порядок и убираем дубли при изменении отчёта между порциями.
 export function mergeCarouselItems(previous, incoming, sort = 'likes', order = 'desc') {
   const rows = new Map(previous.map(item => [String(item.id), item]))

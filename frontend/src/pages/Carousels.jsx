@@ -420,7 +420,7 @@ export default function Carousels() {
           <select aria-label="Период каруселей" value={selectedPeriod || ''} onChange={event => changePage({ period: event.target.value, id: null, offset: 0 })}>
             {!period && !data && <option value="">Автоматически</option>}
             <option value="7d">7 дней · 13–19 октября</option>
-            <option value="14d">Последние 14 дней · избранные</option>
+            <option value="14d">Последние 14 дней</option>
             <option value="archive14d">Архив 6–19 октября</option>
           </select>
         </label>
@@ -476,8 +476,8 @@ export default function Carousels() {
             <span aria-hidden="true">{favoritesExpanded ? '▾' : '▸'}</span> Избранные авторы ({favorites.authors.length})
             <small>{favoritesExpanded ? 'Скрыть' : 'Показать'}</small>
           </button></h2>
-          <button type="button" className={`carousels-favorites-reset${favoriteOnly ? ' is-active' : ''}`}
-            aria-pressed={favoriteOnly} onClick={toggleAllFavorites}>Все избранные</button>
+          <button type="button" className={`carousels-favorites-reset${favoriteOnly && !author ? ' is-active' : ''}`}
+            aria-pressed={favoriteOnly && !author} onClick={toggleAllFavorites}>Все избранные</button>
         </div>
         <div id="carousels-favorites-content" hidden={!favoritesExpanded}>
         <p className="carousels-muted">Общий список на всех устройствах. Сбор новых авторов начинается автоматически; доступны публичные профессиональные профили.</p>

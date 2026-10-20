@@ -255,7 +255,7 @@ def test_rolling_off_sources_and_detail_window_and_archive_failure(monkeypatch):
         calls.append(period)
         if failed:
             raise HTTPException(503, 'Архив временно недоступен')
-        return {'items': [{'id': '123', 'username': 'other', 'media_type': 'CAROUSEL_ALBUM', 'timestamp': stamp},
+        return {'items': [{'id': '123', 'username': 'other', 'media_type': 'CAROUSEL_ALBUM', 'timestamp': stamp, 'likes': 10 if period == '7d' else 99},
                           {'id': '124', 'username': 'other', 'media_type': 'CAROUSEL_ALBUM', 'timestamp': '2000-01-01T00:00:00Z'}]}
     class FakeStore:
         def read_state(self):
@@ -269,10 +269,11 @@ def test_rolling_off_sources_and_detail_window_and_archive_failure(monkeypatch):
     assert client.get(url + '?period=14d').json()['total'] == 0
     assert calls == []
     off = client.post(url, json={'period': '14d', 'favorites_only': False}).json()
-    assert off['total'] == 1 and off['items'][0]['id'] == '123'
+    assert off['total'] == 1 and off['items'][0]['id'] == '123' and off['items'][0]['likes'] == 99
     assert client.get(url + '?period=14d&favorites_only=false').json()['total'] == 1
     detail = client.get(url + '/123?period=14d')
     assert detail.status_code == 200 and detail.json()['start_date'] == off['start_date']
+    assert detail.json()['likes'] == off['items'][0]['likes']
     assert client.get(url + '/124?period=14d').status_code == 404
     failed = True
     assert client.post(url, json={'period': '14d', 'favorites_only': False}).status_code == 503

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getCarousels } from '../api/carousels'
-import { mergeCarouselItems, readCarouselPrefix, sameCarouselSnapshot } from '../api/carouselFeed'
+import { carouselFeedBaseKey, mergeCarouselItems, readCarouselPrefix, sameCarouselSnapshot } from '../api/carouselFeed'
 
 export default function useCarouselFeed(query) {
   const [data, setData] = useState(null)
@@ -11,8 +11,7 @@ export default function useCarouselFeed(query) {
   const [version, setVersion] = useState(0)
   const queryKey = JSON.stringify(query)
   const stableQuery = useMemo(() => JSON.parse(queryKey), [queryKey])
-  const baseKey = JSON.stringify([stableQuery.period, stableQuery.author, stableQuery.sort, stableQuery.order,
-                                  stableQuery.limit, stableQuery.include_authors, stableQuery.source_account])
+  const baseKey = carouselFeedBaseKey(stableQuery)
   const previousBase = useRef(null)
   const generation = useRef(0)
   const cursor = useRef(0)

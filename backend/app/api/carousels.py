@@ -180,8 +180,8 @@ async def _rolling_detail(media_id):
             raise
     reports = await asyncio.gather(_report('7d'), _report('14d'))
     start, end = carousel_favorites.window()
-    for report in reports:
-        for row in carousel_favorites._state_items(report, start, end, None):
+    for report in reversed(reports):
+        for row in reversed(carousel_favorites._state_items(report, start, end, None)):
             if str(row.get('id')) == media_id:
                 return {**_item(row), 'start_date': start.date().isoformat(),
                         'end_date': (end - timedelta(days=1)).date().isoformat()}

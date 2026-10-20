@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mergeCarouselItems, readCarouselPrefix } from './carouselFeed.js'
+import { carouselFeedBaseKey, mergeCarouselItems, readCarouselPrefix } from './carouselFeed.js'
 
 const query = { author: 'alice', sort: 'likes', order: 'desc', limit: 50, exclude_authors: ['bob'] }
 
@@ -58,4 +58,12 @@ test('Непрерывная смена снимка ограничена тре
   const fetchPage = async q => ({ total: 100, collected_at: String(++calls), items: Array.from({ length: 50 }, (_, i) => ({ id: String(q.offset + i), likes: 0 })) })
   await assert.rejects(readCarouselPrefix(fetchPage, query, 100), /Коллекция обновляется/)
   assert.equal(calls, 6)
+})
+
+
+test('on/off избранного меняет ключ сброса загруженного префикса', () => {
+  const on = { ...query, period: '14d', favorites_only: true }
+  const off = { ...on, favorites_only: false }
+  assert.notEqual(carouselFeedBaseKey(on), carouselFeedBaseKey(off))
+  assert.equal(carouselFeedBaseKey(on), carouselFeedBaseKey({ ...on, exclude_authors: ['hidden'] }))
 })
