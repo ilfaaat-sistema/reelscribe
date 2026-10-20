@@ -12,6 +12,9 @@ const dateFormat = new Intl.DateTimeFormat('ru-RU', {
   timeZone: 'Europe/Moscow', day: 'numeric', month: 'short', year: 'numeric',
   hour: '2-digit', minute: '2-digit',
 })
+const periodDateFormat = new Intl.DateTimeFormat('ru-RU', {
+  timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', year: 'numeric',
+})
 const SORTS = new Set(['timestamp', 'likes', 'comments'])
 const CYRILLIC = { а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'kh', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'shch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya' }
 const searchName = value => String(value || '').trim().replace(/^@/, '').toLowerCase().replace(/[а-яё]/g, letter => CYRILLIC[letter])
@@ -80,7 +83,7 @@ function Metric({ label, value }) {
   return <span className="carousels-metric"><b>{count(value)}</b><small>{label}</small></span>
 }
 
-function Drawer({ id, listItem, onClose, excluded }) {
+function Drawer({ period, id, listItem, onClose, excluded }) {
   const [item, setItem] = useState(listItem || null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -88,12 +91,12 @@ function Drawer({ id, listItem, onClose, excluded }) {
 
   useEffect(() => {
     const controller = new AbortController()
-    getCarousel(id, controller.signal)
+    getCarousel(id, controller.signal, period)
       .then(data => { setItem(data); setError('') })
       .catch(e => { if (e.name !== 'AbortError') setError(e.message || 'Не удалось загрузить публикацию') })
       .finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return () => controller.abort()
-  }, [id])
+  }, [id, period])
 
   useEffect(() => {
     closeRef.current?.focus()
@@ -184,6 +187,7 @@ export default function Carousels() {
 
   const author = searchParams.get('author')?.trim() || ''
   useEffect(() => { setSearchDraft(author) }, [author])
+  const period = ['7d', '14d'].includes(searchParams.get('period')) ? searchParams.get('period') : null
   const favoriteOnly = searchParams.get('favorite') === '1'
   const sourceAccount = searchParams.get('source') === 'neyro_set7' ? 'neyro_set7' : null
   const sort = SORTS.has(searchParams.get('sort')) ? searchParams.get('sort') : 'likes'
@@ -191,7 +195,7 @@ export default function Carousels() {
   const limit = searchParams.get('limit') === '100' ? 100 : 50
   const detailId = searchParams.get('id')
   const includeAuthors = favoriteOnly ? favorites.authors : null
-  const listParams = useMemo(() => ({ author, sort, order, limit, exclude_authors: excludedAuthors, include_authors: includeAuthors, source_account: sourceAccount }), [author, sort, order, limit, excludedAuthors, includeAuthors, sourceAccount])
+  const listParams = useMemo(() => ({ period, author, sort, order, limit, exclude_authors: excludedAuthors, include_authors: includeAuthors, source_account: sourceAccount }), [period, author, sort, order, limit, excludedAuthors, includeAuthors, sourceAccount])
   const { data, loading, error, loadingMore, moreError, loadMore, refresh, hasMore } = useCarouselFeed(listParams)
 
   useEffect(() => {
@@ -272,6 +276,7 @@ export default function Carousels() {
     state: backPath ? { authorsScrollTop: location.state?.authorsScrollTop } : undefined,
   })
   const total = Number.isFinite(Number(data?.total)) && data?.total != null ? Number(data.total) : null
+  const selectedPeriod = period || (data?.start_date === '2026-10-06' ? '14d' : data ? '7d' : null)
   const collection = data?.collection
   const checked = collection?.checked
   const target = collection?.target
@@ -289,7 +294,7 @@ export default function Carousels() {
         <div>
           <span className="carousels-eyebrow">Радар · карусели</span>
           <h1>{author ? `Карусели @${author}` : sourceAccount ? 'Карусели NEYRO_SET7' : 'Все карусели'}</h1>
-          <p>13–19 октября 2026 · время Москвы</p>
+          <p>{data?.start_date && data?.end_date ? `${periodDateFormat.format(new Date(`${data.start_date}T12:00:00+03:00`))} — ${periodDateFormat.format(new Date(`${data.end_date}T12:00:00+03:00`))} · время Москвы` : 'Период загружается…'}</p>
         </div>
         {(author || sourceAccount) && <button type="button" className="carousels-all" onClick={() => changePage({ author: null, source: null, offset: 0 })}>Все карусели</button>}
       </header>
@@ -313,6 +318,13 @@ export default function Carousels() {
       </div>
 
       <div className="carousels-controls">
+        <label>Период
+          <select aria-label="Период каруселей" value={selectedPeriod || ''} onChange={event => changePage({ period: event.target.value, id: null, offset: 0 })}>
+            {!period && !data && <option value="">Автоматически</option>}
+            <option value="7d">7 дней · 13–19 октября</option>
+            <option value="14d">14 дней · 6–19 октября</option>
+          </select>
+        </label>
         <form className="carousels-author-search" onSubmit={submitAuthor}
           onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setSearchFocused(false) }}>
           <input aria-label="Поиск автора" placeholder="Сердитов или serditov" autoComplete="off"
@@ -388,7 +400,7 @@ export default function Carousels() {
         {items.map(item => <div className="carousels-tile" key={item.id}><button
           className="carousels-card"
           type="button"
-          onClick={() => updateQuery({ id: item.id })}
+          onClick={() => updateQuery({ id: item.id, period: selectedPeriod })}
           aria-label={`Открыть карусель @${item.username || 'автор неизвестен'}`}
         >
           <Cover item={item} />
@@ -420,6 +432,6 @@ export default function Carousels() {
         {!hasMore && !loading && !error && !moreError && items.length > 0 && <span>Все найденные карусели показаны</span>}
       </div>}
     </div>
-    {detailId && <Drawer key={detailId} id={detailId} listItem={listItem} excluded={excluded} onClose={() => updateQuery({ id: null })} />}
+    {detailId && <Drawer period={period} key={`${period || 'auto'}-${detailId}`} id={detailId} listItem={listItem} excluded={excluded} onClose={() => updateQuery({ id: null })} />}
   </main>
 }

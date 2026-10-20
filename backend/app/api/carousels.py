@@ -1,4 +1,4 @@
-"""Публичный просмотр сохранённого недельного набора без вызовов Meta."""
+"""Публичный просмотр сохранённых наборов без вызовов Meta."""
 from __future__ import annotations
 
 import asyncio
@@ -15,8 +15,9 @@ from app.core.db import get_db
 
 router = APIRouter(prefix='/radar/carousels', tags=['carousels'])
 REPORT_URL = 'https://raw.githubusercontent.com/ilfaaat-sistema/reelscribe/refs/heads/data/authors-carousels-20261013-20261019/activity-report.json'
-_cache = None
-_cached_at = 0.0
+FORTNIGHT_REPORT_URL = REPORT_URL.replace('20261013', '20261006')
+_cache = {}
+_cached_at = {}
 _lock = asyncio.Lock()
 _source_authors_cache = None
 _source_cached_at = 0.0
@@ -53,17 +54,17 @@ def _item(item):
     return result
 
 
-async def _report():
+async def _report(period='7d'):
     global _cache, _cached_at
     now = time.monotonic()
-    if _cache is not None and now - _cached_at < 60:
-        return _cache
+    if period in _cache and now - _cached_at[period] < 60:
+        return _cache[period]
     async with _lock:
-        if _cache is not None and time.monotonic() - _cached_at < 60:
-            return _cache
+        if period in _cache and time.monotonic() - _cached_at[period] < 60:
+            return _cache[period]
         try:
             async with httpx.AsyncClient(timeout=15, follow_redirects=False) as client:
-                async with client.stream('GET', REPORT_URL, params={'v': int(time.time() // 60)}) as response:
+                async with client.stream('GET', FORTNIGHT_REPORT_URL if period == '14d' else REPORT_URL, params={'v': int(time.time() // 60)}) as response:
                     response.raise_for_status()
                     content = bytearray()
                     async for chunk in response.aiter_bytes():
@@ -72,14 +73,27 @@ async def _report():
                             raise ValueError('Отчёт слишком большой')
             import json
             value = json.loads(content)
-            if (value.get('provider') != 'meta_graph' or value.get('start_date') != '2026-10-13'
+            if (value.get('provider') != 'meta_graph' or value.get('start_date') != ('2026-10-06' if period == '14d' else '2026-10-13')
                     or value.get('end_date') != '2026-10-19' or not isinstance(value.get('items'), list)
                     or not isinstance(value.get('collection'), dict)):
-                raise ValueError('Неверный недельный набор')
-            _cache, _cached_at = value, time.monotonic()
+                raise ValueError('Неверный набор каруселей')
+            if period == '14d' and value['collection'].get('target') != 586:
+                raise ValueError('Неверный размер целевой очереди')
+            _cache[period], _cached_at[period] = value, time.monotonic()
             return value
         except (httpx.HTTPError, ValueError, TypeError):
-            raise HTTPException(503, 'Недельный сбор пока недоступен. Попробуйте обновить страницу позже.') from None
+            raise HTTPException(503, 'Сбор за 14 дней ещё не опубликован или временно недоступен. Выберите 7 дней или попробуйте позже.' if period == '14d' else 'Недельный сбор пока недоступен. Попробуйте обновить страницу позже.') from None
+
+
+async def _selected_report(period=None):
+    if period:
+        return await _report(period)
+    try:
+        return await _report('14d')
+    except HTTPException as error:
+        if error.status_code != 503:
+            raise
+        return await _report('7d')
 
 
 def _read_neyro_source_authors():
@@ -149,13 +163,15 @@ def page(report, author='', sort='likes', order='desc', limit=50, offset=0,
 async def list_carousels(author: str = Query('', pattern=r'^@?[A-Za-z0-9._]{0,30}$'),
                          sort: Literal['likes', 'comments', 'timestamp'] = 'likes',
                          order: Literal['desc', 'asc'] = 'desc',
-                         limit: int = Query(50, ge=50, le=100), offset: int = Query(0, ge=0)):
+                         limit: int = Query(50, ge=50, le=100), offset: int = Query(0, ge=0),
+                         period: Optional[Literal['', '7d', '14d']] = None):
     if limit not in (50, 100):
         raise HTTPException(422, 'Размер страницы: 50 или 100')
-    return page(await _report(), author, sort, order, limit, offset)
+    return page(await _selected_report(period), author, sort, order, limit, offset)
 
 
 class CarouselQuery(BaseModel):
+    period: Optional[Literal['', '7d', '14d']] = None
     author: str = Field('', pattern=r'^@?[A-Za-z0-9._]{0,30}$')
     sort: Literal['likes', 'comments', 'timestamp'] = 'likes'
     order: Literal['desc', 'asc'] = 'desc'
@@ -185,19 +201,27 @@ async def filtered_carousels(query: CarouselQuery):
     """Только чтение: исключения приходят из настроек просмотра, без записи в коллекцию."""
     filters = query.model_dump()
     source = filters.pop('source_account')
+    period = filters.pop('period')
     if source == 'neyro_set7':
         allowed = await _neyro_source_authors()
         included = filters['include_authors']
         filters['include_authors'] = sorted(allowed if included is None else allowed.intersection(included))
-    return page(await _report(), **filters)
+    return page(await _selected_report(period), **filters)
 
 
 @router.get('/{media_id}')
-async def detail(media_id: str):
+async def detail(media_id: str, period: Optional[Literal['', '7d', '14d']] = None):
     if not re.fullmatch(r'[0-9]{1,40}', media_id):
         raise HTTPException(422, 'Некорректный ID карусели')
-    report = await _report()
+    report = await _selected_report(period)
     for raw in report['items']:
         if str(raw.get('id')) == media_id and raw.get('media_type') == 'CAROUSEL_ALBUM':
-            return _item(raw)
-    raise HTTPException(404, 'Карусель не найдена в недельном сборе')
+            return {**_item(raw), 'start_date': report['start_date'], 'end_date': report['end_date']}
+    # Старые прямые ссылки не содержат period. После появления 14-дневного набора
+    # они должны продолжать открывать карточки, оставшиеся только в недельном.
+    if not period and report.get('start_date') == '2026-10-06':
+        weekly = await _report('7d')
+        for raw in weekly['items']:
+            if str(raw.get('id')) == media_id and raw.get('media_type') == 'CAROUSEL_ALBUM':
+                return {**_item(raw), 'start_date': weekly['start_date'], 'end_date': weekly['end_date']}
+    raise HTTPException(404, 'Карусель не найдена в выбранном сборе')

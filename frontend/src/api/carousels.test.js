@@ -92,3 +92,25 @@ test('источник NEYRO_SET7 отправляется POST вместе с 
     assert.equal(body.offset, 50)
   } finally { globalThis.fetch = previous }
 })
+
+test('период передаётся списку GET, фильтрам POST и деталям; даты ответа сохраняются', async () => {
+  const previous = globalThis.fetch
+  const calls = []
+  globalThis.fetch = async (url, options) => {
+    calls.push([url, options])
+    return { ok: true, json: async () => ({ start_date: '2026-10-06', end_date: '2026-10-19', items: [] }) }
+  }
+  try {
+    const data = await getCarousels({ period: '14d', author: 'alice', sort: 'timestamp' })
+    assert.equal(new URL(calls[0][0], 'https://example.test').searchParams.get('period'), '14d')
+    assert.equal(data.start_date, '2026-10-06')
+    assert.equal(data.end_date, '2026-10-19')
+    await getCarousels({ period: '7d', include_authors: ['alice'], exclude_authors: ['bob'] })
+    const body = JSON.parse(calls[1][1].body)
+    assert.equal(body.period, '7d')
+    assert.deepEqual(body.include_authors, ['alice'])
+    assert.deepEqual(body.exclude_authors, ['bob'])
+    await getCarousel('123', undefined, '14d')
+    assert.equal(calls[2][0], '/api/radar/carousels/123?period=14d')
+  } finally { globalThis.fetch = previous }
+})

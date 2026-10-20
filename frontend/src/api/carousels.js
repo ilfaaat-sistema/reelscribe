@@ -22,18 +22,19 @@ async function readJson(url, signal, options = {}) {
   return response.json()
 }
 
-export function getCarousels({ author = '', sort = 'likes', order = 'desc', limit = 50, offset = 0, exclude_authors = [], include_authors = null, source_account = null } = {}, signal) {
+export function getCarousels({ period = null, author = '', sort = 'likes', order = 'desc', limit = 50, offset = 0, exclude_authors = [], include_authors = null, source_account = null } = {}, signal) {
   if (include_authors != null || exclude_authors.length || source_account === 'neyro_set7') {
     return readJson(BASE, signal, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ author, sort, order, limit, offset, exclude_authors, ...(include_authors == null ? {} : { include_authors }), ...(source_account === 'neyro_set7' ? { source_account } : {}) }),
+      body: JSON.stringify({ ...(period ? { period } : {}), author, sort, order, limit, offset, exclude_authors, ...(include_authors == null ? {} : { include_authors }), ...(source_account === 'neyro_set7' ? { source_account } : {}) }),
     })
   }
   const query = new URLSearchParams({ sort, order, limit: String(limit), offset: String(offset) })
+  if (period) query.set('period', period)
   if (author) query.set('author', author)
   return readJson(`${BASE}?${query}`, signal)
 }
 
-export function getCarousel(id, signal) {
-  return readJson(`${BASE}/${encodeURIComponent(id)}`, signal)
+export function getCarousel(id, signal, period = null) {
+  return readJson(`${BASE}/${encodeURIComponent(id)}${period ? `?${new URLSearchParams({ period })}` : ''}`, signal)
 }

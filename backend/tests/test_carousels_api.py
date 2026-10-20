@@ -37,7 +37,7 @@ def test_http_interface_validates_filters_and_detail_ids(monkeypatch):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
     from app.api import carousels
-    async def data():
+    async def data(period=None):
         return report()
     monkeypatch.setattr(carousels, '_report', data)
     app = FastAPI()
@@ -75,7 +75,7 @@ def test_hidden_authors_query_is_read_only_and_validated(monkeypatch):
     from fastapi.testclient import TestClient
     from app.api import carousels
     value = report()
-    async def data():
+    async def data(period=None):
         return value
     monkeypatch.setattr(carousels, '_report', data)
     app = FastAPI()
@@ -97,7 +97,7 @@ def test_source_account_filters_before_pagination_and_intersects_favorites(monke
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
     from app.api import carousels
-    async def data():
+    async def data(period=None):
         return report()
     async def authors():
         return {'alice'}
@@ -114,3 +114,107 @@ def test_source_account_filters_before_pagination_and_intersects_favorites(monke
     assert client.post(url, json={'source_account': 'neyro_set7', 'exclude_authors': ['alice']}).json()['total'] == 0
     assert client.get(url + '?limit=50').json()['total'] == 4
     assert client.post(url, json={'source_account': 'unknown'}).status_code == 422
+
+
+def test_period_selection_dates_detail_and_filters(monkeypatch):
+    from fastapi import FastAPI, HTTPException
+    from fastapi.testclient import TestClient
+    from app.api import carousels
+    available = False
+    calls = []
+
+    async def data(period='7d'):
+        calls.append(period)
+        if period == '14d' and not available:
+            raise HTTPException(503, 'Сбор за 14 дней ещё не опубликован')
+        value = report()
+        if period == '14d':
+            value['start_date'] = '2026-10-06'
+            value['collection']['target'] = 586
+            value['items'][0]['timestamp'] = '2026-10-06T00:01:00+03:00'
+        return value
+
+    monkeypatch.setattr(carousels, '_report', data)
+    app = FastAPI()
+    app.include_router(carousels.router)
+    client = TestClient(app)
+    url = '/radar/carousels'
+    assert client.get(url).json()['start_date'] == '2026-10-13'
+    assert calls == ['14d', '7d']
+    assert client.get(url + '?period=').json()['start_date'] == '2026-10-13'
+    assert client.get(url + '?period=14d').status_code == 503
+    assert client.get(url + '/1?period=14d').status_code == 503
+    available = True
+    assert client.get(url).json()['start_date'] == '2026-10-06'
+    assert client.get(url + '?period=7d').json()['start_date'] == '2026-10-13'
+    detail = client.get(url + '/1?period=14d').json()
+    assert detail['start_date'] == '2026-10-06'
+    assert detail['end_date'] == '2026-10-19'
+    assert detail['timestamp'] == '2026-10-06T00:01:00+03:00'
+    filtered = client.post(url, json={'period': '14d', 'include_authors': ['alice'], 'exclude_authors': ['bob']}).json()
+    assert filtered['total'] == 3 and filtered['collection']['target'] == 586
+    assert filtered['start_date'] == '2026-10-06'
+    assert client.get(url + '?period=30d').status_code == 422
+    assert client.get(url + '/1?period=30d').status_code == 422
+    assert client.post(url, json={'period': '30d'}).status_code == 422
+
+
+def test_old_detail_link_without_period_falls_back_to_week(monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from app.api import carousels
+
+    async def data(period='7d'):
+        value = report()
+        if period == '14d':
+            value['start_date'] = '2026-10-06'
+            value['collection']['target'] = 586
+            value['items'] = [item for item in value['items'] if item['id'] != '4']
+        return value
+
+    monkeypatch.setattr(carousels, '_report', data)
+    app = FastAPI()
+    app.include_router(carousels.router)
+    client = TestClient(app)
+    assert client.get('/radar/carousels/4').json()['start_date'] == '2026-10-13'
+    assert client.get('/radar/carousels/4?period=14d').status_code == 404
+
+
+def test_reports_use_isolated_urls_and_caches_and_validate_dates(monkeypatch):
+    import asyncio
+    import httpx
+    from fastapi import HTTPException
+    from app.api import carousels
+    requests = []
+    invalid = False
+
+    def respond(request):
+        requests.append(str(request.url))
+        value = report()
+        value['provider'] = 'meta_graph'
+        if '20261006' in str(request.url):
+            value['start_date'] = '2026-10-13' if invalid else '2026-10-06'
+            value['collection']['target'] = 586
+        return httpx.Response(200, json=value)
+
+    original = httpx.AsyncClient
+    monkeypatch.setattr(carousels.httpx, 'AsyncClient', lambda **kwargs: original(transport=httpx.MockTransport(respond), **kwargs))
+    monkeypatch.setattr(carousels, '_cache', {})
+    monkeypatch.setattr(carousels, '_cached_at', {})
+    async def check():
+        assert (await carousels._report('14d'))['start_date'] == '2026-10-06'
+        assert (await carousels._report('7d'))['start_date'] == '2026-10-13'
+        await carousels._report('14d')
+        assert len(requests) == 2
+        assert '20261006-20261019' in requests[0]
+        assert '20261013-20261019' in requests[1]
+        carousels._cache.clear()
+        nonlocal invalid
+        invalid = True
+        try:
+            await carousels._report('14d')
+        except HTTPException as error:
+            assert error.status_code == 503
+        else:
+            raise AssertionError('Неверные даты приняты')
+    asyncio.run(check())
