@@ -434,7 +434,7 @@ export default function Carousels() {
           aria-label={selections.states[String(item.id)]?.selected ? `Снять отметку с карусели @${item.username}` : `Отобрать карусель @${item.username}`}
           title={selections.states[String(item.id)]?.selected ? 'Снять отметку с карусели' : 'Отобрать карусель'}
           disabled={selections.busy[String(item.id)] || (selections.loading && selections.owner)}
-          onClick={() => toggleSelection(item.id)}><span aria-hidden="true">{selections.states[String(item.id)]?.selected ? '▣' : '▢'}</span>
+          onClick={() => toggleSelection(item.id)}><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill={selections.states[String(item.id)]?.selected ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="M5 3.5h14v17l-7-4.5-7 4.5z" /></svg>
         </button><button type="button" className="carousels-hide-author"
           aria-label={`Скрыть автора @${item.username}`} title={`Скрыть все карусели @${item.username}`}
           onClick={() => changeHidden(item.username, true)}>

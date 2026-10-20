@@ -39,17 +39,17 @@ function Header() {
   const navigate = useNavigate()
   const location = useLocation()
   const { pathname } = location
-  const section = pathname.startsWith('/radar') ? 'radar' : 'parser'
+  const section = pathname.startsWith('/radar') || pathname === '/sign-in' ? 'radar' : 'parser'
   const view = pathname.startsWith('/results')
     ? 'results'
     : pathname.startsWith('/processing')
       ? 'processing'
-      : pathname.startsWith('/radar')
+      : pathname.startsWith('/radar') || pathname === '/sign-in'
         ? 'radar'
         : 'import'
 
   useEffect(() => {
-    saveLastPath(section, pathname + location.search)
+    if (pathname !== '/sign-in') saveLastPath(section, pathname + location.search)
   }, [section, pathname, location.search])
 
   const goToSection = (target) => {
