@@ -167,6 +167,16 @@
 
 /* Форма допускает штатную вставку и не увеличивает страницу на телефоне. */
 .carousels-favorites-list h2 { margin: 0; color: var(--tx); font-size: 15px; }
+.carousels-favorites-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; }
+.carousels-favorites-list .carousels-favorites-toggle { display: flex; align-items: center; gap: 6px; padding: 0; border-radius: 4px; background: transparent; color: var(--tx); font: inherit; text-align: left; }
+.carousels-favorites-toggle small { margin-left: 6px; color: var(--mut); font-size: 11px; font-weight: normal; }
+.carousels-favorites-list .carousels-favorites-toggle:hover { color: var(--iris); }
+.carousels-favorites-list .carousels-favorites-reset { min-height: 30px; border: 1px solid var(--line); }
+.carousels-favorites-list .carousels-favorites-reset.is-active { color: var(--iris); border-color: var(--iris); }
+.carousels-favorites-list li.is-active { border-color: var(--iris); background: color-mix(in srgb, var(--iris) 12%, var(--panel)); }
+.carousels-favorites-list .carousels-favorite-filter { flex: 1; min-width: 0; padding: 0; border-radius: 4px; background: transparent; color: var(--tx); font: inherit; text-align: left; overflow-wrap: anywhere; }
+.carousels-favorites-list .carousels-favorite-filter:hover { color: var(--iris); }
+.carousels-favorites-list button:focus-visible { outline: 2px solid var(--iris); outline-offset: 3px; }
 .carousels-profile-form { max-width: 640px; margin: 12px 0; }
 .carousels-profile-form label { display: block; margin-bottom: 6px; color: var(--tx); }
 .carousels-profile-form > div { display: flex; gap: 8px; }
