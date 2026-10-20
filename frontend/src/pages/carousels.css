@@ -63,7 +63,7 @@
 .carousels-drawer { position: relative; width: min(960px, 96vw); height: 100vh; height: 100dvh; overflow: auto; background: var(--panel); border-left: 1px solid var(--line); box-shadow: -16px 0 50px #0008; }
 .carousels-drawer-head { display: flex; flex-wrap: wrap; align-self: stretch; align-items: center; gap: 5px; padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--line); }
 .carousels-drawer-head strong { display: block; font-size: 15px; margin-top: 2px; }
-.carousels-drawer-title { min-width: 0; }
+.carousels-drawer-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .carousels-head-stats { display: grid; width: 100%; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; min-width: 0; }
 .carousels-head-stats .carousels-metric { min-width: 0; padding: 0 5px; border: 0; border-left: 1px solid var(--line); border-radius: 0; background: transparent; }
 .carousels-head-stats .carousels-metric:first-child { padding-left: 0; border-left: 0; }
@@ -131,8 +131,9 @@
 .carousels-select { position: absolute; z-index: 1; bottom: 10px; right: 45px; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: 7px; background: var(--panel2); color: var(--mut); font-size: 20px; line-height: 1; }
 .carousels-select:hover, .carousels-select.is-selected { color: #ff9eb0; border-color: #ff9eb0; background: #27151ccc; }
 .carousels-select:focus-visible, .carousels-select-drawer:focus-visible { outline: 2px solid var(--iris); outline-offset: 2px; }
-.carousels-select-drawer { display: block; min-height: 44px; margin: 14px 20px 0; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel2); color: var(--tx); }
-.carousels-select-drawer[aria-pressed="true"] { color: #ff9eb0; }
+.carousels-select-drawer { display: grid; place-items: center; flex: 0 0 auto; width: 32px; height: 32px; min-height: 32px; margin: 0 0 0 auto; padding: 0; border: 1px solid var(--line); border-radius: 7px; background: var(--panel2); color: var(--mut); font-size: 20px; line-height: 1; }
+.carousels-select-drawer:hover, .carousels-select-drawer[aria-pressed="true"] { color: #ff9eb0; border-color: #ff9eb0; background: #27151ccc; }
+@media (max-width: 700px) { .carousels-select-drawer { margin-right: 44px; } }
 @media (max-width: 540px) { .carousels-heading-actions { justify-content: flex-start; } }
 .carousels-favorites-list { margin: 10px 0; color: var(--mut); font-size: 12px; }
 .carousels-favorites-list summary { width: fit-content; cursor: pointer; color: var(--tx); }
