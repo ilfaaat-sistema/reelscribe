@@ -34,11 +34,18 @@ export default function CarouselCoverTranslation({ id, period, rootRef, full = f
     const target = targetRef.current
     const card = target?.closest('.carousels-card')
     if (!target || !card) return undefined
+    const originalDescription = card.getAttribute('aria-describedby')
     const cancelHide = () => { clearTimeout(hideTimer.current) }
-    const close = () => { cancelHide(); setPosition(null) }
+    const close = () => {
+      cancelHide()
+      setPosition(null)
+      if (originalDescription) card.setAttribute('aria-describedby', originalDescription)
+      else card.removeAttribute('aria-describedby')
+    }
     const open = () => {
       cancelHide()
       window.dispatchEvent(new CustomEvent('carousel-cover-popup', { detail: popupId }))
+      card.setAttribute('aria-describedby', [originalDescription, popupId].filter(Boolean).join(' '))
       const rect = target.getBoundingClientRect()
       const width = Math.min(360, window.innerWidth - 24)
       const maxHeight = Math.min(400, window.innerHeight - 24)
