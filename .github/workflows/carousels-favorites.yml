@@ -3,7 +3,7 @@ name: Живые избранные карусели
 on:
   workflow_dispatch:
   schedule:
-    - cron: '3,18,33,48 * * * *'
+    - cron: '11,26,41,56 * * * *'
 
 permissions:
   contents: write

@@ -261,7 +261,6 @@ function Drawer({ period, id, listItem, onClose, excluded, selected, selectionBu
     <div className="carousels-overlay" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
       <aside className="carousels-drawer" role="dialog" aria-modal="true" aria-label="Карусель Instagram">
         <button ref={closeRef} type="button" className="carousels-close" onClick={onClose} aria-label="Закрыть">✕</button>
-        {item && <button type="button" className="carousels-select-drawer" disabled={selectionBusy} aria-pressed={selected} onClick={() => onToggleSelection(item)}>{selectionBusy ? 'Сохраняем…' : selected ? '♥ Отобрано · снять отметку' : '♡ Отобрать карусель'}</button>}
         {error && <p className="carousels-error" role="alert">{error}</p>}
         {loading && !item && <p className="carousels-loading" role="status">Загружаем публикацию…</p>}
         {isHidden && <p className="carousels-muted">Этот автор скрыт. Вернуть его можно в списке «Скрытые авторы».</p>}
@@ -269,6 +268,11 @@ function Drawer({ period, id, listItem, onClose, excluded, selected, selectionBu
           <div className="carousels-media">
             <div className="carousels-drawer-head">
               <div className="carousels-drawer-title"><span className="carousels-eyebrow">Карусель</span><strong>{item.username ? `@${item.username}` : 'Публикация Instagram'}</strong></div>
+              <button type="button" className="carousels-select-drawer" disabled={selectionBusy} aria-pressed={selected}
+                aria-label={selectionBusy ? 'Сохраняем отбор карусели' : selected ? 'Убрать карусель из отобранных' : 'Отобрать карусель'}
+                title={selected ? 'Убрать карусель из отобранных' : 'Отобрать карусель'} onClick={() => onToggleSelection(item)}>
+                <span aria-hidden="true">{selectionBusy ? '…' : selected ? '♥' : '♡'}</span>
+              </button>
               <div className="carousels-head-stats">
                 <Metric label="подписчиков" value={item.followers} />
                 <Metric label="лайков" value={item.likes} />
