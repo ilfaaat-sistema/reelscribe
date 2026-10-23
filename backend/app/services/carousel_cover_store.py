@@ -30,7 +30,8 @@ class CoverStore:
     def budget(self):
         data = _rpc('carousel_cover_budget_state', {})
         if (data.get('mode') not in ('pilot', 'live') or data.get('pilot_limit') != 20
-                or data.get('daily_limit') != 500 or data['status'] not in ('available', 'limit_reached')):
+                or type(data.get('daily_limit')) is not int or data['daily_limit'] not in (500, 2500)
+                or data['status'] not in ('available', 'limit_reached')):
             raise ValueError('Некорректные ограничения бюджета обложек')
         reset = datetime.fromisoformat(data['reset_at'].replace('Z', '+00:00'))
         if reset.utcoffset() != timedelta(0):
