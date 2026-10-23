@@ -2,6 +2,12 @@ name: Массовый перевод подписей каруселей
 
 on:
   workflow_dispatch:
+    inputs:
+      max_posts:
+        description: Предел одного прохода (1–500)
+        required: false
+        type: number
+        default: 500
   schedule:
     - cron: '4,19,34,49 * * * *'
   workflow_run:
@@ -10,6 +16,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: carousel-caption-bulk
@@ -39,8 +46,15 @@ jobs:
       - name: Установить фиксированный HTTP-клиент
         run: python -m pip install --disable-pip-version-check 'httpx==0.28.1'
       - name: Продолжить очередь перевода
+        id: queue
         run: python -m app.workers.carousel_caption_bulk
         env:
           PYTHONPATH: backend
           GH_TOKEN: ${{ github.token }}
           CAROUSEL_CAPTION_BULK_ENABLED: ${{ vars.CAROUSEL_CAPTION_BULK_ENABLED }}
+          CAROUSEL_CAPTION_BULK_MAX_POSTS: ${{ github.event_name == 'workflow_dispatch' && toJSON(inputs.max_posts) || '500' }}
+      - name: Передать незавершённую очередь следующему run
+        if: steps.queue.outputs.needs_continuation == 'true'
+        run: gh workflow run carousel-caption-translations.yml --repo "$GITHUB_REPOSITORY" --ref main
+        env:
+          GH_TOKEN: ${{ github.token }}
