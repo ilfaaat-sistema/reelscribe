@@ -16,3 +16,5 @@ Worker — отдельные файлы `carousel_cover_background.py` и `caro
 - Frontend build прошёл; lint без ошибок,8 существовавших unused warnings в других файлах.
 
 Визуальная desktop/mobile приёмка с заблокированными платными POST выполняется корнем через отдельный preview43157. Финальные screenshots и замеры корень сохраняет в исключённой `.baseline/cover-background-20261023/`. Публикация, БД, runtime variables, dispatch и фактический cloud run принадлежат корню и этим модулем не выполнялись.
+
+Корневая приёмка кода завершена: UI desktop/mobile PASS (font8.6667, line12.6667, высота101, шесть строк, portal/full-text, переход указателя внутрь, Escape/keyboard/Drawer). Гонка pointerleave исправлена b5cfda2. Общий deadline перебора периодов исправлен b7f9894; независимое ревью worker/store29tests PASS. Budget210289c:75backend и22frontend, независимая SQL/validator-проверка PASS. Лимит2500 действует только23.10.2026МСК, после00:00автоматически500. Новых открытых code blocker нет. Реальный rollout/Actions проверяется отдельно; тесты не выдаются за уже запущенную облачную обработку.
