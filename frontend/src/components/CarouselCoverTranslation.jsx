@@ -54,7 +54,17 @@ export default function CarouselCoverTranslation({ id, period, rootRef, full = f
       setPosition({ left: Math.max(12, Math.min(rect.left, window.innerWidth - width - 12)), top,
         width, maxHeight: Math.min(maxHeight, window.innerHeight - top - 12) })
     }
-    const leave = () => { cancelHide(); hideTimer.current = setTimeout(close, 120) }
+    const leave = event => {
+      cancelHide()
+      const next = event?.relatedTarget
+      if (next instanceof Node && (target.contains(next) || popupRef.current?.contains(next))) return
+      // Portal и нативный anchor получают события в разном порядке. Проверяем
+      // фактический hover перед закрытием, чтобы поздний pointerleave не победил enter.
+      hideTimer.current = setTimeout(() => {
+        if (target.matches(':hover') || popupRef.current?.matches(':hover')) return
+        close()
+      }, 120)
+    }
     const enter = event => { if (event.pointerType !== 'touch') open() }
     const keydown = event => { if (event.key === 'Escape') close() }
     const other = event => { if (event.detail !== popupId) close() }
@@ -104,7 +114,7 @@ export default function CarouselCoverTranslation({ id, period, rootRef, full = f
       {position && ready && createPortal(<span id={popupId} ref={popupRef} role="tooltip"
         className="carousels-cover-translation-popup" style={position}
         onPointerEnter={() => targetRef.current?._coverPopupKeep?.()}
-        onPointerLeave={() => targetRef.current?._coverPopupLeave?.()}>{text}</span>, document.body)}
+        onPointerLeave={event => targetRef.current?._coverPopupLeave?.(event)}>{text}</span>, document.body)}
     </span>
   )
 }
