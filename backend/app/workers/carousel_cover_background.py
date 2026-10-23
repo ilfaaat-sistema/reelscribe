@@ -20,6 +20,8 @@ API_BASE = "https://reelscribe-ai.vercel.app/api"
 PERIOD_PRIORITY = ("30d", "14d", "archive14d", "7d")
 MAX_RUN_SECONDS = 1200
 REQUEST_DRAIN_SECONDS = 360
+POST_ITEM_SECONDS = 300
+POST_PERIOD_SECONDS = 150
 BATCH_SIZE = 10
 MAX_POSTS = 500
 MOSCOW = ZoneInfo("Europe/Moscow")
@@ -53,10 +55,11 @@ def next_midnight(now):
 
 
 class ProductionApi:
-    def __init__(self, client, base=API_BASE):
+    def __init__(self, client, base=API_BASE, *, monotonic=None):
         if base != API_BASE:
             raise ValueError("Разрешён только Production API")
         self.client = client
+        self.monotonic = monotonic or time.monotonic
 
     @staticmethod
     def _json(response):
@@ -116,10 +119,19 @@ class ProductionApi:
         return value["enabled"], by_id, (value.get("budget") or {}).get("reset_at")
 
     def post(self, item):
-        started = time.monotonic()
+        started = self.monotonic()
+        deadline = started + POST_ITEM_SECONDS
         for period in (p for p in PERIOD_PRIORITY if p in item["periods"]):
+            remaining = deadline - self.monotonic()
+            if remaining <= 0:
+                raise ApiFailure(504, "post_deadline")
+            timeout = min(POST_PERIOD_SECONDS, remaining)
             response = self.client.post(f"{API_BASE}/radar/carousel-cover-translations/{item['id']}",
-                json={"period": period}, timeout=150)
+                json={"period": period}, timeout=httpx.Timeout(
+                    timeout, connect=min(10, timeout), write=min(10, timeout), pool=min(5, timeout),
+                ))
+            if self.monotonic() >= deadline:
+                raise ApiFailure(504, "post_deadline")
             # Эти ответы сервер отдаёт до reserve/model; другой сохранённый период безопасен.
             if response.status_code in {404, 422}:
                 continue
@@ -128,8 +140,8 @@ class ProductionApi:
             if not isinstance(row, dict) or row.get("id") != item["id"] or row.get("status") not in CACHE_STATUSES:
                 raise ApiFailure(502, "post_invalid_result")
             return {"status": row["status"], "retry_after": row.get("retry_after"),
-                    "http_ms": max(0, int((time.monotonic() - started) * 1000))}
-        return {"status": "gone", "http_ms": max(0, int((time.monotonic() - started) * 1000))}
+                    "http_ms": max(0, int((self.monotonic() - started) * 1000))}
+        return {"status": "gone", "http_ms": max(0, int((self.monotonic() - started) * 1000))}
 
 
 def set_item(item, status, now, code=None):

@@ -265,3 +265,37 @@ def test_budget_reset_timestamp_and_later_retry_are_preserved():
     api.read = lambda ids: (True, {"1": {"status": "limit_reached", "retry_after": "2026-10-24T22:00:00Z"}}, "2026-10-23T21:00:00Z")
     execute(store, api)
     assert store.state["pause_until"] == "2026-10-24T22:00:00+00:00" and not api.posts
+
+
+def test_four_slow_period_fallbacks_share_300s_deadline_and_save_unknown_checkpoint():
+    from app.workers.carousel_cover_background import POST_ITEM_SECONDS, REQUEST_DRAIN_SECONDS
+    clock = [0.0]
+    attempts = []
+    def handler(request):
+        timeout = request.extensions["timeout"]
+        attempts.append((__import__("json").loads(request.content)["period"], timeout.copy()))
+        assert timeout["connect"] <= 10 and timeout["write"] <= 10 and timeout["pool"] <= 5
+        # Каждый предыдущий набор отвечает через80с; последний превышает остаток60с.
+        elapsed = min(80, timeout["read"])
+        clock[0] += elapsed
+        if elapsed < 80:
+            raise httpx.ReadTimeout("Общий deadline исчерпан", request=request)
+        return httpx.Response(404 if len(attempts) % 2 else 422, json={})
+    store = Store()
+    inventory = Api(count=1)
+    inventory.rows[0]["periods"] = ["30d", "14d", "archive14d", "7d"]
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        production = ProductionApi(client, monotonic=lambda: clock[0])
+        production.inventory = inventory.inventory
+        production.read = inventory.read
+        status, values = execute(store, production)
+        assert status == "paused" and values["unknown"] == 1
+        # Следующий запуск может только GET; missing не возобновляет fallback/POST.
+        execute(store, production)
+    assert [p for p, _ in attempts] == ["30d", "14d", "archive14d", "7d"]
+    assert [timeout["read"] for _, timeout in attempts] == [150, 150, 140, 60]
+    assert clock[0] == POST_ITEM_SECONDS == 300 < REQUEST_DRAIN_SECONDS == 360
+    assert store.saves[-1]["items"][0]["status"] == "unknown"
+    assert store.saves[-1]["pause_reason"] is None  # Второй запуск read-only сверил неизвестный исход.
+    assert any(s["pause_reason"] == "post_outcome_unknown" for s in store.saves)
+    assert any(s["items"][0]["status"] == "inflight" for s in store.saves)
