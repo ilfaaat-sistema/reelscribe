@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -20,11 +21,12 @@ URL = '/api/radar/carousels/123'
 
 
 class Query:
-    def __init__(self, db):
+    def __init__(self, db, table):
         self.db, self.filters, self.deleting = db, {}, False
+        self.table = table
 
     def select(self, columns):
-        assert columns == service.COLUMNS
+        assert columns == (service.COLUMNS if self.table == service.TABLE else service.ATTEMPT_COLUMNS)
         return self
 
     def eq(self, name, value):
@@ -35,6 +37,10 @@ class Query:
         assert value == 1
         return self
 
+    def order(self, field, desc=False):
+        assert field == "started_at" and desc is True
+        return self
+
     def delete(self):
         self.deleting = True
         return self
@@ -43,6 +49,12 @@ class Query:
         if self.db.fail:
             raise RuntimeError('закрытый ответ БД')
         key = self.filters['instagram_media_id'], self.filters['source_hash']
+        if self.table == service.ATTEMPTS_TABLE:
+            if self.db.fail_status:
+                raise RuntimeError('закрытый статус БД')
+            rows = [row for row in self.db.attempts.values() if row['key'] == key]
+            rows.sort(key=lambda row: row['started_at'], reverse=True)
+            return SimpleNamespace(data=rows[:1])
         row = self.db.cache.get(key)
         if self.deleting and row and row['translation'] == self.filters['translation']:
             del self.db.cache[key]
@@ -53,10 +65,12 @@ class DB:
     def __init__(self):
         self.cache, self.attempts, self.calls = {}, {}, []
         self.fail, self.fail_finish, self.stale, self.reserve_state = False, False, False, None
+        self.fail_status = False
+        self.retry_after = 27
 
     def table(self, name):
-        assert name == service.TABLE
-        return Query(self)
+        assert name in (service.TABLE, service.ATTEMPTS_TABLE)
+        return Query(self, name)
 
     def rpc(self, name, args):
         self.calls.append((name, args))
@@ -66,19 +80,22 @@ class DB:
                 raise RuntimeError('закрытый ответ БД')
             key = args['p_id'], args['p_source_hash']
             token = args['p_attempt_id']
-            if name == 'reserve_carousel_caption_translation':
+            if name in ('reserve_carousel_caption_translation', 'reserve_carousel_caption_translation_auto'):
                 if self.reserve_state:
-                    return SimpleNamespace(data={'state': self.reserve_state, 'retry_after': 27})
+                    return SimpleNamespace(data={'state': self.reserve_state, 'retry_after': self.retry_after})
                 if key in self.cache:
                     return SimpleNamespace(data={'state': 'ready', **self.cache[key]})
                 if any(row['key'] == key and not row.get('outcome') for row in self.attempts.values()):
                     return SimpleNamespace(data={'state': 'in_progress'})
-                self.attempts[token] = {'key': key}
+                now = datetime.now(timezone.utc)
+                self.attempts[token] = {'key': key, 'started_at': now.isoformat(),
+                                        'lease_until': (now + timedelta(minutes=15)).isoformat()}
                 return SimpleNamespace(data={'state': 'reserved', 'attempt_id': token})
             assert name == 'finish_carousel_caption_translation'
             if self.stale:
                 return SimpleNamespace(data={'state': 'stale'})
             self.attempts[token]['outcome'] = args['p_outcome']
+            self.attempts[token]['finished_at'] = datetime.now(timezone.utc).isoformat()
             if args['p_outcome'] == 'ready':
                 self.cache[key] = {'translation': args['p_translation'], 'source_language': args['p_source_language']}
                 return SimpleNamespace(data={'state': 'ready', **self.cache[key]})
@@ -151,7 +168,7 @@ def test_hash_preserves_whitespace_and_changed_source_never_gets_old_cache(setup
 @pytest.mark.parametrize('source,code,status', [
     ('', 'source_missing', 409), ('   ', 'source_missing', 409),
     ('Русский текст не требует перевода.', 'translation_not_needed', 409),
-    ('OK 🎉', 'translation_not_needed', 409), ('x'*12001, 'source_too_long', 413),
+    ('#fitness @hello.world', 'translation_not_needed', 409), ('x'*12001, 'source_too_long', 413),
 ])
 def test_unneeded_or_too_long_source_never_reserves(setup, source, code, status):
     s = setup
@@ -411,3 +428,114 @@ def test_short_invalid_cache_uses_same_quality_gate_as_new_result(setup, monkeyp
     monkeypatch.setattr(service, 'translate_caption', invalid)
     assert post(setup).status_code == 502
     assert len(setup.db.cache) == 1
+
+
+@pytest.mark.parametrize('automatic,rpc', [(False, 'reserve_carousel_caption_translation'), (True, 'reserve_carousel_caption_translation_auto')])
+def test_automatic_uses_atomic_guard_rpc(setup, automatic, rpc):
+    assert post(setup, automatic=automatic).status_code == 200
+    assert setup.db.calls[0][0] == rpc
+
+
+@pytest.mark.parametrize('automatic', ['true', 'false', 0, 1, None, [], {}])
+def test_automatic_accepts_only_strict_boolean(setup, automatic):
+    assert post(setup, automatic=automatic).status_code == 422
+    assert not setup.db.calls and not setup.calls
+
+
+def test_previous_attempt_requires_review_without_model(setup):
+    setup.db.reserve_state = 'previous_attempt'
+    response = post(setup, automatic=True)
+    assert response.status_code == 409
+    assert response.json()['code'] == 'translation_review_required'
+    assert not setup.calls
+
+
+@pytest.mark.parametrize('retry,expected', [(86400, 86400), (43200, 43200), (1, 1), (0, 60), (86401, 60), (True, 60)])
+def test_daily_retry_after_is_preserved_and_invalid_values_are_safe(setup, retry, expected):
+    setup.db.reserve_state = 'limited'
+    setup.db.retry_after = retry
+    response = post(setup)
+    assert response.status_code == 429 and response.headers['retry-after'] == str(expected)
+    assert not setup.calls
+
+
+@pytest.mark.parametrize('outcome,expired,expected', [(None, False, 'running'), (None, True, 'expired_unknown'), ('failed', False, 'failed'), ('quota', False, 'quota'), ('source_changed', False, 'source_changed'), ('ready', False, 'failed')])
+def test_detail_reports_latest_safe_attempt_without_side_effects(setup, monkeypatch, outcome, expired, expected):
+    now = datetime.now(timezone.utc)
+    started = now - timedelta(minutes=30 if expired else 1)
+    lease = started + timedelta(minutes=15)
+    setup.db.attempts['PRIVATE_ATTEMPT_TOKEN'] = {
+        'key': ('123', service.source_hash(SOURCE)), 'started_at': started.isoformat(),
+        'lease_until': lease.isoformat(), 'outcome': outcome,
+        'finished_at': now.isoformat() if outcome else None,
+    }
+    def forbidden(*args, **kwargs):
+        raise AssertionError('GET не вызывает STS или модель')
+    monkeypatch.setattr(service, 'oidc_credentials', forbidden)
+    monkeypatch.setattr(service, 'translate_caption', forbidden)
+    response = setup.client.get(URL)
+    assert response.json()['caption_translation']['attempt'] == {'status': expected, 'started_at': started.isoformat(), 'lease_until': lease.isoformat()}
+    assert 'PRIVATE_ATTEMPT_TOKEN' not in response.text
+    assert not setup.db.calls and not setup.calls
+
+
+def test_detail_empty_attempt_and_status_failure_are_distinct(setup):
+    detail = setup.client.get(URL).json()['caption_translation']
+    assert detail['attempt'] == {'status': 'none', 'started_at': None, 'lease_until': None}
+    setup.db.fail_status = True
+    detail = setup.client.get(URL).json()['caption_translation']
+    assert detail['attempt'] == {'status': 'unavailable', 'started_at': None, 'lease_until': None}
+    assert not setup.db.calls and not setup.calls
+
+
+def test_short_foreign_caption_is_translated_and_cached(setup, monkeypatch):
+    setup.item['caption'] = 'OK 🎉'
+    async def provider(source, **kwargs):
+        setup.calls.append(source)
+        return 'Хорошо 🎉', 'en'
+    monkeypatch.setattr(service, 'translate_caption', provider)
+    assert setup.client.get(URL).json()['caption_translation']['state'] == 'available'
+    assert post(setup).status_code == 200
+    assert setup.calls == ['OK 🎉']
+    assert setup.client.get(URL).json()['caption_translation']['state'] == 'ready'
+
+
+
+def test_ready_cache_does_not_read_attempt_status(setup):
+    assert post(setup).status_code == 200
+    setup.db.fail_status = True
+    detail = setup.client.get(URL).json()['caption_translation']
+    assert detail['state'] == 'ready' and 'attempt' not in detail
+
+
+def test_database_failure_includes_unavailable_attempt(setup):
+    setup.db.fail = True
+    detail = setup.client.get(URL).json()['caption_translation']
+    assert detail['state'] == 'unavailable'
+    assert detail['attempt']['status'] == 'unavailable'
+
+
+def test_detail_selects_latest_matching_hash_attempt(setup):
+    now = datetime.now(timezone.utc)
+    for token, digest, minutes, outcome in [
+        ('old', service.source_hash(SOURCE), 30, 'failed'),
+        ('new', service.source_hash(SOURCE), 2, 'quota'),
+        ('other_hash', service.source_hash(SOURCE + 'changed'), 1, 'source_changed'),
+    ]:
+        started = now - timedelta(minutes=minutes)
+        setup.db.attempts[token] = {'key': ('123', digest), 'started_at': started.isoformat(),
+            'lease_until': (started + timedelta(minutes=15)).isoformat(),
+            'finished_at': now.isoformat(), 'outcome': outcome}
+    detail = setup.client.get(URL).json()['caption_translation']
+    assert detail['attempt']['status'] == 'quota'
+    assert not setup.db.calls
+
+
+@pytest.mark.parametrize('row', [
+    {'started_at': 'invalid', 'lease_until': 'invalid'},
+    {'started_at': '2026-10-23T10:00:00', 'lease_until': '2026-10-23T11:00:00'},
+    {'started_at': '2026-10-23T10:00:00Z', 'lease_until': '2026-10-23T09:00:00Z'},
+])
+def test_malformed_attempt_is_unavailable_instead_of_none(setup, row):
+    setup.db.attempts['bad'] = {'key': ('123', service.source_hash(SOURCE)), **row}
+    assert setup.client.get(URL).json()['caption_translation']['attempt']['status'] == 'unavailable'

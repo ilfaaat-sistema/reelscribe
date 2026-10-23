@@ -332,3 +332,8 @@ def test_short_foreign_caption_does_not_accept_nearly_empty_translation(config, 
 def test_short_caption_quality_accepts_translation_and_ignores_emoji(source, translated):
     assert len(source) < 80
     assert vertex.caption_failure_reason(source, translated) is None
+
+
+@pytest.mark.parametrize('source,translated,reason', [('Go', 'Go', 'unchanged'), ('OK 🎉', 'OK 🎉', 'unchanged'), ('Hello', 'Bye', 'no_cyrillic'), ('Hello', 'Привет', None), ('Hello', 'Привет #fitness #workout #longforeignhashtag', None)])
+def test_caption_only_quality_covers_short_foreign_and_service_tokens(source, translated, reason):
+    assert vertex.caption_failure_reason(source, translated) == reason

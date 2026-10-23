@@ -2,19 +2,19 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import logging
 import re
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import HTTPException
 
 from app.core.translation_db import get_translation_db
-from app.pipeline.translate import (
-    TranslationFailedError,
-    needs_translation,
-)
+from app.pipeline.translate import TranslationFailedError
 
+from app.services.carousel_caption_rules import (
+    MAX_SOURCE_LENGTH, classify_caption, needs_caption_translation, source_hash,
+)
 from app.services.carousel_caption_settings import get_settings
 from app.services.carousel_caption_auth import CaptionAuthError, oidc_credentials
 from app.services.carousel_caption_vertex import (
@@ -23,8 +23,9 @@ from app.services.carousel_caption_vertex import (
 )
 
 logger = logging.getLogger(__name__)
-MAX_SOURCE_LENGTH = 12_000
 TABLE = 'carousel_caption_translations'
+ATTEMPTS_TABLE = 'carousel_caption_translation_attempts'
+ATTEMPT_COLUMNS = 'started_at,lease_until,finished_at,outcome'
 COLUMNS = 'translation,source_language'
 _SAFE_FAILURE_REASONS = frozenset({
     'empty', 'error_marker', 'too_short', 'no_cyrillic', 'unchanged', 'quota_exceeded',
@@ -41,10 +42,6 @@ class TranslationError(Exception):
         self.retry_after = retry_after
 
 
-def source_hash(source):
-    return hashlib.sha256((source or '').encode('utf-8')).hexdigest()
-
-
 def _language(value):
     return value.lower() if isinstance(value, str) and re.fullmatch(r'[A-Za-z-]{2,12}', value) else None
 
@@ -58,6 +55,29 @@ def _cached(db, media_id, digest):
     rows = (db.table(TABLE).select(COLUMNS).eq('instagram_media_id', media_id)
             .eq('source_hash', digest).limit(1).execute().data or [])
     return rows[0] if rows else None
+
+
+def _attempt(db, media_id, digest):
+    # Публичный статус читает только безопасные поля, без приватного fencing token.
+    rows = (db.table(ATTEMPTS_TABLE).select(ATTEMPT_COLUMNS)
+            .eq('instagram_media_id', media_id).eq('source_hash', digest)
+            .order('started_at', desc=True).limit(1).execute().data or [])
+    if not rows:
+        return {'status': 'none', 'started_at': None, 'lease_until': None}
+    row = rows[0]
+    started = datetime.fromisoformat(row['started_at'].replace('Z', '+00:00'))
+    lease = datetime.fromisoformat(row['lease_until'].replace('Z', '+00:00'))
+    if started.tzinfo is None or lease.tzinfo is None or lease <= started:
+        raise ValueError('Неверные даты попытки перевода')
+    outcome = row.get('outcome')
+    if outcome is None and row.get('finished_at') is None:
+        status = 'running' if lease > datetime.now(timezone.utc) else 'expired_unknown'
+    elif outcome in ('failed', 'quota', 'source_changed', 'ready') and row.get('finished_at'):
+        # Потерянный/непригодный ready-кэш тоже требует ручной проверки.
+        status = 'failed' if outcome == 'ready' else outcome
+    else:
+        raise ValueError('Неверный исход попытки перевода')
+    return {'status': status, 'started_at': row['started_at'], 'lease_until': row['lease_until']}
 
 
 def _rpc(db, name, args):
@@ -83,23 +103,31 @@ def _log_translation_failure(exc):
 async def detail_translation(item):
     """Ошибка нового кэша не мешает читать существующую карточку."""
     source = item.get('caption') or ''
-    if not needs_translation(source):
+    category = classify_caption(source)
+    if category in ('empty', 'not_needed'):
         return _value(source, 'not_needed')
-    if len(source) > MAX_SOURCE_LENGTH:
+    if category == 'too_long':
         return _value(source, 'unavailable')
     try:
         db = get_translation_db()
         row = await asyncio.to_thread(_cached, db, str(item['id']), source_hash(source))
     except Exception as exc:
         logger.info('Кэш перевода карусели недоступен: %s', type(exc).__name__)
-        return _value(source, 'unavailable')
+        return {**_value(source, 'unavailable'),
+                'attempt': {'status': 'unavailable', 'started_at': None, 'lease_until': None}}
     if row and caption_failure_reason(source, row.get('translation')) is None:
         return _value(source, 'ready', row['translation'], row.get('source_language'))
     try:
         available = get_settings().enabled
     except Exception:
         available = False
-    return _value(source, 'available' if available else 'unavailable')
+    result = _value(source, 'available' if available else 'unavailable')
+    try:
+        result['attempt'] = await asyncio.to_thread(_attempt, db, str(item['id']), source_hash(source))
+    except Exception as exc:
+        logger.info('Статус попытки перевода недоступен: %s', type(exc).__name__)
+        result['attempt'] = {'status': 'unavailable', 'started_at': None, 'lease_until': None}
+    return result
 
 
 async def _source(media_id, period):
@@ -132,7 +160,7 @@ async def _end_failure(db, media_id, digest, token, outcome='failed'):
         logger.warning('Не удалось закрыть аренду перевода: %s', type(exc).__name__)
 
 
-async def translate(media_id, period, expected_hash, *, oidc_token=None):
+async def translate(media_id, period, expected_hash, *, oidc_token=None, automatic=False):
     if not re.fullmatch(r'[0-9]{1,40}', media_id):
         raise TranslationError(422, 'invalid_request', 'Некорректный ID карусели')
     item = await _source(media_id, period)
@@ -144,7 +172,7 @@ async def translate(media_id, period, expected_hash, *, oidc_token=None):
         raise TranslationError(409, 'source_missing', 'Исходный текст отсутствует.')
     if len(source) > MAX_SOURCE_LENGTH:
         raise TranslationError(413, 'source_too_long', 'Текст слишком длинный для перевода.')
-    if not needs_translation(source):
+    if not needs_caption_translation(source):
         raise TranslationError(409, 'translation_not_needed', 'Этот текст уже на русском или не требует перевода.')
 
     try:
@@ -173,7 +201,9 @@ async def translate(media_id, period, expected_hash, *, oidc_token=None):
                                     .eq('instagram_media_id', media_id).eq('source_hash', digest)
                                     .eq('translation', row['translation']).execute())
         token = str(uuid4())
-        reserved = await asyncio.to_thread(_rpc, db, 'reserve_carousel_caption_translation', {
+        reserve_rpc = ('reserve_carousel_caption_translation_auto' if automatic
+                       else 'reserve_carousel_caption_translation')
+        reserved = await asyncio.to_thread(_rpc, db, reserve_rpc, {
             'p_id': media_id, 'p_source_hash': digest, 'p_attempt_id': token,
         })
     except Exception as exc:
@@ -186,11 +216,14 @@ async def translate(media_id, period, expected_hash, *, oidc_token=None):
             raise _unavailable()
         return {'id': media_id, 'caption_translation': _value(
             source, 'ready', reserved['translation'], reserved.get('source_language')), 'cached': True}
+    if state == 'previous_attempt':
+        raise TranslationError(409, 'translation_review_required',
+                               'Предыдущая попытка перевода требует ручной проверки.')
     if state == 'in_progress':
         raise TranslationError(409, 'translation_in_progress', 'Перевод уже выполняется. Попробуйте чуть позже.', 5)
     if state == 'limited':
         retry = reserved.get('retry_after')
-        retry = retry if isinstance(retry, int) and 1 <= retry <= 3600 else 60
+        retry = retry if type(retry) is int and 1 <= retry <= 86400 else 60
         raise TranslationError(429, 'translation_rate_limited', 'Лимит переводов достигнут. Попробуйте позже.', retry)
     if state != 'reserved' or reserved.get('attempt_id') != token:
         raise _unavailable()

@@ -6,7 +6,8 @@ import time
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from app.pipeline.translate import needs_translation, translation_failure_reason
+from app.pipeline.translate import translation_failure_reason
+from app.services.carousel_caption_rules import needs_caption_translation
 
 logger = logging.getLogger(__name__)
 MODEL_TIMEOUT_MS = 60_000
@@ -45,9 +46,13 @@ class CaptionResult(BaseModel):
 def caption_failure_reason(source, translated):
     """Прежний gate плюс защита короткой foreign-подписи от почти пустого перевода."""
     reason = translation_failure_reason(source, translated)
-    if reason is not None:
+    if reason not in (None, 'unchanged', 'no_cyrillic'):
         return reason
-    if len(source) < 80 and needs_translation(source):
+    if translated.strip() == source.strip() and needs_caption_translation(source):
+        return 'unchanged'
+    if needs_caption_translation(translated):
+        return 'no_cyrillic'
+    if len(source) < 80 and needs_caption_translation(source):
         original_letters = sum(char.isalpha() for char in source)
         translated_letters = sum(char.isalpha() for char in translated)
         if translated_letters < (original_letters + 4) // 5:
