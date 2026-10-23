@@ -207,8 +207,8 @@
 
 /* Место для четырёх строк выделено до чтения кэша и не меняется после перевода. */
 .carousels-cover-translation { display: block; flex: 0 0 auto; width: 100%; height: 101px; padding: 12px 11px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--iris) 6%, var(--panel)); color: var(--mut); font-size: 13px; line-height: 19px; overflow: hidden; }
-.carousels-cover-translation.is-ready { color: var(--tx); }
-.carousels-cover-translation-lines { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; overflow-wrap: anywhere; white-space: pre-line; }
+.carousels-cover-translation.is-ready { color: var(--tx); font-size: 8.6667px; line-height: 12.6667px; }
+.carousels-cover-translation-lines { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 6; overflow: hidden; overflow-wrap: anywhere; white-space: pre-line; }
 .carousels-cover-translation-full { padding-bottom: 20px; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
 .carousels-cover-translation-full p { margin: 0; font-size: 14px; line-height: 1.6; }
 .carousels-cover-translation-text { white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -218,3 +218,5 @@
   .carousels-card-info { min-height: 84px; padding-right: 49px; }
   .carousels-select { right: 9px; bottom: 44px; }
 }
+
+.carousels-cover-translation-popup { position: fixed; z-index: 1000; box-sizing: border-box; display: block; padding: 12px; overflow-y: auto; overscroll-behavior: contain; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 19px; color: var(--tx); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 28px #0004; text-align: left; }
