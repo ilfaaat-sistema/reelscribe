@@ -7,6 +7,7 @@ import useHiddenAuthors from '../hooks/useHiddenAuthors'
 import { FAVORITES_IMPORT_KEY, readFavoriteAuthors, getFavoriteAuthors, addFavoriteAuthor, removeFavoriteAuthor } from '../api/favoriteAuthors'
 import useSelectedCarousels from '../hooks/useSelectedCarousels'
 import useCarouselFeed from '../hooks/useCarouselFeed'
+import CarouselCoverTranslation from '../components/CarouselCoverTranslation'
 import { carouselCaptionView, isCurrentCarouselRequest, isCurrentCarouselTranslation } from './carouselTranslation'
 import './carousels.css'
 
@@ -295,6 +296,7 @@ function Drawer({ period, id, listItem, onClose, excluded, selected, selectionBu
             </div>
           </div>
           <div className="carousels-detail">
+            <CarouselCoverTranslation id={id} period={period} full />
             <div className="carousels-translation-heading">
               <h2>Текст публикации</h2>
               <div className="carousels-translation-actions">
@@ -696,6 +698,7 @@ export default function Carousels() {
           aria-label={`Открыть карусель @${item.username || 'автор неизвестен'}`}
         >
           <Cover item={item} />
+          <CarouselCoverTranslation id={item.id} period={selectedPeriod} rootRef={pageRef} />
           <span className="carousels-card-info">
             <strong>@{item.username || '—'}</strong>
             <small>{date(item.timestamp)} МСК</small>
@@ -730,6 +733,6 @@ export default function Carousels() {
         {!hasMore && !loading && !error && !moreError && items.length > 0 && <span>Все найденные карусели показаны</span>}
       </div>}
     </div>
-    {detailId && <Drawer period={period} key={`${period || 'auto'}-${detailId}`} id={detailId} listItem={listItem} excluded={excluded} selected={selectedIds.has(String(detailId))} selectionBusy={selected.loading || selected.busy.has(String(detailId))} onToggleSelection={changeSelected} onClose={() => updateQuery({ id: null })} />}
+    {detailId && <Drawer period={selectedPeriod} key={`${period || 'auto'}-${detailId}`} id={detailId} listItem={listItem} excluded={excluded} selected={selectedIds.has(String(detailId))} selectionBusy={selected.loading || selected.busy.has(String(detailId))} onToggleSelection={changeSelected} onClose={() => updateQuery({ id: null })} />}
   </main>
 }
