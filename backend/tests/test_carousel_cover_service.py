@@ -185,7 +185,7 @@ def test_russian_is_preserved_and_mixed_text_keeps_translation():
 @pytest.mark.asyncio
 async def test_stale_running_is_terminal_in_read_without_releasing_slot(runtime):
     from datetime import datetime, timedelta, timezone
-    runtime.rows['1'] = {'status': 'running', 'created_at': (datetime.now(timezone.utc) - timedelta(seconds=121)).isoformat()}
+    runtime.rows['1'] = {'status': 'running', 'created_at': (datetime.now(timezone.utc) - timedelta(seconds=service.STALE_RUNNING_SECONDS + 1)).isoformat()}
     runtime.attempts = 1
     runtime.held.add('1')
     assert (await service.read(['1']))['items'][0]['status'] == 'error'
@@ -193,6 +193,42 @@ async def test_stale_running_is_terminal_in_read_without_releasing_slot(runtime)
     assert runtime.rows['1']['status'] == 'running'
     assert runtime.attempts == 1 and runtime.held == {'1'}
     service.generate.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_slow_but_active_request_is_not_marked_stale(runtime):
+    from datetime import datetime, timedelta, timezone
+    runtime.rows['1'] = {'status': 'running', 'created_at': (datetime.now(timezone.utc) - timedelta(seconds=130)).isoformat()}
+    assert (await service.read(['1']))['items'][0]['status'] == 'running'
+
+
+@pytest.mark.asyncio
+async def test_provider_failure_records_only_safe_metadata(runtime, caplog):
+    class ProviderError(Exception):
+        code = 503
+    service.generate.side_effect = ProviderError('private credential and provider payload')
+    original_finish = runtime.finish
+    runtime.finish = Mock(wraps=original_finish)
+    result = await service.translate('1', '7d')
+    assert result['item']['status'] == 'error'
+    assert runtime.attempts == 1 and runtime.held == {'1'}
+    assert runtime.finish.call_args.args[3] == {'error_type': 'ProviderError', 'provider_status': 503, 'provider_response_complete': False}
+    assert 'private credential' not in caplog.text
+    assert service.generate.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_completed_provider_http_error_releases_slot_without_refunding_attempt(runtime):
+    import httpx
+    from google.genai.errors import ServerError
+    response = httpx.Response(504, json={'error': {'code': 504, 'message': 'private provider detail'}})
+    assert response.is_closed
+    service.generate.side_effect = ServerError(504, {'error': {'message': 'private provider detail'}}, response=response)
+    first = await service.translate('1', '7d')
+    assert first['item']['status'] == 'error'
+    assert runtime.attempts == 1 and not runtime.held
+    assert (await service.translate('1', '7d'))['item']['status'] == 'error'
+    assert service.generate.await_count == 1
 
 
 def test_mixed_non_latin_text_is_not_mistaken_for_russian():

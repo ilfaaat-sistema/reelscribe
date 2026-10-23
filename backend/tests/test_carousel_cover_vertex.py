@@ -9,7 +9,7 @@ from google.oauth2.credentials import Credentials
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('status', [429, 503])
+@pytest.mark.parametrize('status', [429, 503, 504])
 async def test_sdk_vertex_uses_adc_and_does_not_retry(monkeypatch, status):
     config = SimpleNamespace(enabled=True, auth_mode='adc', vertex_project='test-cover-project',
                              vertex_location='global', vertex_model='gemini-test')
@@ -40,8 +40,9 @@ async def test_sdk_vertex_uses_adc_and_does_not_retry(monkeypatch, status):
     assert captured['project'] == 'test-cover-project'
     assert 'api_key' not in captured
     assert captured['http_options'].retry_options.attempts == 1
-    assert captured['http_options'].timeout == 60_000
+    assert captured['http_options'].timeout == 120_000
     assert len(requests) == 1, repr(caught.value)
     assert requests[0].url.host == 'aiplatform.googleapis.com'
     assert '/projects/test-cover-project/locations/global/' in requests[0].url.path
     assert 'x-goog-api-key' not in requests[0].headers
+    assert requests[0].headers['x-server-timeout'] == '120'
