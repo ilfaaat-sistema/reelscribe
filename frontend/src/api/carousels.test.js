@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { getCarousels, getCarousel } from './carousels.js'
+import { getCarousels, getCarousel, translateCarousel } from './carousels.js'
 
 test('список передаёт фильтр, сортировку и страницу только своему API', async () => {
   const previous = globalThis.fetch
@@ -156,5 +156,46 @@ test('30d сохраняется в API, деталях и выключении 
     assert.equal(JSON.parse(calls[0][1].body).favorites_only, false)
     await getCarousel('123', undefined, '30d')
     assert.equal(calls[1][0], '/api/radar/carousels/123?period=30d')
+  } finally { globalThis.fetch = previous }
+})
+
+test('перевод отправляет period и source_hash, не передавая текст', async () => {
+  const previous = globalThis.fetch
+  const calls = []
+  globalThis.fetch = async (url, options) => {
+    calls.push([url, options])
+    return { ok: true, json: async () => ({ id: '123', caption_translation: { source_hash: 'abc', state: 'ready', translation: 'Перевод', source_language: 'en' }, cached: false }) }
+  }
+  try {
+    const signal = new AbortController().signal
+    const result = await translateCarousel('123 /?', { period: 'archive14d', sourceHash: 'abc' }, signal)
+    assert.equal(calls[0][0], '/api/radar/carousels/123%20%2F%3F/translate')
+    assert.equal(calls[0][1].method, 'POST')
+    assert.equal(calls[0][1].signal, signal)
+    assert.deepEqual(JSON.parse(calls[0][1].body), { period: 'archive14d', source_hash: 'abc' })
+    assert.equal(result.caption_translation.translation, 'Перевод')
+  } finally { globalThis.fetch = previous }
+})
+
+test('перевод передаёт код source_changed для обновления деталей', async () => {
+  const previous = globalThis.fetch
+  globalThis.fetch = async () => ({ ok: false, status: 409, json: async () => ({ code: 'source_changed', detail: 'Текст изменился.' }) })
+  try {
+    await assert.rejects(
+      translateCarousel('123', { sourceHash: 'old' }),
+      error => error.code === 'source_changed' && error.status === 409 && /изменился/.test(error.message),
+    )
+  } finally { globalThis.fetch = previous }
+})
+
+test('ошибки перевода показывают короткие статусы и сохраняют отмену', async () => {
+  const previous = globalThis.fetch
+  try {
+    globalThis.fetch = async () => ({ ok: false, status: 429, json: async () => ({ detail: 'internal quota id 42' }) })
+    await assert.rejects(translateCarousel('123', { sourceHash: 'abc' }), /Лимит переводов/)
+    const abort = new Error('cancelled')
+    abort.name = 'AbortError'
+    globalThis.fetch = async () => { throw abort }
+    await assert.rejects(translateCarousel('123', { sourceHash: 'abc' }), error => error === abort)
   } finally { globalThis.fetch = previous }
 })
