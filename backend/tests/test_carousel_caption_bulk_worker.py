@@ -383,3 +383,58 @@ def test_github_rate_guard_saves_pause_before_any_api_call():
     status, _ = execute(store, api)
     assert status == "paused" and not api.gets and not api.posts
     assert store.state["pause_reason"] == "github_rate_limit"
+
+
+def test_startup_validates_all_real_snapshot_rows_before_any_api_request():
+    """Реальные сохранённые входы проверяются локально без публикации captions в git."""
+    import hashlib
+    import json
+    from pathlib import Path
+
+    from app.services.carousel_caption_bulk_store import validate_state
+
+    worktree = Path(__file__).resolve().parents[2]
+    candidates = [worktree / ".baseline/carousel-caption-bulk/snapshots",
+                  worktree.parent / "carousel-caption-translation/.baseline/carousel-caption-bulk/snapshots"]
+    fixture_dir = next((candidate for candidate in candidates if (candidate / "archive7d.json").is_file()), None)
+    if fixture_dir is None:
+        pytest.skip("Локальные сохранённые raw snapshots отсутствуют; постоянная hash-регрессия проверяется отдельно")
+    filenames = {"archive7d": "archive7d.json", "archive14d": "archive14d.json", "live": "live-state.json"}
+    raw = {name: (fixture_dir / filename).read_bytes() for name, filename in filenames.items()}
+    data = {name: json.loads(value) for name, value in raw.items()}
+
+    class ValidatingSnapshotStore(MemoryStore):
+        def __init__(self):
+            super().__init__(data)
+            self.refs = {name: {"commit": str(index + 1) * 40, "blob": hashlib.sha1(raw[name]).hexdigest()}
+                         for index, name in enumerate(worker.SOURCES)}
+
+        def load(self):
+            return deepcopy(self.state), None
+
+        def save(self, state, expected):
+            encoded = validate_state(state)
+            assert len(json.loads(encoded)["items"]) == 2038
+            if not self.writes:
+                assert expected is None
+            return super().save(state, expected)
+
+    class NoApi:
+        def get(self, *args, **kwargs):
+            raise AssertionError("Офлайн startup не читает production API")
+
+        def post(self, *args, **kwargs):
+            raise AssertionError("Офлайн startup не вызывает модель")
+
+    store = ValidatingSnapshotStore()
+    status, result = execute(store, NoApi(), max_posts=0)
+    assert status == "started"
+    assert result == {"pending": 425, "not_needed": 1539, "empty": 74}
+    assert store.state["inventory"] == {"eligible": 425, "not_needed": 1539, "empty": 74, "too_long": 0}
+    assert len(store.writes) == 2
+    assert store.state["discovered_day"] == "2026-10-23"
+    assert {name: len(value["items"]) for name, value in data.items()} == {
+        "archive7d": 1404, "archive14d": 1212, "live": 79,
+    }
+    assert all(set(item) == {"id", "source_hash", "periods", "status", "updated_at", "code", "inflight_started_at"}
+               for item in store.state["items"])

@@ -153,3 +153,55 @@ def test_github_rate_metadata_is_safe_and_available_to_worker():
         store = CarouselCaptionBulkStore(client)
         assert store.load()[1] is None
     assert store.remaining == 19 and int(store.reset_at.timestamp()) == int(reset)
+
+
+@pytest.mark.parametrize("digest", ["eaa" + "a" * 61, "a" * 5 + "eaa" + "a" * 56])
+def test_meta_prefix_inside_lowercase_hash_is_safe_metadata(digest):
+    state = initial_state()
+    state["refs"] = {"live": {"commit": "eaa" + "a" * 37, "blob": "a" * 37 + "eaa"}}
+    state["items"] = [{
+        "id": "123", "source_hash": digest, "periods": ["7d"],
+        "status": "pending", "updated_at": state["updated_at"], "code": None,
+        "inflight_started_at": None,
+    }]
+    assert json.loads(validate_state(state)) == state
+
+
+@pytest.mark.parametrize("token", ["github_pat_" + "a" * 30, "ghp_" + "a" * 40])
+def test_github_tokens_still_rejected_in_otherwise_valid_code(token):
+    state = initial_state()
+    state["pause_reason"] = token
+    with pytest.raises(ValueError, match="В очереди обнаружены запрещённые данные"):
+        validate_state(state)
+
+
+def test_secret_scanner_preserves_exact_meta_prefix_and_case_insensitive_field_names():
+    from app.services.carousel_caption_bulk_store import _SECRET
+
+    assert _SECRET.search('"EAA' + 'a' * 45 + '"')
+    assert _SECRET.search('"Authorization":')
+    # Регистронезависимая эвристика сохраняется; безопасные SHA исключает только validate_state.
+    assert _SECRET.search('"' + 'a' * 5 + 'eaa' + 'a' * 56 + '"')
+
+
+@pytest.mark.parametrize("field", ["caption", "CAPTION", "Translation", "TOKEN", "Authorization", "API_KEY", "service_role_key", "decrypted_secret"])
+def test_forbidden_fields_remain_rejected_after_metadata_exclusion(field):
+    state = initial_state()
+    state[field] = "forbidden"
+    with pytest.raises(ValueError):
+        validate_state(state)
+
+
+@pytest.mark.parametrize("value", ["EAA" + "a" * 45, "eaa" + "a" * 45])
+def test_meta_tokens_cannot_hide_in_untrusted_non_hash_fields(value):
+    state = initial_state()
+    state["pause_reason"] = value
+    with pytest.raises(ValueError):
+        validate_state(state)
+
+
+def test_unvalidated_hash_field_is_not_exempted_from_schema_validation():
+    state = initial_state()
+    state["refs"] = {"live": {"commit": "EAA" + "a" * 45, "blob": "a" * 40}}
+    with pytest.raises(ValueError, match="Некорректный SHA источника"):
+        validate_state(state)

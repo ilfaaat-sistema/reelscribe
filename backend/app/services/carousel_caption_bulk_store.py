@@ -138,7 +138,16 @@ def validate_state(state: object) -> str:
         if code is not None and (not isinstance(code, str) or not _SAFE_CODE.fullmatch(code)):
             raise ValueError("Некорректный код очереди")
     text = json.dumps(state, ensure_ascii=False, allow_nan=False, separators=(",", ":"), sort_keys=True)
-    if _SECRET.search(text):
+    # SHA уже проверены по точному lowercase hex-формату выше. Только эти поля
+    # исключаем из эвристики credentials: подстрока eaa в SHA не является Meta token.
+    # Все остальные значения и имена полей проверяются прежним строгим сканером.
+    scan_state = {
+        **state,
+        "refs": {name: {"commit": None, "blob": None} for name in refs},
+        "items": [{**item, "source_hash": None} for item in items],
+    }
+    scan_text = json.dumps(scan_state, ensure_ascii=False, allow_nan=False, separators=(",", ":"), sort_keys=True)
+    if _SECRET.search(scan_text):
         raise ValueError("В очереди обнаружены запрещённые данные")
     if len(text.encode("utf-8")) > MAX_BYTES:
         raise ValueError("Превышен размер очереди")
