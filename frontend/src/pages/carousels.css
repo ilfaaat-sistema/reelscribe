@@ -193,6 +193,15 @@
 .carousels-favorites-list button:disabled, .carousels-favorite-author:disabled { opacity: .5; cursor: default; }
 @media (max-width: 390px) { .carousels-profile-form > div { flex-wrap: wrap; } .carousels-profile-form input { flex-basis: 100%; } }
 
+/* Место для четырёх строк выделено до чтения кэша и не меняется после перевода. */
+.carousels-cover-translation { display: block; flex: 0 0 auto; width: 100%; height: 101px; padding: 12px 11px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--iris) 6%, var(--panel)); color: var(--mut); font-size: 13px; line-height: 19px; overflow: hidden; }
+.carousels-cover-translation.is-ready { color: var(--tx); }
+.carousels-cover-translation-lines { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; overflow-wrap: anywhere; white-space: pre-line; }
+.carousels-cover-translation-full { padding-bottom: 20px; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
+.carousels-cover-translation-full p { margin: 0; font-size: 14px; line-height: 1.6; }
+.carousels-cover-translation-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.carousels-cover-translation-full details { margin-top: 12px; color: var(--mut); font-size: 12px; }
+.carousels-cover-translation-full summary { cursor: pointer; margin-bottom: 8px; }
 @container (max-width: 190px) {
   .carousels-card-info { min-height: 84px; padding-right: 49px; }
   .carousels-select { right: 9px; bottom: 44px; }

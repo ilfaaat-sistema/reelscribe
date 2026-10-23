@@ -6,6 +6,7 @@ from app.api import (
     carousel_favorites,
     carousels,
     carousel_likes,
+    carousel_cover_translations,
     hidden_authors,
     translation,
     errors,
@@ -50,6 +51,7 @@ app.include_router(chat.router, prefix="/api")
 app.include_router(carousel_favorites.router, prefix="/api")
 app.include_router(carousels.router, prefix="/api")
 app.include_router(carousel_likes.router, prefix="/api")
+app.include_router(carousel_cover_translations.router, prefix="/api")
 app.include_router(hidden_authors.router, prefix="/api")
 app.include_router(translation.router, prefix="/api")
 
