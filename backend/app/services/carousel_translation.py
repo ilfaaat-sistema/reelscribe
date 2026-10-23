@@ -22,6 +22,9 @@ logger = logging.getLogger(__name__)
 MAX_SOURCE_LENGTH = 12_000
 TABLE = 'carousel_caption_translations'
 COLUMNS = 'translation,source_language'
+_SAFE_FAILURE_REASONS = frozenset({
+    'empty', 'error_marker', 'too_short', 'no_cyrillic', 'unchanged', 'quota_exceeded',
+})
 
 
 class TranslationError(Exception):
@@ -63,6 +66,13 @@ def _rpc(db, name, args):
 
 def _unavailable():
     return TranslationError(503, 'translation_unavailable', 'Перевод временно недоступен. Попробуйте позже.')
+
+
+def _log_translation_failure(exc):
+    # Причина может содержать произвольный текст; в журнал попадает только известный код.
+    reason = exc.reason if isinstance(exc, TranslationFailedError) else None
+    safe_reason = reason if isinstance(reason, str) and reason in _SAFE_FAILURE_REASONS else 'unknown'
+    logger.warning('Ошибка перевода карусели: %s reason=%s', type(exc).__name__, safe_reason)
 
 
 async def detail_translation(item):
@@ -165,11 +175,12 @@ async def translate(media_id, period, expected_hash):
         reason = translation_failure_reason(source, translated)
         if reason is not None:
             raise TranslationFailedError(reason)
-    except TranslationQuotaExceededError:
+    except TranslationQuotaExceededError as exc:
+        _log_translation_failure(exc)
         await _end_failure(db, media_id, digest, token, 'quota')
         raise TranslationError(429, 'translation_quota_exceeded', 'Квота переводчика исчерпана. Попробуйте позже.') from None
     except Exception as exc:
-        logger.warning('Ошибка перевода карусели: %s', type(exc).__name__)
+        _log_translation_failure(exc)
         await _end_failure(db, media_id, digest, token)
         raise TranslationError(502, 'translation_failed', 'Перевод не удался. Попробуйте позже.') from None
 

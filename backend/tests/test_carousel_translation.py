@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from threading import Event
 from types import SimpleNamespace
 
@@ -224,6 +225,49 @@ def test_provider_errors_keep_charge_without_cached_bad_result(setup, monkeypatc
     assert r.status_code == status and r.json()['code'] == code
     assert 'закрытый' not in r.text and not s.db.cache
     assert [row['outcome'] for row in s.db.attempts.values()] == [outcome]
+
+
+@pytest.mark.parametrize('reason,expected', [
+    ('empty', 'empty'), ('error_marker', 'error_marker'), ('too_short', 'too_short'),
+    ('no_cyrillic', 'no_cyrillic'), ('unchanged', 'unchanged'),
+    ('PRIVATE_REASON\n' + SOURCE, 'unknown'), (['error_marker'], 'unknown'),
+])
+def test_failure_log_allows_only_known_reason_without_payload(setup, monkeypatch, caplog, reason, expected):
+    s = setup
+    private_message = 'PRIVATE_EXCEPTION ' + SOURCE + ' ' + RUSSIAN
+    def fail(_source):
+        raise TranslationFailedError(reason, private_message)
+    monkeypatch.setattr(service, 'translate_to_ru_detailed', fail)
+    with caplog.at_level(logging.WARNING, logger=service.__name__):
+        response = post(s)
+    assert response.status_code == 502
+    records = [record for record in caplog.records if record.name == service.__name__]
+    assert len(records) == 1
+    assert records[0].getMessage() == 'Ошибка перевода карусели: TranslationFailedError reason=' + expected
+    assert all(value not in caplog.text for value in (SOURCE, RUSSIAN, 'PRIVATE_REASON', 'PRIVATE_EXCEPTION'))
+    assert all(value not in response.text for value in (SOURCE, RUSSIAN, 'PRIVATE_REASON', 'PRIVATE_EXCEPTION'))
+
+
+@pytest.mark.parametrize('kind,expected,status', [
+    ('quota', 'TranslationQuotaExceededError reason=quota_exceeded', 429),
+    ('runtime', 'RuntimeError reason=unknown', 502),
+])
+def test_quota_and_untyped_failure_logs_remain_sanitized(setup, monkeypatch, caplog, kind, expected, status):
+    s = setup
+    private_message = 'PRIVATE_EXCEPTION ' + SOURCE + ' ' + RUSSIAN
+    failure = TranslationQuotaExceededError(private_message) if kind == 'quota' else RuntimeError(private_message)
+    # Даже похожее поле стороннего исключения не является доверенным кодом TranslationFailedError.
+    if kind == 'runtime':
+        failure.reason = 'error_marker'
+    def fail(_source):
+        raise failure
+    monkeypatch.setattr(service, 'translate_to_ru_detailed', fail)
+    with caplog.at_level(logging.WARNING, logger=service.__name__):
+        response = post(s)
+    assert response.status_code == status
+    records = [record for record in caplog.records if record.name == service.__name__]
+    assert len(records) == 1 and records[0].getMessage() == 'Ошибка перевода карусели: ' + expected
+    assert all(value not in caplog.text for value in (SOURCE, RUSSIAN, 'PRIVATE_EXCEPTION'))
 
 
 def test_invalid_cache_is_replaced_and_bad_new_translation_is_never_saved(setup, monkeypatch):
