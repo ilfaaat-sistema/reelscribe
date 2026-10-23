@@ -29,3 +29,5 @@ google-genai>=2.31.0
 # Caption Vertex: проверенный SubjectTokenSupplier и request-scoped WIF.
 google-auth>=2.62.0
 requests>=2.31.0
+# Опциональная нормализация полного кадра перед переводом обложки.
+Pillow==13.0.0
