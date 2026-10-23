@@ -337,3 +337,10 @@ def test_short_caption_quality_accepts_translation_and_ignores_emoji(source, tra
 @pytest.mark.parametrize('source,translated,reason', [('Go', 'Go', 'unchanged'), ('OK 🎉', 'OK 🎉', 'unchanged'), ('Hello', 'Bye', 'no_cyrillic'), ('Hello', 'Привет', None), ('Hello', 'Привет #fitness #workout #longforeignhashtag', None)])
 def test_caption_only_quality_covers_short_foreign_and_service_tokens(source, translated, reason):
     assert vertex.caption_failure_reason(source, translated) == reason
+
+
+def test_kazakh_role_translation_passes_with_unchanged_handles_and_camera_credit():
+    source = 'aitbekov_aas 🥇🌍 \n\nбапкері: adilalzhikeev \n\n📷 UWW \n\nkazakhstan_wrestling'
+    translated = source.replace('бапкері:', 'Тренер:')
+    assert vertex.caption_failure_reason(source, translated) is None
+    assert vertex.caption_failure_reason(source, source) == 'unchanged'

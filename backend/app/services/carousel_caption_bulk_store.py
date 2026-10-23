@@ -6,6 +6,8 @@ import json
 import re
 from datetime import date, datetime, timezone
 
+from app.services.carousel_caption_rules import CAPTION_RULES_VERSION
+
 REPOSITORY = "ilfaaat-sistema/reelscribe"
 BRANCH = "data/carousel-caption-bulk"
 MAX_BYTES = 10 * 1024 * 1024
@@ -61,6 +63,7 @@ def _iso(value: object, *, nullable: bool = True) -> datetime | None:
 def initial_state() -> dict:
     return {
         "version": 1,
+        "classification_version": CAPTION_RULES_VERSION,
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "discovered_day": None,
         "refs": {},
@@ -79,8 +82,11 @@ def validate_state(state: object) -> str:
         "version", "updated_at", "discovered_day", "refs", "items", "inventory", "pause_until",
         "pause_reason", "consecutive_translation_failures",
     }
-    if set(state) != required:
+    if set(state) not in (required, required | {"classification_version"}):
         raise ValueError("Некорректные поля очереди")
+    classification_version = state.get("classification_version", 1)
+    if type(classification_version) is not int or classification_version < 1:
+        raise ValueError("Некорректная версия классификации")
     _iso(state["updated_at"], nullable=False)
     discovered_day = state["discovered_day"]
     if discovered_day is not None:

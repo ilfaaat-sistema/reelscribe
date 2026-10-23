@@ -205,3 +205,20 @@ def test_unvalidated_hash_field_is_not_exempted_from_schema_validation():
     state["refs"] = {"live": {"commit": "EAA" + "a" * 45, "blob": "a" * 40}}
     with pytest.raises(ValueError, match="Некорректный SHA источника"):
         validate_state(state)
+
+
+def test_classification_version_is_optional_for_existing_checkpoints():
+    state = initial_state()
+    assert state['classification_version'] == 2
+    state.pop('classification_version')
+    assert 'classification_version' not in json.loads(validate_state(state))
+    state['classification_version'] = 2
+    assert json.loads(validate_state(state))['classification_version'] == 2
+
+
+@pytest.mark.parametrize('value', [None, True, False, 0, -1, '2', 2.0])
+def test_classification_version_requires_positive_strict_integer(value):
+    state = initial_state()
+    state['classification_version'] = value
+    with pytest.raises(ValueError, match='Некорректная версия классификации'):
+        validate_state(state)

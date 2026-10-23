@@ -18,7 +18,11 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from app.services.carousel_caption_bulk_store import CarouselCaptionBulkStore, Conflict
-from app.services.carousel_caption_rules import classify_caption, source_hash
+from app.services.carousel_caption_rules import (
+    CAPTION_RULES_VERSION,
+    classify_caption,
+    source_hash,
+)
 
 API_BASE = "https://reelscribe-ai.vercel.app/api"
 MAX_RUN_SECONDS = 20 * 60
@@ -208,7 +212,11 @@ def merge_inventory(state: dict, inventory: list[dict], counts: dict[str, int], 
         current_keys.add(key)
         old = previous.get(key)
         category = found["category"]
-        if category != "eligible":
+        if old and old["status"] in {"ready", "inflight", "unknown", "review", "error", "source_changed"}:
+            # Новая классификация не стирает историю исхода и не разрешает новый POST.
+            status, code = old["status"], old["code"]
+            inflight_started_at = old["inflight_started_at"]
+        elif category != "eligible":
             status = category
             code = category
             inflight_started_at = None
@@ -241,7 +249,8 @@ def discover(store, state: dict, now: datetime) -> bool:
         commit, blob = store.source_ref(branch, path)
         refs[name] = {"commit": commit, "blob": blob}
     discovered_day = now.astimezone(MOSCOW).date().isoformat()
-    if refs == state["refs"] and state["discovered_day"] == discovered_day:
+    if (refs == state["refs"] and state["discovered_day"] == discovered_day
+            and state.get("classification_version", 1) == CAPTION_RULES_VERSION):
         return False
     snapshots = {
         name: store.read_source_json(branch, path, refs[name]["blob"])
@@ -251,6 +260,7 @@ def discover(store, state: dict, now: datetime) -> bool:
     merge_inventory(state, inventory, counts, now)
     state["refs"] = refs
     state["discovered_day"] = discovered_day
+    state["classification_version"] = CAPTION_RULES_VERSION
     return True
 
 
@@ -550,6 +560,18 @@ def reconcile_inflight(api, state: dict, now: datetime) -> bool:
     quota_pause = False
     for item in state["items"]:
         original_status = item["status"]
+        if original_status in {"review", "error", "source_changed"}:
+            # Только GET: failed/unknown не возвращаются в pending даже при attempt.none.
+            try:
+                detail = get_detail(api, item)
+            except ApiFailure:
+                continue
+            if detail.get("source_hash") == item["source_hash"]:
+                if detail.get("state") == "ready":
+                    _set(item, "ready", now, "ready")
+                elif detail.get("state") == "not_needed":
+                    _set(item, "not_needed", now, "translation_not_needed")
+            continue
         if original_status not in {"inflight", "unknown"}:
             continue
         try:
@@ -649,10 +671,23 @@ def _summary(status: str, values: dict[str, int]) -> str:
     return f"{status} {safe}".strip()
 
 
+def _continuation_output(enabled: bool) -> None:
+    output = os.environ.get("GITHUB_OUTPUT")
+    if output:
+        # Только штатный output Actions и фиксированная булева строка, без пользовательских данных.
+        with open(output, "a", encoding="utf-8") as stream:
+            stream.write("needs_continuation=true\n" if enabled else "needs_continuation=false\n")
+
+
 def main() -> int:
+    _continuation_output(False)
     if os.environ.get("CAROUSEL_CAPTION_BULK_ENABLED", "").lower() != "true":
         print("paused code=disabled")
         return 0
+    limit = os.environ.get("CAROUSEL_CAPTION_BULK_MAX_POSTS", "500")
+    if not re.fullmatch(r"[1-9][0-9]{0,2}", limit) or int(limit) > MAX_POSTS:
+        print("paused code=invalid_max_posts")
+        return 1
     token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
     if not token:
         print("paused code=github_token_missing")
@@ -660,7 +695,10 @@ def main() -> int:
     try:
         with httpx.Client(follow_redirects=False, trust_env=False) as github_client, \
                 httpx.Client(follow_redirects=False, trust_env=False) as api_client:
-            status, values = run(CarouselCaptionBulkStore(github_client, token), ProductionApi(api_client))
+            status, values = run(CarouselCaptionBulkStore(github_client, token), ProductionApi(api_client),
+                                 max_posts=int(limit))
+        if status == "started" and values.get("pending", 0) > 0:
+            _continuation_output(True)
         print(_summary(status, values))
         return 0
     except Conflict:

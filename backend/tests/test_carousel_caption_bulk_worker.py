@@ -429,8 +429,8 @@ def test_startup_validates_all_real_snapshot_rows_before_any_api_request():
     store = ValidatingSnapshotStore()
     status, result = execute(store, NoApi(), max_posts=0)
     assert status == "started"
-    assert result == {"pending": 425, "not_needed": 1539, "empty": 74}
-    assert store.state["inventory"] == {"eligible": 425, "not_needed": 1539, "empty": 74, "too_long": 0}
+    assert result == {"pending": 431, "not_needed": 1533, "empty": 74}
+    assert store.state["inventory"] == {"eligible": 431, "not_needed": 1533, "empty": 74, "too_long": 0}
     assert len(store.writes) == 2
     assert store.state["discovered_day"] == "2026-10-23"
     assert {name: len(value["items"]) for name, value in data.items()} == {
@@ -438,3 +438,138 @@ def test_startup_validates_all_real_snapshot_rows_before_any_api_request():
     }
     assert all(set(item) == {"id", "source_hash", "periods", "status", "updated_at", "code", "inflight_started_at"}
                for item in store.state["items"])
+
+
+def test_classifier_version_forces_one_rediscovery_for_unchanged_refs_and_day():
+    store = MemoryStore()
+    state = initial_state()
+    assert worker.discover(store, state, NOW)
+    assert not worker.discover(store, state, NOW)
+    state.pop('classification_version')
+    assert worker.discover(store, state, NOW)
+    assert state['classification_version'] == 2
+    assert not worker.discover(store, state, NOW)
+
+
+@pytest.mark.parametrize('status', ['review', 'error', 'source_changed'])
+@pytest.mark.parametrize('api_state,expected', [('ready', 'ready'), ('not_needed', 'not_needed'), ('available', None), ('unavailable', None)])
+def test_previous_failure_reconciliation_only_gets_and_never_requeues(status, api_state, expected):
+    store = MemoryStore()
+    worker.discover(store, store.state, NOW)
+    item = store.state['items'][0]
+    item.update(status=status, code='failed')
+    api = Api([{'source_hash': item['source_hash'], 'state': api_state, 'attempt': {'status': 'none'}}])
+    execute(store, api)
+    assert store.state['items'][0]['status'] == (expected or status)
+    assert len(api.gets) == 1 and not api.posts
+
+
+@pytest.mark.parametrize('status', ['review', 'error', 'source_changed', 'unknown', 'inflight'])
+def test_rediscovery_keeps_attempt_history_until_read_only_reconcile(status):
+    store = MemoryStore(snapshots(row(caption='ashrapov_67\n📷 UWW\nkazakhstan_wrestling')))
+    state = initial_state()
+    worker.discover(store, state, NOW)
+    state['items'][0].update(status=status, code='failed', inflight_started_at=NOW.isoformat())
+    state.pop('classification_version')
+    assert worker.discover(store, state, NOW)
+    assert state['items'][0]['status'] == status
+    assert state['items'][0]['code'] == 'failed'
+    assert state['items'][0]['inflight_started_at'] == NOW.isoformat()
+
+
+def test_review_reconciliation_ignores_wrong_hash_without_post():
+    store = MemoryStore()
+    worker.discover(store, store.state, NOW)
+    store.state['items'][0].update(status='review', code='failed')
+    api = Api([{'source_hash': '0' * 64, 'state': 'ready'}])
+    execute(store, api)
+    assert store.state['items'][0]['status'] == 'review'
+    assert not api.posts
+
+
+@pytest.mark.parametrize('status,values,continuation', [
+    ('started', {'pending': 2, 'ready': 3}, 'true'),
+    ('started', {'ready': 3}, 'false'),
+    ('started', {'pending': 0, 'review': 1}, 'false'),
+    ('completed', {'ready': 4}, 'false'),
+    ('paused', {'pending': 4}, 'false'),
+    ('paused', {'pending': 4, 'unknown': 1}, 'false'),
+    ('paused', {'review': 1}, 'false'),
+])
+def test_cli_continuation_is_fixed_boolean_only_for_started_pending(monkeypatch, tmp_path, status, values, continuation):
+    output = tmp_path / 'github-output'
+    monkeypatch.setenv('GITHUB_OUTPUT', str(output))
+    monkeypatch.setenv('CAROUSEL_CAPTION_BULK_ENABLED', 'true')
+    monkeypatch.setenv('GH_TOKEN', 'dummy')
+    monkeypatch.setattr(worker, 'run', lambda *args, **kwargs: (status, values))
+    assert worker.main() == 0
+    lines = output.read_text().splitlines()
+    assert lines[-1] == 'needs_continuation=' + continuation
+    assert set(lines) <= {'needs_continuation=true', 'needs_continuation=false'}
+
+
+def test_disabled_cli_does_not_schedule_continuation(monkeypatch, tmp_path):
+    output = tmp_path / 'github-output'
+    monkeypatch.setenv('GITHUB_OUTPUT', str(output))
+    monkeypatch.setenv('CAROUSEL_CAPTION_BULK_ENABLED', 'false')
+    monkeypatch.setattr(worker, 'run', lambda *args, **kwargs: pytest.fail('disabled не запускает worker'))
+    assert worker.main() == 0
+    assert output.read_text() == 'needs_continuation=false\n'
+
+
+def test_failed_cli_continuation_stays_false_and_no_private_exception_leaks(monkeypatch, tmp_path, capsys):
+    output = tmp_path / 'github-output'
+    monkeypatch.setenv('GITHUB_OUTPUT', str(output))
+    monkeypatch.setenv('CAROUSEL_CAPTION_BULK_ENABLED', 'true')
+    monkeypatch.setenv('GH_TOKEN', 'dummy')
+    def fail(*args, **kwargs):
+        raise ValueError('PRIVATE_CAPTION')
+    monkeypatch.setattr(worker, 'run', fail)
+    assert worker.main() == 1
+    assert output.read_text() == 'needs_continuation=false\n'
+    assert 'PRIVATE_CAPTION' not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize('limit', ['', '0', '-1', '501', '1.0', 'true', ' 5', '5 ', '05', '1000'])
+def test_cli_max_posts_rejects_invalid_before_startup_or_post(monkeypatch, tmp_path, limit):
+    output = tmp_path / 'github-output'
+    monkeypatch.setenv('GITHUB_OUTPUT', str(output))
+    monkeypatch.setenv('CAROUSEL_CAPTION_BULK_ENABLED', 'true')
+    monkeypatch.setenv('CAROUSEL_CAPTION_BULK_MAX_POSTS', limit)
+    monkeypatch.setenv('GH_TOKEN', 'dummy')
+    monkeypatch.setattr(worker, 'run', lambda *args, **kwargs: pytest.fail('invalid limit не запускает worker'))
+    assert worker.main() == 1
+    assert output.read_text() == 'needs_continuation=false\n'
+
+
+@pytest.mark.parametrize('limit,expected', [(None, 500), ('1', 1), ('5', 5), ('500', 500)])
+def test_cli_bounded_run_preserves_default_and_continuation_contract(monkeypatch, tmp_path, limit, expected):
+    output = tmp_path / 'github-output'
+    monkeypatch.setenv('GITHUB_OUTPUT', str(output))
+    monkeypatch.setenv('CAROUSEL_CAPTION_BULK_ENABLED', 'true')
+    monkeypatch.setenv('GH_TOKEN', 'dummy')
+    if limit is None:
+        monkeypatch.delenv('CAROUSEL_CAPTION_BULK_MAX_POSTS', raising=False)
+    else:
+        monkeypatch.setenv('CAROUSEL_CAPTION_BULK_MAX_POSTS', limit)
+    def run(*args, **kwargs):
+        assert kwargs == {'max_posts': expected}
+        return 'started', {'pending': 9}
+    monkeypatch.setattr(worker, 'run', run)
+    assert worker.main() == 0
+    assert output.read_text().splitlines()[-1] == 'needs_continuation=true'
+
+
+def test_five_post_run_keeps_batch_tail_pending_for_one_safe_continuation():
+    store = MemoryStore(snapshots(*[row(str(index), f'English caption {index}') for index in range(1, 13)]))
+    api = Api()
+    status, result = execute(store, api, max_posts=5)
+    assert status == 'started' and result == {'ready': 5, 'pending': 7}
+    assert len(api.posts) == 5
+    assert sum(item['code'] == 'batch_unsent' for item in store.state['items']) == 5
+    for item in store.state['items']:
+        assert item['inflight_started_at'] is None
+    next_api = Api()
+    status, result = execute(store, next_api)
+    assert status == 'completed' and result == {'ready': 12}
+    assert len(next_api.posts) == 7
