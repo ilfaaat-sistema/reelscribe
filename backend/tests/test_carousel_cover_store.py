@@ -40,8 +40,9 @@ def test_service_role_uses_separate_client_with_finite_timeout(monkeypatch):
 @pytest.mark.parametrize('mode,status,retry_after', [
     ('pilot', 'available', None), ('pilot', 'limit_reached', None),
     ('live', 'available', None), ('live', 'limit_reached', '2030-01-01T21:00:00Z')])
-def test_budget_rpc_has_fixed_limits_and_utc_reset(monkeypatch, mode, status, retry_after):
-    data = {'mode': mode, 'status': status, 'pilot_limit': 20, 'daily_limit': 500,
+@pytest.mark.parametrize('daily_limit', [500, 2500])
+def test_budget_rpc_has_fixed_limits_and_utc_reset(monkeypatch, mode, status, retry_after, daily_limit):
+    data = {'mode': mode, 'status': status, 'pilot_limit': 20, 'daily_limit': daily_limit,
             'reset_at': '2030-01-01T21:00:00Z', 'retry_after': retry_after}
     rpc = Mock(return_value=data)
     monkeypatch.setattr(store, '_rpc', rpc)
@@ -51,6 +52,8 @@ def test_budget_rpc_has_fixed_limits_and_utc_reset(monkeypatch, mode, status, re
 
 @pytest.mark.parametrize('changed', [
     {'mode': 'unknown'}, {'pilot_limit': 21}, {'daily_limit': 501},
+    {'daily_limit': 2501}, {'daily_limit': True}, {'daily_limit': False},
+    {'daily_limit': 500.0}, {'daily_limit': 2500.0}, {'daily_limit': '2500'},
     {'status': 'ready'}, {'reset_at': '2030-01-02T00:00:00+03:00'},
     {'retry_after': '2030-01-02T21:00:00Z'}, {'reset_at': 'invalid'},
     {'mode': 'pilot', 'retry_after': '2030-01-01T21:00:00Z'}])

@@ -13,9 +13,10 @@ function normalizeUtcTimestamp(value) {
 }
 
 function normalizeBudget(value) {
-  if (!['pilot', 'live'].includes(value?.mode) || value.pilot_limit !== 20 || value.daily_limit !== 500) return null
+  if (!['pilot', 'live'].includes(value?.mode) || value.pilot_limit !== 20 ||
+      !Number.isInteger(value.daily_limit) || ![500, 2500].includes(value.daily_limit)) return null
   const resetAt = normalizeUtcTimestamp(value.reset_at)
-  return resetAt ? { mode: value.mode, pilot_limit: 20, daily_limit: 500, reset_at: resetAt } : null
+  return resetAt ? { mode: value.mode, pilot_limit: 20, daily_limit: value.daily_limit, reset_at: resetAt } : null
 }
 
 function normalizeItem(item, id) {
