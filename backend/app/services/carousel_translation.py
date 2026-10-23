@@ -12,10 +12,14 @@ from fastapi import HTTPException
 from app.core.translation_db import get_translation_db
 from app.pipeline.translate import (
     TranslationFailedError,
-    TranslationQuotaExceededError,
     needs_translation,
-    translate_to_ru_detailed,
-    translation_failure_reason,
+)
+
+from app.services.carousel_caption_settings import get_settings
+from app.services.carousel_caption_auth import CaptionAuthError, oidc_credentials
+from app.services.carousel_caption_vertex import (
+    CaptionVertexError, CaptionVertexAuthError, CaptionVertexQuotaError,
+    CaptionVertexUnknown, caption_failure_reason, translate_caption,
 )
 
 logger = logging.getLogger(__name__)
@@ -24,6 +28,7 @@ TABLE = 'carousel_caption_translations'
 COLUMNS = 'translation,source_language'
 _SAFE_FAILURE_REASONS = frozenset({
     'empty', 'error_marker', 'too_short', 'no_cyrillic', 'unchanged', 'quota_exceeded',
+    'auth', 'schema', 'blocked', 'finish', 'provider', 'unknown',
 })
 
 
@@ -70,7 +75,7 @@ def _unavailable():
 
 def _log_translation_failure(exc):
     # Причина может содержать произвольный текст; в журнал попадает только известный код.
-    reason = exc.reason if isinstance(exc, TranslationFailedError) else None
+    reason = exc.reason if isinstance(exc, (TranslationFailedError, CaptionVertexError)) else None
     safe_reason = reason if isinstance(reason, str) and reason in _SAFE_FAILURE_REASONS else 'unknown'
     logger.warning('Ошибка перевода карусели: %s reason=%s', type(exc).__name__, safe_reason)
 
@@ -88,9 +93,13 @@ async def detail_translation(item):
     except Exception as exc:
         logger.info('Кэш перевода карусели недоступен: %s', type(exc).__name__)
         return _value(source, 'unavailable')
-    if row and translation_failure_reason(source, row.get('translation')) is None:
+    if row and caption_failure_reason(source, row.get('translation')) is None:
         return _value(source, 'ready', row['translation'], row.get('source_language'))
-    return _value(source, 'available')
+    try:
+        available = get_settings().enabled
+    except Exception:
+        available = False
+    return _value(source, 'available' if available else 'unavailable')
 
 
 async def _source(media_id, period):
@@ -123,7 +132,7 @@ async def _end_failure(db, media_id, digest, token, outcome='failed'):
         logger.warning('Не удалось закрыть аренду перевода: %s', type(exc).__name__)
 
 
-async def translate(media_id, period, expected_hash):
+async def translate(media_id, period, expected_hash, *, oidc_token=None):
     if not re.fullmatch(r'[0-9]{1,40}', media_id):
         raise TranslationError(422, 'invalid_request', 'Некорректный ID карусели')
     item = await _source(media_id, period)
@@ -141,8 +150,25 @@ async def translate(media_id, period, expected_hash):
     try:
         db = get_translation_db()
         row = await asyncio.to_thread(_cached, db, media_id, digest)
-        if row and translation_failure_reason(source, row.get('translation')) is not None:
-            # Сравнение текста защищает от удаления уже исправленного конкурентом кэша.
+        if row and caption_failure_reason(source, row.get('translation')) is None:
+            return {'id': media_id, 'caption_translation': _value(
+                source, 'ready', row['translation'], row.get('source_language')), 'cached': True}
+    except Exception as exc:
+        logger.warning('Кэш перевода карусели недоступен: %s', type(exc).__name__)
+        raise _unavailable() from None
+
+    try:
+        config = get_settings()
+        if not config.enabled:
+            raise CaptionAuthError('Перевод выключен')
+        credentials = await asyncio.to_thread(oidc_credentials, oidc_token, config=config)
+    except Exception:
+        # Включая STS/IAM: до reserve, без попытки модели и сырых исключений.
+        raise _unavailable() from None
+
+    try:
+        if row:
+            # Сравнение текста защищает от удаления исправленного конкурентом кэша.
             await asyncio.to_thread(lambda: db.table(TABLE).delete()
                                     .eq('instagram_media_id', media_id).eq('source_hash', digest)
                                     .eq('translation', row['translation']).execute())
@@ -156,7 +182,7 @@ async def translate(media_id, period, expected_hash):
 
     state = reserved.get('state')
     if state == 'ready':
-        if translation_failure_reason(source, reserved.get('translation')) is not None:
+        if caption_failure_reason(source, reserved.get('translation')) is not None:
             raise _unavailable()
         return {'id': media_id, 'caption_translation': _value(
             source, 'ready', reserved['translation'], reserved.get('source_language')), 'cached': True}
@@ -170,15 +196,22 @@ async def translate(media_id, period, expected_hash):
         raise _unavailable()
 
     try:
-        # Отмена запроса не прекращает поток; не снимаем аренду при CancelledError.
-        translated, language = await asyncio.to_thread(translate_to_ru_detailed, source)
-        reason = translation_failure_reason(source, translated)
+        translated, language = await translate_caption(source, credentials=credentials, config=config)
+        reason = caption_failure_reason(source, translated)
         if reason is not None:
             raise TranslationFailedError(reason)
-    except TranslationQuotaExceededError as exc:
+    except CaptionVertexQuotaError as exc:
         _log_translation_failure(exc)
         await _end_failure(db, media_id, digest, token, 'quota')
         raise TranslationError(429, 'translation_quota_exceeded', 'Квота переводчика исчерпана. Попробуйте позже.') from None
+    except CaptionVertexAuthError as exc:
+        _log_translation_failure(exc)
+        await _end_failure(db, media_id, digest, token)
+        raise _unavailable() from None
+    except CaptionVertexUnknown as exc:
+        _log_translation_failure(exc)
+        # Потраченный бюджет неизвестен: сохраняем lease до штатных 15 минут.
+        raise TranslationError(502, 'translation_failed', 'Перевод не удался. Попробуйте позже.') from None
     except Exception as exc:
         _log_translation_failure(exc)
         await _end_failure(db, media_id, digest, token)
@@ -200,7 +233,7 @@ async def translate(media_id, period, expected_hash):
         raise _unavailable() from None
     if saved.get('state') != 'ready':
         raise TranslationError(409, 'translation_in_progress', 'Срок ожидания перевода истёк. Повторите запрос.', 5)
-    if translation_failure_reason(source, saved.get('translation')) is not None:
+    if caption_failure_reason(source, saved.get('translation')) is not None:
         raise _unavailable()
     return {'id': media_id, 'caption_translation': _value(
         source, 'ready', saved['translation'], saved.get('source_language')), 'cached': False}

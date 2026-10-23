@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from threading import Event
 from types import SimpleNamespace
 
 import pytest
@@ -12,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from app.api import carousel_translation, carousels
 from app.core import translation_db
-from app.pipeline.translate import TranslationFailedError, TranslationQuotaExceededError
+from app.services.carousel_caption_vertex import CaptionVertexError, CaptionVertexQuotaError, CaptionVertexAuthError, CaptionVertexUnknown
 from app.services import carousel_translation as service
 
 SOURCE = 'This is an English caption which should be translated to Russian for the reader.'
@@ -97,13 +96,15 @@ def setup(monkeypatch):
             raise HTTPException(404, 'Карусель не найдена')
         return dict(item)
 
-    def provider(source):
+    async def provider(source, **kwargs):
         calls.append(source)
         return RUSSIAN, 'EN'
 
     monkeypatch.setattr(carousels, 'resolve_detail', resolve)
     monkeypatch.setattr(service, 'get_translation_db', lambda: db)
-    monkeypatch.setattr(service, 'translate_to_ru_detailed', provider)
+    monkeypatch.setattr(service, 'translate_caption', provider)
+    monkeypatch.setattr(service, 'get_settings', lambda: SimpleNamespace(enabled=True))
+    monkeypatch.setattr(service, 'oidc_credentials', lambda token, **kwargs: object())
     app = FastAPI()
     app.include_router(carousels.router, prefix='/api')
     app.include_router(carousel_translation.router, prefix='/api')
@@ -212,15 +213,15 @@ def test_shared_reservation_stops_provider_and_exposes_retry_after(setup, state,
 
 
 @pytest.mark.parametrize('failure,status,code,outcome', [
-    (TranslationQuotaExceededError('закрытый ответ'), 429, 'translation_quota_exceeded', 'quota'),
-    (TranslationFailedError('unchanged', 'закрытый ответ'), 502, 'translation_failed', 'failed'),
+    (CaptionVertexQuotaError('закрытый ответ'), 429, 'translation_quota_exceeded', 'quota'),
+    (CaptionVertexError('unchanged'), 502, 'translation_failed', 'failed'),
     (RuntimeError('закрытый ответ'), 502, 'translation_failed', 'failed'),
 ])
 def test_provider_errors_keep_charge_without_cached_bad_result(setup, monkeypatch, failure, status, code, outcome):
     s = setup
-    def fail(source):
+    async def fail(source, **kwargs):
         raise failure
-    monkeypatch.setattr(service, 'translate_to_ru_detailed', fail)
+    monkeypatch.setattr(service, 'translate_caption', fail)
     r = post(s)
     assert r.status_code == status and r.json()['code'] == code
     assert 'закрытый' not in r.text and not s.db.cache
@@ -235,33 +236,33 @@ def test_provider_errors_keep_charge_without_cached_bad_result(setup, monkeypatc
 def test_failure_log_allows_only_known_reason_without_payload(setup, monkeypatch, caplog, reason, expected):
     s = setup
     private_message = 'PRIVATE_EXCEPTION ' + SOURCE + ' ' + RUSSIAN
-    def fail(_source):
-        raise TranslationFailedError(reason, private_message)
-    monkeypatch.setattr(service, 'translate_to_ru_detailed', fail)
+    async def fail(_source, **kwargs):
+        raise CaptionVertexError(reason)
+    monkeypatch.setattr(service, 'translate_caption', fail)
     with caplog.at_level(logging.WARNING, logger=service.__name__):
         response = post(s)
     assert response.status_code == 502
     records = [record for record in caplog.records if record.name == service.__name__]
     assert len(records) == 1
-    assert records[0].getMessage() == 'Ошибка перевода карусели: TranslationFailedError reason=' + expected
+    assert records[0].getMessage() == 'Ошибка перевода карусели: CaptionVertexError reason=' + expected
     assert all(value not in caplog.text for value in (SOURCE, RUSSIAN, 'PRIVATE_REASON', 'PRIVATE_EXCEPTION'))
     assert all(value not in response.text for value in (SOURCE, RUSSIAN, 'PRIVATE_REASON', 'PRIVATE_EXCEPTION'))
 
 
 @pytest.mark.parametrize('kind,expected,status', [
-    ('quota', 'TranslationQuotaExceededError reason=quota_exceeded', 429),
+    ('quota', 'CaptionVertexQuotaError reason=quota_exceeded', 429),
     ('runtime', 'RuntimeError reason=unknown', 502),
 ])
 def test_quota_and_untyped_failure_logs_remain_sanitized(setup, monkeypatch, caplog, kind, expected, status):
     s = setup
     private_message = 'PRIVATE_EXCEPTION ' + SOURCE + ' ' + RUSSIAN
-    failure = TranslationQuotaExceededError(private_message) if kind == 'quota' else RuntimeError(private_message)
-    # Даже похожее поле стороннего исключения не является доверенным кодом TranslationFailedError.
+    failure = CaptionVertexQuotaError('quota_exceeded') if kind == 'quota' else RuntimeError(private_message)
+    # Даже похожее поле стороннего исключения не является доверенным кодом CaptionVertexError.
     if kind == 'runtime':
         failure.reason = 'error_marker'
-    def fail(_source):
+    async def fail(_source, **kwargs):
         raise failure
-    monkeypatch.setattr(service, 'translate_to_ru_detailed', fail)
+    monkeypatch.setattr(service, 'translate_caption', fail)
     with caplog.at_level(logging.WARNING, logger=service.__name__):
         response = post(s)
     assert response.status_code == status
@@ -276,18 +277,20 @@ def test_invalid_cache_is_replaced_and_bad_new_translation_is_never_saved(setup,
     s.db.cache[key] = {'translation': '<html>error</html>', 'source_language': None}
     assert post(s).status_code == 200 and s.db.cache[key]['translation'] == RUSSIAN
     s.item['caption'] = SOURCE+' altered'
-    monkeypatch.setattr(service, 'translate_to_ru_detailed', lambda _: (SOURCE, None))
+    async def unchanged(source, **kwargs):
+        return SOURCE, None
+    monkeypatch.setattr(service, 'translate_caption', unchanged)
     assert post(s).status_code == 502
     assert len(s.db.cache) == 1
 
 
 def test_changed_during_provider_does_not_publish_or_translate_new_caption(setup, monkeypatch):
     s = setup
-    def provider(source):
+    async def provider(source, **kwargs):
         s.calls.append(source)
         s.item['caption'] = SOURCE+' new version'
         return RUSSIAN, None
-    monkeypatch.setattr(service, 'translate_to_ru_detailed', provider)
+    monkeypatch.setattr(service, 'translate_caption', provider)
     r = post(s)
     assert r.status_code == 409 and r.json()['code'] == 'source_changed'
     assert not s.db.cache and s.calls == [SOURCE]
@@ -319,22 +322,92 @@ def test_source_unavailability_prevents_reservation(setup, monkeypatch, failure)
 
 def test_cancelled_await_does_not_release_still_running_provider(setup, monkeypatch):
     s = setup
-    entered, release = Event(), Event()
-    def provider(source):
-        entered.set()
-        assert release.wait(5)
-        return RUSSIAN, None
-    monkeypatch.setattr(service, 'translate_to_ru_detailed', provider)
     async def check():
+        entered = asyncio.Event()
+        async def provider(source, **kwargs):
+            entered.set()
+            await asyncio.Event().wait()
+        monkeypatch.setattr(service, 'translate_caption', provider)
         task = asyncio.create_task(service.translate('123', '14d', service.source_hash(SOURCE)))
-        try:
-            assert await asyncio.to_thread(entered.wait, 5)
-            task.cancel()
-            with pytest.raises(asyncio.CancelledError):
-                await task
-            assert len(s.db.attempts) == 1
-            assert all('outcome' not in row for row in s.db.attempts.values())
-            assert not s.db.cache
-        finally:
-            release.set()
+        await asyncio.wait_for(entered.wait(), 5)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert len(s.db.attempts) == 1
+        assert all('outcome' not in row for row in s.db.attempts.values())
+        assert not s.db.cache
     asyncio.run(check())
+
+
+@pytest.mark.parametrize('failure,status,closed', [
+    (CaptionVertexAuthError('auth'), 503, True),
+    (CaptionVertexUnknown('unknown'), 502, False),
+])
+def test_auth_and_unknown_after_reserve(setup, monkeypatch, failure, status, closed):
+    async def provider(source, **kwargs):
+        raise failure
+    monkeypatch.setattr(service, 'translate_caption', provider)
+    response = post(setup)
+    assert response.status_code == status
+    assert len(setup.db.attempts) == 1 and not setup.db.cache
+    assert all(('outcome' in row) == closed for row in setup.db.attempts.values())
+
+
+def test_ready_before_auth_and_config(setup, monkeypatch):
+    assert post(setup).status_code == 200
+    def forbidden(*args, **kwargs):
+        raise AssertionError('Готовый кэш не требует auth/config')
+    monkeypatch.setattr(service, 'get_settings', forbidden)
+    monkeypatch.setattr(service, 'oidc_credentials', forbidden)
+    assert post(setup).json()['cached'] is True
+    assert setup.client.get(URL).json()['caption_translation']['state'] == 'ready'
+    assert len(setup.db.attempts) == 1
+
+
+def test_auth_failure_before_attempt_and_header_is_request_scoped(setup, monkeypatch):
+    tokens = []
+    def auth(token, **kwargs):
+        tokens.append(token)
+        raise RuntimeError('закрытый ответ STS')
+    monkeypatch.setattr(service, 'oidc_credentials', auth)
+    for token in ('first', 'second'):
+        response = setup.client.post(URL+'/translate',
+            headers={'x-vercel-oidc-token': token}, json={'source_hash': service.source_hash(SOURCE)})
+        assert response.status_code == 503 and 'закрытый' not in response.text
+    assert tokens == ['first', 'second']
+    assert not setup.db.calls and not setup.calls
+
+
+def test_disabled_configuration_has_no_attempt(setup, monkeypatch):
+    monkeypatch.setattr(service, 'get_settings', lambda: SimpleNamespace(enabled=False))
+    assert setup.client.get(URL).json()['caption_translation']['state'] == 'unavailable'
+    assert post(setup).status_code == 503
+    assert not setup.db.calls and not setup.calls
+
+
+def test_concurrent_ready_after_auth_avoids_model(setup, monkeypatch):
+    def auth(token, **kwargs):
+        assert not setup.db.calls and not setup.db.attempts
+        setup.db.cache[('123', service.source_hash(SOURCE))] = {
+            'translation': RUSSIAN, 'source_language': 'en'}
+        return object()
+    monkeypatch.setattr(service, 'oidc_credentials', auth)
+    result = post(setup)
+    assert result.status_code == 200 and result.json()['cached'] is True
+    assert not setup.calls and not setup.db.attempts
+    assert len(setup.db.calls) == 1 and setup.db.calls[0][0].startswith('reserve')
+
+
+def test_short_invalid_cache_uses_same_quality_gate_as_new_result(setup, monkeypatch):
+    key = ('123', service.source_hash(SOURCE))
+    setup.db.cache[key] = {'translation': 'Да', 'source_language': 'en'}
+    assert setup.client.get(URL).json()['caption_translation']['state'] == 'available'
+    assert post(setup).status_code == 200
+    assert setup.db.cache[key]['translation'] == RUSSIAN
+    assert len(setup.db.attempts) == 1
+    setup.item['caption'] = SOURCE+'!'
+    async def invalid(source, **kwargs):
+        return 'Да', 'en'
+    monkeypatch.setattr(service, 'translate_caption', invalid)
+    assert post(setup).status_code == 502
+    assert len(setup.db.cache) == 1

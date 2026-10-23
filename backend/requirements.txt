@@ -14,7 +14,7 @@ pydantic-settings>=2.2.0
 # и сортировка по просмотрам/залётности ставит записи с пустыми метриками в начало.
 supabase>=2.19.0
 openpyxl>=3.1.2
-# >=0.28.1 обязательно: google-genai 1.47.0 (ниже) требует эту версию httpx, со старым
+# >=0.28.1 обязательно: google-genai (ниже) требует эту версию httpx, со старым
 # пином (0.27.0) пакеты вместе не ставятся (конфликт разрешения зависимостей pip).
 httpx>=0.28.1
 # HTTP-перевод вызывается самим API; lazy import тоже требует пакетов на Vercel.
@@ -23,5 +23,9 @@ deep-translator==1.11.4
 deepl==1.32.0
 # Радар (ТЗ 08): один вызов Gemini на разбор рилса — расшифровка речи + видеоанализ,
 # прямо в API-функции Vercel (без Whisper/ffmpeg/воркера). Сверено с фактически
-# установленной в venv версией 1.47.0.
-google-genai>=1.20
+# установленной для caption Vertex версией 2.31.0 (HttpRetryOptions, async transport).
+google-genai>=2.31.0
+
+# Caption Vertex: проверенный SubjectTokenSupplier и request-scoped WIF.
+google-auth>=2.62.0
+requests>=2.31.0
