@@ -367,8 +367,14 @@ test('API сохраняет budget и retry_after как ISO UTC; неизве�
     assert.equal(data.items[1].retry_after, null)
     assert.equal(data.items[2].retry_after, null)
     assert.equal(data.items[3].retry_after, null)
-    response = { enabled: true, budget: { ...liveBudget, daily_limit: 501 }, items: [limited('1', null)] }
-    assert.equal((await getCarouselCoverTranslations(['1'])).budget, null)
+    for (const daily_limit of [500, 2500]) {
+      response = { enabled: true, budget: { ...liveBudget, daily_limit }, items: [] }
+      assert.equal((await getCarouselCoverTranslations(['1'])).budget.daily_limit, daily_limit)
+    }
+    for (const daily_limit of [501, 2501, true, false, '2500', 2500.5, null]) {
+      response = { enabled: true, budget: { ...liveBudget, daily_limit }, items: [] }
+      assert.equal((await getCarouselCoverTranslations(['1'])).budget, null)
+    }
     response = { item: limited('1', '2026-10-24T00:00:00+03:00') }
     assert.equal((await translateCarouselCover('1', '7d')).retry_after, liveBudget.reset_at)
   } finally { globalThis.fetch = original }
