@@ -96,6 +96,16 @@ def test_paired_titles_do_not_hide_foreign_standalone_text(source, expected):
     assert needs_caption_translation(source) is expected
 
 
-@pytest.mark.parametrize('credit', ['📷 UWW', '📸 imbelovandrey', '📸 : JUCY_xcom / X'])
+@pytest.mark.parametrize('credit', ['📷 UWW', '📸 imbelovandrey_67', '📸 : JUCY_xcom / X', '📷 name123', '📷 @username'])
 def test_short_camera_credit_does_not_force_russian_caption(credit):
     assert not needs_caption_translation('Русский текст для читателя\n' + credit)
+
+
+@pytest.mark.parametrize('line', ['📍Buy Now', '📍Buy Grand Plaza', '📍Visit City Mall', '📍Best Hotel', '📷 Beautiful', '📷 beautiful', '📷 imbelovandrey', '📷 BEAUTIFUL'])
+def test_advertising_and_ambiguous_camera_words_require_translation(line):
+    assert needs_caption_translation(line + '\nЗакажите у нас')
+
+
+@pytest.mark.parametrize('line', ['📍City Plaza', '📍Central Metropolitan', '📍Grand Theatre', '📍City Airport'])
+def test_venue_suffix_metadata_still_uses_russian_context(line):
+    assert not needs_caption_translation(line + '\nДля заказа Direct/WhatsApp')

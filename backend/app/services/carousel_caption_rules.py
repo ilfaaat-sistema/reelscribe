@@ -13,6 +13,15 @@ _HANDLE = re.compile(r'(?=[\w.]*[._])[\w.]*\w', re.UNICODE)
 _LETTER = re.compile(r'[^\W\d_]', re.UNICODE)
 _CYRILLIC = re.compile(r'[а-яёА-ЯЁ]')
 _QUOTED = re.compile(r'«[^«»\n]*»|“[^“”\n]*”|"[^"\n]*"')
+_VENUE_SUFFIXES = frozenset({
+    'plaza', 'mall', 'center', 'centre', 'metropolitan', 'park', 'hotel', 'resort',
+    'station', 'square', 'arena', 'theatre', 'theater', 'tower', 'airport', 'complex',
+})
+_AD_WORDS = frozenset({
+    'buy', 'now', 'order', 'visit', 'try', 'get', 'shop', 'discover', 'book', 'come',
+    'enjoy', 'check', 'learn', 'watch', 'click', 'join', 'follow', 'swipe', 'read',
+    'save', 'share', 'start', 'go', 'see', 'look', 'best', 'free', 'sale', 'offer',
+})
 
 
 def source_hash(text: str | None) -> str:
@@ -65,14 +74,19 @@ def needs_caption_translation(text: str | None) -> bool:
         line = line.strip()
         # Только короткий credit без обычных слов: аббревиатура либо уже удалённый handle.
         if line.startswith(('📷', '📸')):
-            credit = re.sub(r'[\s:/|,]+', ' ', line[1:].lstrip('\ufe0f')).strip()
-            if not credit or re.fullmatch(r'[A-Za-z][A-Za-z0-9_]{0,29}', credit):
+            raw_credit = line[1:].lstrip('\ufe0f').strip().lstrip(':').strip()
+            credit = re.sub(r'\s*[/|,]\s*', '/', raw_credit).strip('/')
+            explicit_handle = (re.search(r'[@._/\d]', raw_credit)
+                               and re.fullmatch(r'[A-Za-z0-9@._]+(?:/[A-Za-z0-9@._]+)*', credit))
+            if not credit or explicit_handle or re.fullmatch(r'[A-Z]{2,6}', credit):
                 continue
             if _foreign_body(line):
                 return True
         if line.startswith('📍'):
             location = line.removeprefix('📍').lstrip('\ufe0f').strip()
-            if re.fullmatch(r'[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2}', location):
+            words = location.lower().split()
+            if (re.fullmatch(r'[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2}', location)
+                    and words[-1] in _VENUE_SUFFIXES and not _AD_WORDS.intersection(words)):
                 venues.append(line)
                 continue
             # Предложение после pin не скрывается большим русским контекстом.

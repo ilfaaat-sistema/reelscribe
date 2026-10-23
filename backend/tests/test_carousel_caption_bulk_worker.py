@@ -429,8 +429,8 @@ def test_startup_validates_all_real_snapshot_rows_before_any_api_request():
     store = ValidatingSnapshotStore()
     status, result = execute(store, NoApi(), max_posts=0)
     assert status == "started"
-    assert result == {"pending": 431, "not_needed": 1533, "empty": 74}
-    assert store.state["inventory"] == {"eligible": 431, "not_needed": 1533, "empty": 74, "too_long": 0}
+    assert result == {"pending": 432, "not_needed": 1532, "empty": 74}
+    assert store.state["inventory"] == {"eligible": 432, "not_needed": 1532, "empty": 74, "too_long": 0}
     assert len(store.writes) == 2
     assert store.state["discovered_day"] == "2026-10-23"
     assert {name: len(value["items"]) for name, value in data.items()} == {
@@ -573,3 +573,59 @@ def test_five_post_run_keeps_batch_tail_pending_for_one_safe_continuation():
     status, result = execute(store, next_api)
     assert status == 'completed' and result == {'ready': 12}
     assert len(next_api.posts) == 7
+
+
+def test_zero_progress_from_slow_discovery_pauses_without_continuation(monkeypatch, tmp_path):
+    clock = {'elapsed': 0}
+    class SlowStore(MemoryStore):
+        def read_source_json(self, *args):
+            clock['elapsed'] = 6
+            return super().read_source_json(*args)
+    store, api = SlowStore(), Api()
+    real_run = worker.run
+    def run(*args, **kwargs):
+        return real_run(store, api, now_fn=lambda: NOW, monotonic=lambda: clock['elapsed'],
+                        max_seconds=worker.REQUEST_DRAIN_SECONDS + 5)
+    output = tmp_path / 'github-output'
+    monkeypatch.setenv('GITHUB_OUTPUT', str(output))
+    monkeypatch.setenv('CAROUSEL_CAPTION_BULK_ENABLED', 'true')
+    monkeypatch.setenv('GH_TOKEN', 'dummy')
+    monkeypatch.setattr(worker, 'run', run)
+    assert worker.main() == 0
+    assert store.state['pause_reason'] == 'zero_progress_deadline'
+    assert worker.parse_stamp(store.state['pause_until']) == NOW + timedelta(minutes=15)
+    assert store.state['items'][0]['status'] == 'pending'
+    assert not api.gets and not api.posts
+    assert output.read_text() == 'needs_continuation=false\n'
+
+
+def test_zero_progress_when_checkpoint_save_spends_deadline_returns_paused():
+    clock = {'elapsed': 0}
+    class SlowCheckpointStore(MemoryStore):
+        def save(self, *args):
+            result = super().save(*args)
+            if len(self.writes) == 3:
+                clock['elapsed'] = 6
+            return result
+    store, api = SlowCheckpointStore(), Api()
+    status, values = worker.run(store, api, now_fn=lambda: NOW, monotonic=lambda: clock['elapsed'],
+                                max_seconds=worker.REQUEST_DRAIN_SECONDS + 5)
+    assert status == 'paused' and values == {'pending': 1}
+    assert store.state['pause_reason'] == 'zero_progress_deadline'
+    assert not api.gets and not api.posts
+
+
+def test_get_ready_counts_as_progress_without_paid_post_at_deadline():
+    clock = {'elapsed': 0}
+    class ReadyApi(Api):
+        def get(self, item):
+            self.gets.append(item['id'])
+            clock['elapsed'] = 6
+            return {'source_hash': item['source_hash'], 'state': 'ready'}
+    store = MemoryStore(snapshots(row('1'), row('2')))
+    api = ReadyApi()
+    status, values = worker.run(store, api, now_fn=lambda: NOW, monotonic=lambda: clock['elapsed'],
+                                max_seconds=worker.REQUEST_DRAIN_SECONDS + 5)
+    assert status == 'started' and values == {'ready': 1, 'pending': 1}
+    assert store.state['pause_reason'] is None
+    assert len(api.gets) == 1 and not api.posts

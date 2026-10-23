@@ -624,6 +624,7 @@ def run(store, api, *, now_fn: Callable[[], datetime] = utcnow,
         return "paused", counts(state)
 
     posts = 0
+    processed = 0
     work_deadline = max(0, max_seconds - REQUEST_DRAIN_SECONDS)
     while posts < max_posts and monotonic() - started < work_deadline:
         pending = [item for item in state["items"] if item["status"] == "pending"]
@@ -650,9 +651,12 @@ def run(store, api, *, now_fn: Callable[[], datetime] = utcnow,
             if monotonic() - started >= work_deadline:
                 for unsent in batch[index:]:
                     _set(unsent, "pending", now, "run_deadline")
+                if processed == 0:
+                    pause(state, "zero_progress_deadline", now + timedelta(minutes=15), now)
                 stop = True
                 break
             action, posted = process_one(api, item, state, now)
+            processed += 1
             posts += int(posted)
             if action == "pause" or posts >= max_posts:
                 # В этом процессе точно известно, что хвост пачки ещё не отправлялся.
@@ -663,6 +667,12 @@ def run(store, api, *, now_fn: Callable[[], datetime] = utcnow,
         sha = _save(store, state, sha)
         if stop:
             return "paused" if state.get("pause_until") or any(i["status"] == "unknown" for i in batch) else "started", counts(state)
+    if (processed == 0 and any(item["status"] == "pending" for item in state["items"])
+            and monotonic() - started >= work_deadline):
+        now = now_fn()
+        pause(state, "zero_progress_deadline", now + timedelta(minutes=15), now)
+        _save(store, state, sha)
+        return "paused", counts(state)
     return "started", counts(state)
 
 
