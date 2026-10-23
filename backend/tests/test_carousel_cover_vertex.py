@@ -1,5 +1,7 @@
 """Настоящий SDK с локальным транспортом: Vertex, ADC и один HTTP-запрос."""
 from types import SimpleNamespace
+import base64
+import json
 
 import httpx
 import pytest
@@ -46,3 +48,13 @@ async def test_sdk_vertex_uses_adc_and_does_not_retry(monkeypatch, status):
     assert '/projects/test-cover-project/locations/global/' in requests[0].url.path
     assert 'x-goog-api-key' not in requests[0].headers
     assert requests[0].headers['x-server-timeout'] == '120'
+    payload = json.loads(requests[0].content)
+    assert payload['systemInstruction']['parts'] == [{'text': vertex.PROMPT}]
+    assert len(payload['contents']) == 1
+    content = payload['contents'][0]
+    assert content['role'] == 'user' and len(content['parts']) == 1
+    assert set(content['parts'][0]) == {'inlineData'}
+    image = content['parts'][0]['inlineData']
+    assert base64.urlsafe_b64decode(image['data']) == b'\xff\xd8\xfftest'
+    assert image.get('mimeType', image.get('mime_type')) == 'image/jpeg'
+    assert payload['generationConfig']['responseMimeType'] == 'application/json'
