@@ -61,7 +61,8 @@ class MemoryStore:
 def runtime(monkeypatch):
     store = MemoryStore()
     monkeypatch.setattr(service, 'CoverStore', lambda: store)
-    monkeypatch.setattr(service, 'get_settings', lambda: SimpleNamespace(enabled=True, vertex_model='model'))
+    monkeypatch.setattr(service, 'get_settings', lambda: SimpleNamespace(
+        enabled=True, vertex_model='model', image_normalization='none'))
     monkeypatch.setattr(service.carousels, 'detail', AsyncMock(return_value={'media_url': 'https://x.fbcdn.net/a'}))
     monkeypatch.setattr(service, 'download_image', AsyncMock(return_value=(b'jpg', 'image/jpeg')))
     client = SimpleNamespace(aio=SimpleNamespace(aclose=AsyncMock()), close=Mock())
@@ -212,7 +213,9 @@ async def test_provider_failure_records_only_safe_metadata(runtime, caplog):
     result = await service.translate('1', '7d')
     assert result['item']['status'] == 'error'
     assert runtime.attempts == 1 and runtime.held == {'1'}
-    assert runtime.finish.call_args.args[3] == {'error_type': 'ProviderError', 'provider_status': 503, 'provider_response_complete': False}
+    assert runtime.finish.call_args.args[3] == {
+        'error_type': 'ProviderError', 'provider_status': 503, 'provider_response_complete': False,
+        'prompt_revision': service.PROMPT_REVISION, 'image_preprocessing': 'none'}
     assert 'private credential' not in caplog.text
     assert service.generate.await_count == 1
 
@@ -351,3 +354,48 @@ async def test_budget_metadata_failure_is_fail_closed(runtime):
     assert exc.value.status_code == 503
     service.generate.assert_not_awaited()
     service.download_image.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_original_image_is_default_and_revision_does_not_change_cache(runtime, monkeypatch):
+    assert CoverSettings(_env_file=None).image_normalization == 'none'
+    normalize = Mock(side_effect=AssertionError('Неожиданная нормализация'))
+    monkeypatch.setattr(service, 'normalize_image', normalize)
+    runtime.finish = Mock(wraps=runtime.finish)
+    await service.translate('1', '7d')
+    service.generate.assert_awaited_once_with(service.create_vertex_client.return_value, b'jpg', 'image/jpeg')
+    normalize.assert_not_called()
+    assert runtime.finish.call_args.args[3] == {
+        'total_token_count': 8, 'prompt_revision': service.PROMPT_REVISION,
+        'image_preprocessing': 'none'}
+    await service.translate('1', '14d')
+    assert service.generate.await_count == 1 and runtime.attempts == 1
+
+
+@pytest.mark.asyncio
+async def test_explicit_normalization_submits_and_hashes_transformed_image(runtime, monkeypatch):
+    import hashlib
+    monkeypatch.setattr(service, 'get_settings', lambda: SimpleNamespace(
+        enabled=True, vertex_model='model', image_normalization='jpeg2048'))
+    normalize = Mock(return_value=(b'normalized-jpeg', 'image/jpeg'))
+    monkeypatch.setattr(service, 'normalize_image', normalize)
+    runtime.reserve = Mock(wraps=runtime.reserve)
+    runtime.finish = Mock(wraps=runtime.finish)
+    await service.translate('1', '7d')
+    normalize.assert_called_once_with(b'jpg', 'image/jpeg')
+    runtime.reserve.assert_called_once_with('1', 'model', hashlib.sha256(b'normalized-jpeg').hexdigest())
+    service.generate.assert_awaited_once_with(
+        service.create_vertex_client.return_value, b'normalized-jpeg', 'image/jpeg')
+    assert runtime.finish.call_args.args[3]['image_preprocessing'] == 'jpeg2048'
+    assert runtime.attempts == 1
+
+
+@pytest.mark.asyncio
+async def test_normalization_failure_precedes_auth_and_paid_reservation(runtime, monkeypatch):
+    monkeypatch.setattr(service, 'get_settings', lambda: SimpleNamespace(
+        enabled=True, vertex_model='model', image_normalization='jpeg2048'))
+    monkeypatch.setattr(service, 'normalize_image', Mock(side_effect=service.ImageUnavailable()))
+    assert (await service.translate('1', '7d'))['item']['status'] == 'image_unavailable'
+    service.create_vertex_client.assert_not_called()
+    service.generate.assert_not_awaited()
+    assert runtime.attempts == 0

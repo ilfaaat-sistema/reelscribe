@@ -8,10 +8,10 @@ from datetime import datetime, timezone
 from fastapi import HTTPException
 
 from app.api import carousels
-from app.services.carousel_cover_image import ImageUnavailable, download_image
+from app.services.carousel_cover_image import ImageUnavailable, download_image, normalize_image
 from app.services.carousel_cover_settings import get_settings
 from app.services.carousel_cover_store import CoverStore
-from app.services.carousel_cover_vertex import create_vertex_client, generate
+from app.services.carousel_cover_vertex import PROMPT_REVISION, create_vertex_client, generate
 
 logger = logging.getLogger(__name__)
 STALE_RUNNING_SECONDS = 180
@@ -68,8 +68,11 @@ async def translate(media_id, period, *, oidc_token=None):
             raise HTTPException(422, 'Карусель отсутствует в выбранном наборе') from None
         raise
     # Только адрес существующей серверной записи, никаких URL из тела запроса.
+    image_normalization = get_settings().image_normalization
     try:
         data, mime = await download_image(cover.get('media_url') or cover.get('thumbnail_url'))
+        if image_normalization == 'jpeg2048':
+            data, mime = await asyncio.to_thread(normalize_image, data, mime)
     except ImageUnavailable:
         row = await database(store.unavailable, media_id)
         return {'item': item(media_id, row)}
@@ -101,6 +104,9 @@ async def translate(media_id, period, *, oidc_token=None):
             logger.warning('Сбой перевода обложки id=%s, type=%s, code=%s',
                            media_id, type(error).__name__, code if isinstance(code, int) else None)
             result, uncertain = {'status': 'error'}, not completed
+        # Метаданные ревизии не меняют ключ кэша и не возвращают потраченные попытки.
+        usage = {**usage, 'prompt_revision': PROMPT_REVISION,
+                 'image_preprocessing': image_normalization}
         saved = await database(store.finish, media_id, row['claim_token'], result, usage,
                                int((time.monotonic() - started) * 1000), uncertain)
         return {'item': item(media_id, saved)}

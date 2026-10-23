@@ -134,7 +134,8 @@ def service_fixture(monkeypatch):
     store = AtomicStore()
     monkeypatch.setattr(cover_service, 'CoverStore', lambda: store)
     monkeypatch.setattr(cover_service, 'get_settings',
-                        lambda: SimpleNamespace(enabled=True, vertex_model='vertex-model'))
+                        lambda: SimpleNamespace(enabled=True, vertex_model='vertex-model',
+                                                image_normalization='none'))
     monkeypatch.setattr(cover_service.carousels, 'detail',
                         AsyncMock(return_value={'media_url': 'https://x.fbcdn.net/a'}))
     monkeypatch.setattr(cover_service, 'download_image',

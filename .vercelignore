@@ -3,6 +3,7 @@
 # в основном за счёт личной выгрузки Instagram. Такие данные на хостинге не нужны.
 
 # личные выгрузки и данные
+.baseline/
 your_instagram_activity*/
 message_*.json
 *.csv
