@@ -25,11 +25,15 @@ class MemoryStore:
         return {'status': 'limit_reached' if limited else 'available', 'mode': self.mode,
                 'pilot_limit': 20, 'daily_limit': 500, 'reset_at': self.reset_at,
                 'retry_after': self.reset_at if limited and self.mode == 'live' else None,
-                'attempts': self.attempts, 'daily_attempts': daily}
+                'attempts': self.attempts, 'daily_attempts': daily,
+                'active_slots': len(self.held), 'available_slots': max(0, 2-len(self.held))}
 
 
     def read(self, ids):
         return [dict(row, media_id=identity) for identity, row in self.rows.items() if identity in ids]
+
+    def read_source_override(self, media_id):
+        return None
 
     def reserve(self, media_id, model, image_hash):
         if media_id in self.rows:
@@ -48,13 +52,13 @@ class MemoryStore:
 
     def finish(self, media_id, token, result, usage, duration_ms, uncertain):
         assert token == media_id
-        self.rows[media_id] = result
+        self.rows[media_id] = {**result, 'attempt_recorded': True}
         if not uncertain:
             self.held.remove(media_id)
-        return result
+        return self.rows[media_id]
 
-    def unavailable(self, media_id):
-        return self.rows.setdefault(media_id, {'status': 'image_unavailable'})
+    def unavailable(self, media_id, reason_code='image_unavailable', source_kind=None):
+        return self.rows.setdefault(media_id, {'status': 'image_unavailable', 'reason_code': reason_code})
 
 
 @pytest.fixture
@@ -62,9 +66,10 @@ def runtime(monkeypatch):
     store = MemoryStore()
     monkeypatch.setattr(service, 'CoverStore', lambda: store)
     monkeypatch.setattr(service, 'get_settings', lambda: SimpleNamespace(
-        enabled=True, vertex_model='model', image_normalization='none'))
+        enabled=True, vertex_model='model', image_normalization='jpeg2048'))
     monkeypatch.setattr(service.carousels, 'detail', AsyncMock(return_value={'media_url': 'https://x.fbcdn.net/a'}))
     monkeypatch.setattr(service, 'download_image', AsyncMock(return_value=(b'jpg', 'image/jpeg')))
+    monkeypatch.setattr(service, 'normalize_image', Mock(return_value=(b'jpg', 'image/jpeg')))
     client = SimpleNamespace(aio=SimpleNamespace(aclose=AsyncMock()), close=Mock())
     monkeypatch.setattr(service, 'create_vertex_client', Mock(return_value=client))
     monkeypatch.setattr(service, 'generate', AsyncMock(return_value=({'status': 'ready', 'source_text': 'Hello', 'text_ru': 'Привет'}, {'total_token_count': 8})))
@@ -75,7 +80,8 @@ def runtime(monkeypatch):
 async def test_cache_is_shared_between_periods_and_signed_urls(runtime):
     first = await service.translate('1', '7d')
     second = await service.translate('1', 'archive14d')
-    assert first == second
+    assert first['item'] == second['item']
+    assert first['attempt_reserved'] is True and second['attempt_reserved'] is False
     assert runtime.attempts == service.generate.await_count == 1
     assert service.carousels.detail.await_count == 1
 
@@ -176,8 +182,8 @@ def test_empty_and_unreadable_do_not_invent_text(status):
     assert result.source_text == result.text_ru == ''
 
 
-def test_russian_is_preserved_and_mixed_text_keeps_translation():
-    assert CoverResult(status='ready', source_text='Мой заголовок!', text_ru='Изменённый').text_ru == 'Мой заголовок!'
+def test_ready_result_is_not_reclassified_by_alphabet():
+    assert CoverResult(status='ready', source_text='Мой заголовок!', text_ru='Изменённый').status == 'ready'
     assert CoverResult(status='ready', source_text='Мой AI guide', text_ru='Мой гид по ИИ').text_ru == 'Мой гид по ИИ'
     with pytest.raises(ValueError):
         CoverResult(status='ready', source_text='', text_ru='Домысел')
@@ -215,7 +221,7 @@ async def test_provider_failure_records_only_safe_metadata(runtime, caplog):
     assert runtime.attempts == 1 and runtime.held == {'1'}
     assert runtime.finish.call_args.args[3] == {
         'error_type': 'ProviderError', 'provider_status': 503, 'provider_response_complete': False,
-        'prompt_revision': service.PROMPT_REVISION, 'image_preprocessing': 'none'}
+        'prompt_revision': service.PROMPT_REVISION, 'image_preprocessing': 'jpeg2048', 'source_kind': 'media_url', 'source_failures': []}
     assert 'private credential' not in caplog.text
     assert service.generate.await_count == 1
 
@@ -285,8 +291,9 @@ async def test_get_budget_exhaustion_keeps_cached_results_and_never_starts_model
     assert [value['status'] for value in result['items']] == ['ready', 'unreadable', 'limit_reached']
     assert result['items'][0]['retry_after'] is None
     assert result['items'][2]['retry_after'] == runtime.reset_at
-    assert result['budget'] == {'mode': 'live', 'pilot_limit': 20, 'daily_limit': 500, 'reset_at': runtime.reset_at}
-    assert 'attempts' not in result['budget']
+    assert result['budget'] == {'mode': 'live', 'pilot_limit': 20, 'daily_limit': 500, 'reset_at': runtime.reset_at,
+                                'attempts': 500, 'daily_attempts': 500, 'active_slots': 0, 'available_slots': 2}
+    assert result['budget']['attempts'] == 500
     service.generate.assert_not_awaited()
     service.download_image.assert_not_awaited()
 
@@ -357,17 +364,17 @@ async def test_budget_metadata_failure_is_fail_closed(runtime):
 
 
 @pytest.mark.asyncio
-async def test_original_image_is_default_and_revision_does_not_change_cache(runtime, monkeypatch):
-    assert CoverSettings(_env_file=None).image_normalization == 'none'
-    normalize = Mock(side_effect=AssertionError('Неожиданная нормализация'))
+async def test_normalized_image_is_default_and_revision_does_not_change_cache(runtime, monkeypatch):
+    assert CoverSettings(_env_file=None).image_normalization == 'jpeg2048'
+    normalize = Mock(return_value=(b'jpg', 'image/jpeg'))
     monkeypatch.setattr(service, 'normalize_image', normalize)
     runtime.finish = Mock(wraps=runtime.finish)
     await service.translate('1', '7d')
     service.generate.assert_awaited_once_with(service.create_vertex_client.return_value, b'jpg', 'image/jpeg')
-    normalize.assert_not_called()
+    normalize.assert_called_once_with(b'jpg', 'image/jpeg')
     assert runtime.finish.call_args.args[3] == {
         'total_token_count': 8, 'prompt_revision': service.PROMPT_REVISION,
-        'image_preprocessing': 'none'}
+        'image_preprocessing': 'jpeg2048', 'source_kind': 'media_url', 'source_failures': []}
     await service.translate('1', '14d')
     assert service.generate.await_count == 1 and runtime.attempts == 1
 
@@ -399,3 +406,174 @@ async def test_normalization_failure_precedes_auth_and_paid_reservation(runtime,
     service.create_vertex_client.assert_not_called()
     service.generate.assert_not_awaited()
     assert runtime.attempts == 0
+
+
+@pytest.mark.asyncio
+async def test_legacy_equal_cache_is_neutral_without_image_auth_or_model(runtime):
+    runtime.rows['1'] = {'status': 'ready', 'source_text': 'Как сохранить текст?', 'text_ru': ' Как сохранить текст? ',
+                         'attempt_recorded': True}
+    result = await service.translate('1', '7d')
+    assert result['item']['status'] == 'not_needed' and result['item']['text_ru'] == ''
+    assert result['item']['source_text'] == 'Как сохранить текст?'
+    assert result['item']['reason_code'] == 'unchanged_source'
+    assert result['attempt_reserved'] is False and result['item']['attempt_recorded'] is True
+    assert runtime.rows['1']['status'] == 'ready'
+    service.download_image.assert_not_awaited()
+    service.create_vertex_client.assert_not_called()
+    service.generate.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_sources_fail_over_before_one_reservation(runtime):
+    service.carousels.detail.return_value = {'media_url': 'https://x.fbcdn.net/expired',
+        'thumbnail_url': 'https://x.fbcdn.net/thumb', 'shortcode': 'Abc123_'}
+    service.download_image.side_effect = [service.ImageUnavailable('expired_signature'),
+        service.ImageUnavailable('timeout'), (b'jpg', 'image/jpeg')]
+    runtime.finish = Mock(wraps=runtime.finish)
+    result = await service.translate('1', '7d')
+    assert result['attempt_reserved'] is True and runtime.attempts == 1
+    assert [call.args[0] for call in service.download_image.await_args_list] == [
+        'https://x.fbcdn.net/expired','https://x.fbcdn.net/thumb',
+        'https://www.instagram.com/p/Abc123_/media/?size=l']
+    assert runtime.finish.call_args.args[3]['source_kind'] == 'public_first_cover'
+    assert runtime.finish.call_args.args[3]['source_failures'] == [
+        {'source_kind': 'media_url', 'reason_code': 'expired_signature'},
+        {'source_kind': 'thumbnail_url', 'reason_code': 'timeout'}]
+    service.generate.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_unknown_russian_image_uses_single_combined_request(runtime):
+    service.generate.return_value = ({'status': 'not_needed', 'source_text': 'Мой текст', 'text_ru': ''}, {})
+    result = await service.translate('1','7d')
+    assert result['item']['status'] == 'not_needed'
+    assert result['attempt_reserved'] is True and runtime.attempts == 1
+    service.generate.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_image_failure_is_safe_and_never_reserves(runtime):
+    service.download_image.side_effect = service.ImageUnavailable('timeout')
+    result = await service.translate('1','7d')
+    assert result['attempt_reserved'] is False and result['item']['attempt_recorded'] is False
+    assert result['item']['reason_code'] == 'timeout'
+    assert runtime.attempts == 0
+    service.generate.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('header,minimum,maximum', [('120',119,121), ('999999',299,301), ('invalid',59,61)])
+async def test_completed_429_reports_bounded_pause_without_refund(runtime, header, minimum, maximum):
+    import httpx
+    from datetime import datetime, timezone
+    from google.genai.errors import ClientError
+    response = httpx.Response(429, headers={'Retry-After': header}, json={'error': {'code':429}})
+    service.generate.side_effect = ClientError(429, {'error': {'message': 'private detail'}}, response=response)
+    runtime.finish = Mock(wraps=runtime.finish)
+    result = await service.translate('1','7d')
+    assert result['attempt_reserved'] and runtime.attempts == 1 and not runtime.held
+    usage = runtime.finish.call_args.args[3]
+    seconds = (datetime.fromisoformat(usage['retry_after'])-datetime.now(timezone.utc)).total_seconds()
+    assert minimum <= seconds <= maximum
+    assert usage['provider_response_complete'] is True and usage['provider_status'] == 429
+
+
+
+@pytest.mark.asyncio
+async def test_meta_override_precedes_historical_sources_without_exposing_urls(runtime):
+    runtime.read_source_override = Mock(return_value={'media_id': '1',
+        'media_url': 'https://x.fbcdn.net/refreshed?signature=private',
+        'thumbnail_url': 'https://x.fbcdn.net/refreshed-thumb'})
+    result = await service.translate('1', '7d')
+    service.download_image.assert_awaited_once_with('https://x.fbcdn.net/refreshed?signature=private')
+    runtime.read_source_override.assert_called_once_with('1')
+    assert result['attempt_reserved'] is True and runtime.attempts == 1
+    assert 'private' not in str(result) and 'signature' not in str(result)
+
+
+@pytest.mark.asyncio
+async def test_meta_override_failure_falls_back_to_original_sources(runtime):
+    runtime.read_source_override = Mock(return_value={'media_id': '1',
+        'media_url': 'https://x.fbcdn.net/refreshed', 'thumbnail_url': 'https://x.fbcdn.net/refreshed-thumb'})
+    service.download_image.side_effect = [service.ImageUnavailable('expired_signature'),
+        service.ImageUnavailable('timeout'), (b'jpg','image/jpeg')]
+    await service.translate('1','7d')
+    assert [call.args[0] for call in service.download_image.await_args_list] == [
+        'https://x.fbcdn.net/refreshed','https://x.fbcdn.net/refreshed-thumb','https://x.fbcdn.net/a']
+    assert runtime.attempts == 1
+
+
+@pytest.mark.asyncio
+async def test_override_for_other_id_is_ignored(runtime):
+    runtime.read_source_override = Mock(return_value={'media_id':'2', 'media_url':'https://x.fbcdn.net/other'})
+    await service.translate('1','7d')
+    service.download_image.assert_awaited_once_with('https://x.fbcdn.net/a')
+
+
+@pytest.mark.asyncio
+async def test_ready_cache_never_reads_source_override(runtime):
+    runtime.rows['1'] = {'status':'ready','source_text':'Title','text_ru':'Заголовок'}
+    runtime.read_source_override = Mock(side_effect=AssertionError('Готовый cache не требует refresh'))
+    result = await service.translate('1','7d')
+    assert result['item']['status'] == 'ready' and result['attempt_reserved'] is False
+    runtime.read_source_override.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_override_store_failure_is_sanitized_before_paid_reservation(runtime):
+    runtime.read_source_override = Mock(side_effect=RuntimeError('private signed URL'))
+    with pytest.raises(HTTPException) as error:
+        await service.translate('1','7d')
+    assert error.value.status_code == 503 and 'private' not in error.value.detail
+    assert runtime.attempts == 0
+    service.download_image.assert_not_awaited()
+    service.generate.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_override_cannot_bypass_existing_download_allowlist(runtime):
+    from app.services.carousel_cover_image import download_image
+    runtime.read_source_override = Mock(return_value={'media_id':'1', 'media_url':'https://127.0.0.1/private'})
+    async def guarded(url):
+        if '127.0.0.1' in url:
+            return await download_image(url)
+        return b'jpg', 'image/jpeg'
+    service.download_image.side_effect = guarded
+    runtime.finish = Mock(wraps=runtime.finish)
+    await service.translate('1','7d')
+    assert runtime.finish.call_args.args[3]['source_failures'] == [
+        {'source_kind':'media_url','reason_code':'unsupported'}]
+    assert runtime.attempts == 1
+
+
+
+@pytest.mark.parametrize('source,text_ru', [
+    ('Как да постигнем успех','Как добиться успеха'),
+    ('Мама любить читати книги','Мама любит читать книги'),
+    ('Како да направите добар план','Как составить хороший план'),
+])
+@pytest.mark.asyncio
+async def test_cyrillic_foreign_cache_keeps_existing_translation(runtime, source, text_ru):
+    runtime.rows['1'] = {'status':'ready','source_text':source,'text_ru':text_ru}
+    result = await service.translate('1','7d')
+    assert result['item']['status'] == 'ready' and result['item']['text_ru'] == text_ru
+    assert result['item']['source_text'] == source
+    assert result['attempt_reserved'] is False
+    service.generate.assert_not_awaited()
+    service.download_image.assert_not_awaited()
+
+
+@pytest.mark.parametrize('source', ['Как да постигнем успех','Мама любить читати книги',
+    'Како да направите добар план','Мой русский текст'])
+def test_new_ready_is_never_forced_to_not_needed_by_alphabet(source):
+    result = CoverResult(status='ready',source_text=source,text_ru=source)
+    assert result.status == 'ready' and result.text_ru == source
+
+
+@pytest.mark.asyncio
+async def test_new_v5_ready_cache_remains_ready_even_when_text_matches(runtime):
+    runtime.rows['1'] = {'status':'ready','source_text':'Мой текст','text_ru':'Мой текст',
+                         'usage':{'prompt_revision':service.PROMPT_REVISION}}
+    result = await service.read(['1'])
+    assert result['items'][0]['status'] == 'ready' and result['items'][0]['text_ru'] == 'Мой текст'
+    service.generate.assert_not_awaited()

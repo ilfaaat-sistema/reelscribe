@@ -1,5 +1,5 @@
 """Привилегированное хранилище обложек, отдельное от общего anon-клиента."""
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 
 from app.core.config import settings
@@ -42,15 +42,30 @@ class CoverStore:
         return data
 
     def read(self, ids):
-        return (get_cover_db().table(TABLE).select('media_id,status,source_text,text_ru,created_at')
+        return (get_cover_db().table(TABLE).select('media_id,status,source_text,text_ru,created_at,reason_code,claim_token,lease_expires_at,usage')
                 .eq('prompt_version', PROMPT_VERSION).in_('media_id', ids).execute().data or [])
+
+    def read_source_override(self, media_id):
+        rows = (get_cover_db().table('carousel_cover_source_overrides')
+                .select('media_id,media_url,thumbnail_url,expires_at,provenance')
+                .eq('media_id', media_id).gt('expires_at', datetime.now(timezone.utc).isoformat())
+                .limit(1).execute().data or [])
+        return rows[0] if rows else None
 
     def reserve(self, media_id, model, image_hash):
         return _rpc('reserve_carousel_cover', {'p_id': media_id, 'p_version': PROMPT_VERSION,
                     'p_model': model, 'p_hash': image_hash})
 
-    def unavailable(self, media_id):
-        return _rpc('unavailable_carousel_cover', {'p_id': media_id, 'p_version': PROMPT_VERSION})
+    def unavailable(self, media_id, reason_code='image_unavailable', source_kind=None):
+        return _rpc('unavailable_carousel_cover_source', {'p_id': media_id, 'p_version': PROMPT_VERSION,
+                    'p_reason': reason_code, 'p_source_kind': source_kind})
+
+    def reap(self):
+        return _rpc('reap_carousel_cover_leases', {})
+
+    def rearm(self, media_id, expected_created_at, reason):
+        return _rpc('rearm_carousel_cover', {'p_id': media_id, 'p_expected_created_at': expected_created_at,
+                    'p_reason': reason})
 
     def finish(self, media_id, token, result, usage, duration_ms, uncertain=False):
         return _rpc('finish_carousel_cover', {'p_id': media_id, 'p_version': PROMPT_VERSION,

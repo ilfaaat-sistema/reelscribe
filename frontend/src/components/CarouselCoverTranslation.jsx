@@ -9,6 +9,7 @@ const retryDateFormat = new Intl.DateTimeFormat('ru-RU', {
 const LABELS = {
   missing: 'Перевод обложки пока не получен',
   running: 'Переводим крупный текст обложки…',
+  not_needed: 'Текст уже на русском',
   no_text: 'На обложке нет крупного текста',
   unreadable: 'Не удалось прочитать текст обложки',
   image_unavailable: 'Изображение обложки недоступно',
@@ -26,6 +27,8 @@ export default function CarouselCoverTranslation({ id, period, rootRef, full = f
   const [position, setPosition] = useState(null)
   const ready = item.status === 'ready' && Boolean(item.text_ru.trim())
   const text = ready ? item.text_ru
+    : item.status === 'not_needed' && item.reason_code === 'unchanged_source'
+      ? 'Совпадает с оригиналом'
     : item.status === 'limit_reached' && item.retry_after
       ? `Суточный лимит исчерпан. Проверка после ${retryDateFormat.format(new Date(item.retry_after))} МСК`
       : LABELS[item.status] || LABELS.error

@@ -7,6 +7,7 @@ from app.api import (
     carousels,
     carousel_likes,
     carousel_cover_translations,
+    carousel_cover_watchdog,
     carousel_translation,
     hidden_authors,
     translation,
@@ -53,6 +54,7 @@ app.include_router(carousel_favorites.router, prefix="/api")
 app.include_router(carousels.router, prefix="/api")
 app.include_router(carousel_likes.router, prefix="/api")
 app.include_router(carousel_cover_translations.router, prefix="/api")
+app.include_router(carousel_cover_watchdog.router, prefix="/api")
 app.include_router(hidden_authors.router, prefix="/api")
 app.include_router(translation.router, prefix="/api")
 app.include_router(carousel_translation.router, prefix="/api")

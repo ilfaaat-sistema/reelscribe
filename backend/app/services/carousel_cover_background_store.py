@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+from copy import deepcopy
 import json
 import re
 from datetime import datetime, timezone
@@ -13,7 +14,7 @@ MARKER = "Данные очереди перевода обложек карус
 FILES = {"state.json", "vercel.json", ".carousel-cover-background-data"}
 PERIODS = {"7d", "14d", "30d", "archive14d"}
 MODES = {"existing", "continuous", "archive"}
-STATUSES = {"pending", "inflight", "running", "ready", "no_text", "review", "unknown", "gone"}
+STATUSES = {"pending", "inflight", "running", "ready", "not_needed", "no_text", "review", "unknown", "gone"}
 _HEX64 = re.compile(r"[0-9a-f]{64}")
 _GIT_SHA = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 _ID = re.compile(r"[0-9]{1,40}")
@@ -58,18 +59,103 @@ def _iso(value: object, *, nullable: bool = True) -> datetime | None:
 
 def initial_state(mode: str = "existing") -> dict:
     return {
-        "version": 1, "mode": mode, "updated_at": datetime.now(timezone.utc).isoformat(),
+        "version": 2, "mode": mode, "updated_at": datetime.now(timezone.utc).isoformat(),
         "inventory": None, "items": [], "pause_until": None, "pause_reason": None,
-        "consecutive_errors": 0,
-        "counters": {"posts": 0, "ready": 0, "skipped": 0, "errors": 0, "http_ms": 0},
+        "consecutive_errors": 0, "source_refs": {}, "recovery_events": [],
+        "counters": {"posts": 0, "ready": 0, "skipped": 0, "errors": 0, "http_ms": 0,
+                     "http_requests": 0, "attempts_reserved": 0, "cache_hits": 0, "busy_rejections": 0},
     }
 
 
+def upgrade_state(state: dict) -> dict:
+    """v1.posts — исторический HTTP-счётчик; оплаченные попытки из него не выводим."""
+    validate_state(state)
+    value = deepcopy(state)
+    if value["version"] == 1:
+        value.update(version=2, source_refs={}, recovery_events=[])
+        value["counters"].update(http_requests=value["counters"]["posts"], attempts_reserved=0,
+                                 cache_hits=0, busy_rejections=0)
+    return value
+
+
+def reconcile_queue(store, manifest: dict, *, now: datetime) -> str:
+    """Чистый операторский CAS: только явно сверенные результаты, никаких HTTP POST."""
+    _iso(now.isoformat(), nullable=False)
+    if not isinstance(manifest, dict) or set(manifest) != {"expected_sha", "items"}:
+        raise ValueError("Некорректный manifest восстановления")
+    if not _GIT_SHA.fullmatch(str(manifest["expected_sha"])) or not isinstance(manifest["items"], list) or not manifest["items"]:
+        raise ValueError("Некорректный manifest восстановления")
+    state, sha = store.load()
+    if sha != manifest["expected_sha"]:
+        raise Conflict("Очередь изменилась после операторской сверки")
+    state = upgrade_state(state)
+    by_id = {item["id"]: item for item in state["items"]}
+    seen = set()
+    common = {"id", "expected_status", "expected_updated_at", "expected_first_inflight_at", "action"}
+    fields = {
+        "verified_no_attempt": {"db_all_versions_checked", "db_claim_absent", "old_run_finished"},
+        "db_rearmed": {"db_rearmed"},
+        "resolved_without_model": {"resolved_without_model", "observed_status"},
+    }
+    for row in manifest["items"]:
+        if not isinstance(row, dict) or row.get("action") not in fields or set(row) != common | fields[row["action"]]:
+            raise ValueError("Некорректная сверка восстановления")
+        if not isinstance(row["id"], str) or not _ID.fullmatch(row["id"]) or row["id"] in seen:
+            raise ValueError("Некорректный или повторный ID восстановления")
+        seen.add(row["id"])
+        item = by_id.get(row["id"])
+        if (not item or item["status"] != row["expected_status"] or item["updated_at"] != row["expected_updated_at"]
+                or item["first_inflight_at"] != row["expected_first_inflight_at"]):
+            raise Conflict("Запись очереди изменилась после операторской сверки")
+        action = row["action"]
+        target = "pending"
+        if action == "verified_no_attempt":
+            first = _iso(item["first_inflight_at"])
+            if (item["status"] != "unknown" or first is None or (now - first).total_seconds() <= 600
+                    or any(row[key] is not True for key in fields[action])):
+                raise ValueError("Нужны сверка всех DB-версий, отсутствие claim, завершённый run и возраст более600с")
+            reason = "operator_confirmed_no_claim"
+        elif action == "db_rearmed":
+            if item["status"] != "review" or row["db_rearmed"] is not True:
+                raise ValueError("Нужен успешный DB rearm для review")
+            reason = "operator_db_rearmed"
+        else:
+            if (item["status"] not in {"pending", "review"} or row["resolved_without_model"] is not True
+                    or row["observed_status"] not in {"not_needed", "no_text"}):
+                raise ValueError("Нужен терминальный GET-результат без модели")
+            target = row["observed_status"]
+            reason = "operator_resolved_without_model"
+        state["recovery_events"].append({"id": item["id"], "at": now.isoformat(),
+            "previous_updated_at": item["updated_at"], "first_inflight_at": item["first_inflight_at"],
+            "previous_status": item["status"], "reason": reason})
+        item.update(status=target, updated_at=now.isoformat(), first_inflight_at=None,
+                    safe_error_code=reason, defer_until=None)
+    state["updated_at"] = now.isoformat()
+    return store.save(state, sha)
+
+
+def reconcile_unknown(store, manifest: dict, *, now: datetime) -> str:
+    """Совместимый узкий helper; manifest обязательно подтверждает все версии БД."""
+    if not isinstance(manifest, dict) or set(manifest) != {"expected_sha", "items"} or not isinstance(manifest["items"], list):
+        raise ValueError("Некорректный manifest неизвестных исходов")
+    converted = {"expected_sha": manifest["expected_sha"], "items": []}
+    for row in manifest["items"]:
+        if not isinstance(row, dict) or set(row) != {"id", "expected_updated_at", "expected_first_inflight_at",
+                "db_claim_absent", "db_all_versions_checked", "old_run_finished"}:
+            raise ValueError("Нужна явная сверка всех DB-версий неизвестного исхода")
+        converted["items"].append({**row, "expected_status": "unknown", "action": "verified_no_attempt"})
+    return reconcile_queue(store, converted, now=now)
+
+
 def validate_state(state: object) -> str:
-    if not isinstance(state, dict) or set(state) != {
+    if not isinstance(state, dict):
+        raise ValueError("Некорректная схема очереди")
+    version = state.get("version")
+    extra = {"source_refs", "recovery_events"} if version == 2 else set()
+    if set(state) != {
         "version", "mode", "updated_at", "inventory", "items", "pause_until", "pause_reason",
         "consecutive_errors", "counters",
-    } or state.get("version") != 1 or state.get("mode") not in MODES:
+    } | extra or version not in (1, 2) or state.get("mode") not in MODES:
         raise ValueError("Некорректная схема очереди")
     _iso(state["updated_at"], nullable=False)
     _iso(state["pause_until"])
@@ -86,8 +172,25 @@ def validate_state(state: object) -> str:
         if type(inventory["count"]) is not int or inventory["count"] < 0 or inventory["scope"] not in MODES:
             raise ValueError("Некорректный объём инвентаризации")
         _iso(inventory["captured_at"], nullable=False)
+    if version == 2:
+        refs = state["source_refs"]
+        if not isinstance(refs, dict) or any(name not in {"archive7d", "archive14d", "live"} or not isinstance(sha, str) or not _GIT_SHA.fullmatch(sha) for name, sha in refs.items()):
+            raise ValueError("Некорректные SHA источников")
+        if not isinstance(state["recovery_events"], list) or len(state["recovery_events"]) > 100_000:
+            raise ValueError("Некорректная история восстановления")
+        for event in state["recovery_events"]:
+            if (not isinstance(event, dict) or set(event) not in ({"id", "at", "previous_updated_at", "first_inflight_at", "reason"},
+                                             {"id", "at", "previous_updated_at", "first_inflight_at", "previous_status", "reason"})
+                    or not isinstance(event["id"], str) or not _ID.fullmatch(event["id"])
+                    or event["reason"] not in {"operator_confirmed_no_claim", "operator_db_rearmed", "operator_resolved_without_model"}
+                    or event.get("previous_status", "unknown") not in STATUSES):
+                raise ValueError("Некорректное событие восстановления")
+            for field in ("at", "previous_updated_at"):
+                _iso(event[field], nullable=False)
+            _iso(event["first_inflight_at"])
     counters = state["counters"]
-    if not isinstance(counters, dict) or set(counters) != {"posts", "ready", "skipped", "errors", "http_ms"} or any(type(v) is not int or v < 0 for v in counters.values()):
+    counter_extra = {"http_requests", "attempts_reserved", "cache_hits", "busy_rejections"} if version == 2 else set()
+    if not isinstance(counters, dict) or set(counters) != {"posts", "ready", "skipped", "errors", "http_ms"} | counter_extra or any(type(v) is not int or v < 0 for v in counters.values()):
         raise ValueError("Некорректные счётчики")
     items = state["items"]
     if not isinstance(items, list) or len(items) > 100_000:
@@ -125,9 +228,10 @@ def validate_state(state: object) -> str:
 
 
 class CarouselCoverBackgroundStore:
-    def __init__(self, client, token: str | None = None):
+    def __init__(self, client, token: str | None = None, *, request_timeout=45):
         self.client = client
         self.token = token
+        self.request_timeout = request_timeout
         self.base = f"https://api.github.com/repos/{REPOSITORY}/"
         self.remaining: int | None = None
         self.reset_at: datetime | None = None
@@ -137,7 +241,7 @@ class CarouselCoverBackgroundStore:
         headers = {"Accept": accept, "X-GitHub-Api-Version": "2022-11-28"}
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
-        response = self.client.request(method, self.base + path, headers=headers, timeout=45, **kwargs)
+        response = self.client.request(method, self.base + path, headers=headers, timeout=self.request_timeout, **kwargs)
         remaining = response.headers.get("x-ratelimit-remaining")
         if remaining is not None:
             try:
@@ -202,7 +306,7 @@ class CarouselCoverBackgroundStore:
         if vercel != {"git": {"deploymentEnabled": False}}:
             raise ValueError("Ветка очереди не защищена от деплоя")
         validate_state(state)
-        return state, sha
+        return upgrade_state(state), sha
 
     def save(self, state: dict, expected_sha: str | None) -> str:
         if not self.token:
@@ -225,3 +329,26 @@ class CarouselCoverBackgroundStore:
             self.request("POST", "git/refs", json={"ref": "refs/heads/" + BRANCH,
                          "sha": commit["sha"]}, conflict=True)
         return commit["sha"]
+
+
+# Источники уже согласованного каталога; watchdog читает только SHA, без контента.
+SOURCES = {
+    "archive7d": ("data/authors-carousels-20261013-20261019", "activity-report.json"),
+    "archive14d": ("data/authors-carousels-20261006-20261019", "activity-report.json"),
+    "live": ("data/carousels-favorites-live", "state.json"),
+}
+
+
+def source_refs(store) -> dict:
+    refs = {}
+    for name, (branch, path) in SOURCES.items():
+        # Git tree содержит только метаданные: полный JSON исходника не скачивается.
+        value = store.request("GET", "git/trees/" + branch)
+        if not isinstance(value, dict) or value.get("truncated") or not isinstance(value.get("tree"), list):
+            raise ValueError("Некорректное дерево источника")
+        entry = next((row for row in value["tree"] if isinstance(row, dict) and row.get("path") == path), {})
+        sha = entry.get("sha") if entry.get("type") == "blob" else None
+        if not isinstance(sha, str) or not _GIT_SHA.fullmatch(sha):
+            raise ValueError("Некорректный SHA источника")
+        refs[name] = sha
+    return refs
