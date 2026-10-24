@@ -92,11 +92,27 @@ def test_disabled_is_noop_without_gate_github_reap_or_budget():
     assert not control.claimed and not control.reaps and not github.loads and not github.signals
 
 
-@pytest.mark.parametrize('active', [True])
-def test_queued_or_active_run_is_noop_before_source_reads(active):
-    control, github = Control(), GitHub(active=active)
-    assert watchdog(control=control, github=github).tick()['reason'] == 'active_run'
-    assert control.reaps == 1 and not github.signals and not github.ref_reads
+@pytest.mark.parametrize('run_status', ['queued', 'in_progress'])
+def test_queued_or_active_run_refreshes_summary_without_source_reads_or_dispatch(run_status):
+    control, snapshot = Control(), GitHub(count=6)
+    for item, status in zip(snapshot.state['items'], ['pending', 'pending', 'running', 'unknown', 'ready', 'not_needed']):
+        item['status'] = status
+    calls, loads = [], []
+    def handler(request):
+        calls.append(request)
+        if '/actions/variables/' in request.url.path:
+            return httpx.Response(200, json={'value': 'true'})
+        assert request.method == 'GET' and request.url.path.endswith('/runs')
+        active = request.url.params['status'] == run_status
+        return httpx.Response(200, json={'total_count': int(active), 'workflow_runs': [{'id': 1}] if active else []})
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        github = service.GitHubWatchdog(client, 'dummy-test-token')
+        github.load = lambda: loads.append(True) or deepcopy(snapshot.state)
+        assert watchdog(control=control, github=github).tick() == {'reason': 'active_run', 'dispatched': False}
+    assert loads == [True] and control.reaps == 1
+    assert control.records == [('active_run', {}, {'pending': 2, 'running': 1, 'unknown': 1, 'terminal': 2, 'remaining': 4})]
+    assert all(request.method == 'GET' for request in calls)
+    assert not any('/git/trees/' in request.url.path for request in calls)
 
 
 @pytest.mark.parametrize(('status', 'slots', 'reason'), [('limit_reached', 2, 'quota'), ('available', 0, 'busy')])

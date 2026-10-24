@@ -128,6 +128,8 @@ class Watchdog:
             if not self.github.repository_enabled():
                 reason = 'repository_disabled'
             elif self.github.active_run():
+                # Живой run не разрешает новый dispatch, но сводка берётся из свежего CAS-кэша.
+                summary = safe_summary(self.github.load())
                 reason = 'active_run'
             else:
                 budget = self.cover.budget()
