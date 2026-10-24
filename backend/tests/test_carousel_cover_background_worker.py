@@ -55,11 +55,11 @@ class Api:
         self.posts.append(item["id"])
         if isinstance(self.result, Exception):
             raise self.result
-        return {"status": self.result, "http_ms": 123}
+        return {"status": self.result, "http_ms": 123, "attempt_reserved": self.result not in {"busy", "running", "limit_reached"}}
 
 
 def execute(store, api, **kwargs):
-    return run(store, api, enabled=True, now_fn=lambda: NOW, monotonic=lambda: 0, log=lambda _: None, **kwargs)
+    return run(store, api, enabled=True, now_fn=lambda: NOW, monotonic=lambda: 0, log=lambda _: None, sleep_fn=lambda _: None, **kwargs)
 
 
 def test_disabled_has_no_network_or_checkpoint():
@@ -88,14 +88,15 @@ def test_write_ahead_and_two_simultaneous_posts():
     def post(item):
         nonlocal active, maximum
         checkpoint = store.saves[-1]
-        assert all(i["status"] == "inflight" for i in checkpoint["items"])
+        assert sum(i["status"] == "inflight" for i in checkpoint["items"]) == 2
+        assert next(i for i in checkpoint["items"] if i["id"] == item["id"])["status"] == "inflight"
         with lock:
             active += 1
             maximum = max(maximum, active)
         barrier.wait(timeout=3)
         with lock:
             active -= 1
-        return {"status": "ready", "http_ms": 10}
+        return {"status": "ready", "http_ms": 10, "attempt_reserved": True}
     api.post = post
     assert execute(store, api)[0] == "completed"
     assert maximum == 2
@@ -206,7 +207,7 @@ def test_post_period_fallback_only_before_model_and_no_transport_retry():
         assert request.url.host == "reelscribe-ai.vercel.app"
         if len(calls) == 1:
             return httpx.Response(422, json={})
-        return httpx.Response(200, json={"item": {"id": "1", "status": "ready", "text_ru": "Секретный текст"}})
+        return httpx.Response(200, json={"item": {"id": "1", "status": "ready", "text_ru": "Секретный текст"}, "attempt_reserved": True})
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
         result = ProductionApi(client).post({"id": "1", "periods": ["14d", "30d"]})
     assert result["status"] == "ready" and "text_ru" not in result
@@ -286,6 +287,7 @@ def test_four_slow_period_fallbacks_share_300s_deadline_and_save_unknown_checkpo
     inventory.rows[0]["periods"] = ["30d", "14d", "archive14d", "7d"]
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
         production = ProductionApi(client, monotonic=lambda: clock[0])
+        production.control = lambda: True
         production.inventory = inventory.inventory
         production.read = inventory.read
         status, values = execute(store, production)
@@ -299,3 +301,106 @@ def test_four_slow_period_fallbacks_share_300s_deadline_and_save_unknown_checkpo
     assert store.saves[-1]["pause_reason"] is None  # Второй запуск read-only сверил неизвестный исход.
     assert any(s["pause_reason"] == "post_outcome_unknown" for s in store.saves)
     assert any(s["items"][0]["status"] == "inflight" for s in store.saves)
+
+
+def test_not_needed_is_terminal_without_post():
+    api, store = Api({'1': 'not_needed'}, count=1), Store()
+    assert execute(store, api)[0] == 'completed'
+    assert not api.posts and store.state['items'][0]['status'] == 'not_needed'
+    assert store.state['counters']['cache_hits'] == 1
+
+
+def test_cache_and_rejections_do_not_consume_new_attempt_cap():
+    api, store = Api(count=4), Store()
+    def post(item):
+        api.posts.append(item['id'])
+        return {'status': 'ready', 'http_ms': 1, 'attempt_reserved': item['id'] in {'3', '4'}}
+    api.post = post
+    execute(store, api, max_posts=1)
+    assert api.posts == ['1', '2', '3']
+    assert store.state['counters']['attempts_reserved'] == 1
+    assert store.state['counters']['http_requests'] == 3
+    assert store.state['counters']['cache_hits'] == 2
+    assert store.state['items'][3]['status'] == 'pending'
+
+
+def test_busy_backpressure_waits_gets_and_never_marks_whole_queue_inflight():
+    api, store = Api(result='busy', count=10), Store()
+    delays = []
+    api.last_budget = {'available_slots': 2}
+    # GET сообщает исчерпанную ёмкость после первой волны.
+    original = api.read
+    def read(ids):
+        if api.posts:
+            api.last_budget = {'available_slots': 0}
+        return original(ids)
+    api.read = read
+    status, values = run(store, api, enabled=True, now_fn=lambda: NOW, monotonic=lambda: 0,
+                         sleep_fn=delays.append, log=lambda _: None)
+    assert status == 'paused' and delays == [5, 10, 20]
+    assert len(api.posts) == 2 and api.reads[1:]
+    assert store.state['counters']['attempts_reserved'] == 0
+    assert store.state['counters']['busy_rejections'] == 2
+    assert store.state['counters']['http_requests'] == 2
+    assert all(i['status'] == 'pending' for i in store.state['items'])
+    assert store.state['pause_reason'] == 'busy_backpressure'
+    assert not values['needs_continuation']
+
+
+def test_racy_capacity_reports_still_bound_busy_retries_to_three_waits():
+    api, store = Api(result='busy', count=10), Store()
+    api.last_budget = {'available_slots': 2}
+    delays = []
+    run(store, api, enabled=True, now_fn=lambda: NOW, monotonic=lambda: 0,
+        sleep_fn=delays.append, log=lambda _: None)
+    assert delays == [5, 10, 20]
+    assert len(api.posts) == 8  # Две исходных выдачи + три проверенные волны.
+    assert store.state['pause_reason'] == 'busy_backpressure'
+
+
+def test_controller_disabled_before_next_batch_stops_new_ids():
+    api, store = Api(count=10), Store()
+    api.control = lambda: len(api.posts) < 2
+    execute(store, api)
+    assert len(api.posts) == 2 and store.state['pause_reason'] == 'controller_disabled'
+    assert sum(i['status'] == 'pending' for i in store.state['items']) == 8
+
+
+def test_time_budget_with_progress_requests_continuation_without_cron():
+    clock = [0.0]
+    api, store = Api(count=10), Store()
+    def post(item):
+        api.posts.append(item['id'])
+        clock[0] = 4500
+        return {'status': 'ready', 'http_ms': 1, 'attempt_reserved': True}
+    api.post = post
+    status, values = run(store, api, enabled=True, now_fn=lambda: NOW, monotonic=lambda: clock[0], log=lambda _: None)
+    assert status == 'started' and values['needs_continuation']
+    assert len(api.posts) == 2 and values['pending'] == 8
+    assert not store.state['pause_reason']
+
+
+def test_no_progress_empty_or_unknown_only_never_requests_continuation():
+    api, store = Api(count=0), Store()
+    assert not execute(store, api)[1]['needs_continuation']
+    api, store = Api(count=1), Store()
+    merge_inventory(store.state, api.rows, 'existing', NOW)
+    store.state['items'][0].update(status='unknown', first_inflight_at=NOW.isoformat())
+    assert not execute(store, api)[1]['needs_continuation'] and not api.posts
+
+
+def test_provider_rate_limit_pauses_new_ids_and_preserves_paid_error_terminal():
+    api, store = Api(count=10), Store()
+    def post(item):
+        api.posts.append(item['id'])
+        return {'status': 'error', 'reason_code': 'provider_rate_limit', 'retry_after': '2026-10-23T17:02:00Z',
+                'http_ms': 1, 'attempt_reserved': True}
+    api.post = post
+    execute(store, api)
+    assert len(api.posts) == 2 and store.state['counters']['attempts_reserved'] == 2
+    assert store.state['pause_reason'] == 'provider_rate_limit'
+    assert store.state['pause_until'] == '2026-10-23T17:02:00+00:00'
+    assert all(i['status'] == 'review' for i in store.state['items'] if i['id'] in api.posts)
+    before = api.posts[:]
+    execute(store, api)
+    assert api.posts == before

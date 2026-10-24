@@ -2,12 +2,14 @@ name: Фоновый перевод обложек каруселей
 
 on:
   workflow_dispatch:
+  repository_dispatch:
+    types: [carousel-cover-background-run]
   schedule:
     - cron: '7,22,37,52 * * * *'
 
 permissions:
   contents: write
-  actions: read
+  actions: write
 
 concurrency:
   group: carousel-cover-background
@@ -17,7 +19,7 @@ jobs:
   translate:
     if: vars.CAROUSEL_COVER_BACKGROUND_ENABLED == 'true' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
     steps:
       - name: Получить код main
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -31,9 +33,15 @@ jobs:
       - name: Установить фиксированный HTTP-клиент
         run: python -m pip install --disable-pip-version-check 'httpx==0.28.1'
       - name: Продолжить очередь обложек
+        id: queue
         run: python -m app.workers.carousel_cover_background
         env:
           PYTHONPATH: backend
           GH_TOKEN: ${{ github.token }}
           CAROUSEL_COVER_BACKGROUND_ENABLED: ${{ vars.CAROUSEL_COVER_BACKGROUND_ENABLED }}
           CAROUSEL_COVER_BACKGROUND_MODE: ${{ vars.CAROUSEL_COVER_BACKGROUND_MODE }}
+      - name: Передать готовую к работе очередь следующему run
+        if: steps.queue.outputs.needs_continuation == 'true'
+        run: gh workflow run carousel-cover-background.yml --repo ilfaaat-sistema/reelscribe --ref main
+        env:
+          GH_TOKEN: ${{ github.token }}
