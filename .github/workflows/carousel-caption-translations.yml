@@ -52,7 +52,7 @@ jobs:
           PYTHONPATH: backend
           GH_TOKEN: ${{ github.token }}
           CAROUSEL_CAPTION_BULK_ENABLED: ${{ vars.CAROUSEL_CAPTION_BULK_ENABLED }}
-          CAROUSEL_CAPTION_BULK_MAX_POSTS: ${{ github.event_name == 'workflow_dispatch' && toJSON(inputs.max_posts) || '500' }}
+          CAROUSEL_CAPTION_BULK_MAX_POSTS: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.max_posts) || '500' }}
       - name: Передать незавершённую очередь следующему run
         if: steps.queue.outputs.needs_continuation == 'true'
         run: gh workflow run carousel-caption-translations.yml --repo "$GITHUB_REPOSITORY" --ref main

@@ -3,6 +3,10 @@ import re
 from pathlib import Path
 
 WORKFLOW = Path(__file__).parents[2] / ".github/workflows/carousel-caption-translations.yml"
+MAX_POSTS_EXPRESSION = (
+    "${{ github.event_name == 'workflow_dispatch' && "
+    "format('{0}', inputs.max_posts) || '500' }}"
+)
 
 
 def source() -> str:
@@ -46,10 +50,11 @@ def test_continuation_uses_only_exact_worker_output_and_own_workflow():
     assert "        run: python -m app.workers.carousel_caption_bulk\n" in queue
     max_posts_env = (
         "          CAROUSEL_CAPTION_BULK_MAX_POSTS: "
-        "${{ github.event_name == 'workflow_dispatch' && toJSON(inputs.max_posts) || '500' }}"
+        + MAX_POSTS_EXPRESSION
     )
     assert max_posts_env in queue
     assert "${{ inputs.max_posts || 500 }}" not in queue
+    assert "toJSON(inputs.max_posts)" not in queue
 
     handoff = step(text, "Передать незавершённую очередь следующему run")
     assert "        if: steps.queue.outputs.needs_continuation == 'true'\n" in handoff
@@ -59,3 +64,16 @@ def test_continuation_uses_only_exact_worker_output_and_own_workflow():
     assert not any(value in handoff for value in ("http://", "https://", "--field", " -f ", "secrets."))
     assert "max_posts" not in handoff
     assert text.count("gh workflow run ") == 1
+
+
+def test_max_posts_format_preserves_zero_and_numeric_strings_before_cli_validation():
+    assert MAX_POSTS_EXPRESSION in source()
+
+    def rendered(event_name, value):
+        # Модель зафиксированного GitHub format('{0}', value) + event fallback.
+        return str(value) if event_name == "workflow_dispatch" else "500"
+
+    for value, expected in ((0, "0"), ("0", "0"), (5, "5"), ("5", "5")):
+        assert rendered("workflow_dispatch", value) == expected
+    assert rendered("schedule", None) == "500"
+    assert rendered("workflow_run", None) == "500"
