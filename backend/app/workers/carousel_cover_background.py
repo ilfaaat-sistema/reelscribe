@@ -22,7 +22,8 @@ MAX_RUN_SECONDS = 80 * 60
 REQUEST_DRAIN_SECONDS = 360
 POST_ITEM_SECONDS = 300
 POST_PERIOD_SECONDS = 150
-BATCH_SIZE = 2
+BATCH_SIZE = 10
+MAX_ACTIVE_POSTS = 2
 MAX_POSTS = 2500
 MOSCOW = ZoneInfo("Europe/Moscow")
 _ID = re.compile(r"[0-9]{1,40}")
@@ -256,6 +257,10 @@ def run(store, api, *, enabled=False, mode="existing", now_fn=utcnow, monotonic=
         nonlocal sha
         state["updated_at"] = stamp(now_fn())
         sha = store.save(state, sha)
+        remaining = store.remaining if store.remaining is not None else "unknown"
+        reset = stamp(store.reset_at) if store.reset_at is not None else "unknown"
+        log(f"checkpoint mode={mode} github_remaining={remaining} github_reset_at={reset} "
+            + " ".join(f"{key}={value}" for key, value in sorted(counts(state).items())))
 
     def alive():
         return monotonic() - started < deadline
@@ -356,76 +361,95 @@ def run(store, api, *, enabled=False, mode="existing", now_fn=utcnow, monotonic=
         capacity = getattr(api, "last_budget", {}).get("available_slots", 2)
         busy = capacity == 0
         if not busy:
-            batch = eligible[:min(BATCH_SIZE, max_posts - reservations, capacity)]
+            batch = eligible[:BATCH_SIZE]
             eligible = eligible[len(batch):]
+            previous_first = {item["id"]: item["first_inflight_at"] for item in batch}
             for item in batch:
                 set_item(item, "inflight", now_fn(), "checkpointed")
                 item["first_inflight_at"] = item["first_inflight_at"] or stamp(now_fn())
-            # Пишем намерение только двух реально выдаваемых ID до любых POST.
+            # Один CAS до группы: после crash даже неотправленный хвост требует GET-сверки.
             save()
-            with ThreadPoolExecutor(max_workers=2) as pool:
-                futures = {pool.submit(api.post, item): (item, time.monotonic()) for item in batch}
-                # Вся волна завершается прежде, чем может быть выдан следующий ID.
-                for future, (item, request_started) in futures.items():
-                    try:
-                        result = future.result()
-                        item["http_ms"] = result["http_ms"]
-                        status = result["status"]
-                        if status in {"missing", "disabled"}:
-                            raise ApiFailure(502, "post_invalid_result")
-                        requests = result.get("http_requests", 1)
-                        state["counters"]["posts"] += requests
-                        state["counters"]["http_requests"] += requests
-                        if result.get("attempt_reserved") is True:
-                            reservations += 1
-                            state["counters"]["attempts_reserved"] += 1
-                        elif status in {"ready", "not_needed", "no_text", "unreadable", "error"}:
-                            state["counters"]["cache_hits"] += 1
-                        if status == "gone":
-                            set_item(item, "gone", now_fn(), "carousel_not_found")
-                            progress = True
-                        elif status in {"busy", "limit_reached"}:
-                            # Явный отказ до reserve; намерение можно безопасно вернуть.
-                            set_item(item, "pending", now_fn(), status)
-                            item["first_inflight_at"] = None
-                            item["defer_until"] = None
-                            if status == "busy":
-                                state["counters"]["busy_rejections"] += 1
-                                busy = True
-                                eligible.append(item)
+            cursor = 0
+            with ThreadPoolExecutor(max_workers=MAX_ACTIVE_POSTS) as pool:
+                while cursor < len(batch) and reservations < max_posts and alive():
+                    if busy or state["pause_reason"] or not controlled():
+                        break
+                    capacity = getattr(api, "last_budget", {}).get("available_slots", MAX_ACTIVE_POSTS)
+                    if capacity <= 0:
+                        busy = True
+                        break
+                    size = min(MAX_ACTIVE_POSTS, capacity, max_posts - reservations, len(batch) - cursor)
+                    wave = batch[cursor:cursor + size]
+                    cursor += len(wave)
+                    # Следующая пара не попадает даже в executor, пока эта волна не завершена.
+                    futures = {pool.submit(api.post, item): (item, time.monotonic()) for item in wave}
+                    for future, (item, request_started) in futures.items():
+                        try:
+                            result = future.result()
+                            item["http_ms"] = result["http_ms"]
+                            status = result["status"]
+                            if status in {"missing", "disabled"}:
+                                raise ApiFailure(502, "post_invalid_result")
+                            requests = result.get("http_requests", 1)
+                            state["counters"]["posts"] += requests
+                            state["counters"]["http_requests"] += requests
+                            if result.get("attempt_reserved") is True:
+                                reservations += 1
+                                state["counters"]["attempts_reserved"] += 1
+                            elif status in {"ready", "not_needed", "no_text", "unreadable", "error"}:
+                                state["counters"]["cache_hits"] += 1
+                            if status == "gone":
+                                set_item(item, "gone", now_fn(), "carousel_not_found")
+                                progress = True
+                            elif status in {"busy", "limit_reached"}:
+                                # Явный отказ до reserve; намерение можно безопасно вернуть.
+                                set_item(item, "pending", now_fn(), status)
+                                item["first_inflight_at"] = None
+                                item["defer_until"] = None
+                                if status == "busy":
+                                    state["counters"]["busy_rejections"] += 1
+                                    busy = True
+                                    eligible.append(item)
+                                else:
+                                    budget_pause(state, result, None, now_fn())
                             else:
-                                budget_pause(state, result, None, now_fn())
-                        else:
-                            action = apply_cache(item, result, state, now_fn())
-                            progress = progress or action == "done"
-                            if status == "error":
-                                state["consecutive_errors"] = min(3, state["consecutive_errors"] + 1)
-                                state["counters"]["errors"] += 1
-                            else:
-                                state["consecutive_errors"] = 0
-                                state["counters"]["ready" if status == "ready" else "skipped"] += 1
-                        state["counters"]["http_ms"] += result["http_ms"]
-                        if result.get("reason_code") == "provider_rate_limit":
-                            until = now_fn() + timedelta(seconds=60)
-                            try:
-                                until = max(now_fn() + timedelta(seconds=1), min(
-                                    parse_stamp(result.get("retry_after") or ""), now_fn() + timedelta(minutes=5)))
-                            except (ValueError, AttributeError):
-                                pass
-                            pause(state, "provider_rate_limit", now_fn(), until)
-                        if state["consecutive_errors"] >= 3:
-                            pause(state, "three_errors", now_fn(), now_fn() + timedelta(minutes=15))
-                    except Exception as exc:  # noqa: BLE001 — потерянный ответ не разрешает повтор.
-                        requests = getattr(exc, "http_requests", 1)
-                        item["http_ms"] = getattr(exc, "http_ms", max(0, int((time.monotonic() - request_started) * 1000)))
-                        state["counters"]["http_ms"] += item["http_ms"]
-                        state["counters"]["posts"] += requests
-                        state["counters"]["http_requests"] += requests
-                        code = "auth_failed" if isinstance(exc, ApiFailure) and exc.status in {401, 403} else "post_outcome_unknown"
-                        set_item(item, "unknown", now_fn(), code)
-                        state["counters"]["errors"] += 1
-                        pause(state, code, now_fn())
-                    log(f"cover id={item['id']} status={item['status']} http_ms={item['http_ms']} mode={mode}")
+                                action = apply_cache(item, result, state, now_fn())
+                                progress = progress or action == "done"
+                                if status == "error":
+                                    state["consecutive_errors"] = min(3, state["consecutive_errors"] + 1)
+                                    state["counters"]["errors"] += 1
+                                else:
+                                    state["consecutive_errors"] = 0
+                                    state["counters"]["ready" if status == "ready" else "skipped"] += 1
+                            state["counters"]["http_ms"] += result["http_ms"]
+                            if result.get("reason_code") == "provider_rate_limit":
+                                until = now_fn() + timedelta(seconds=60)
+                                try:
+                                    until = max(now_fn() + timedelta(seconds=1), min(
+                                        parse_stamp(result.get("retry_after") or ""), now_fn() + timedelta(minutes=5)))
+                                except (ValueError, AttributeError):
+                                    pass
+                                pause(state, "provider_rate_limit", now_fn(), until)
+                            if state["consecutive_errors"] >= 3:
+                                pause(state, "three_errors", now_fn(), now_fn() + timedelta(minutes=15))
+                        except Exception as exc:  # noqa: BLE001 — потерянный ответ не разрешает повтор.
+                            requests = getattr(exc, "http_requests", 1)
+                            item["http_ms"] = getattr(exc, "http_ms", max(0, int((time.monotonic() - request_started) * 1000)))
+                            state["counters"]["http_ms"] += item["http_ms"]
+                            state["counters"]["posts"] += requests
+                            state["counters"]["http_requests"] += requests
+                            code = "auth_failed" if isinstance(exc, ApiFailure) and exc.status in {401, 403} else "post_outcome_unknown"
+                            set_item(item, "unknown", now_fn(), code)
+                            state["counters"]["errors"] += 1
+                            pause(state, code, now_fn())
+                        log(f"cover id={item['id']} status={item['status']} http_ms={item['http_ms']} mode={mode}")
+            # Только живой процесс знает, что хвост не отправлялся; после crash такого права нет.
+            unsent = batch[cursor:]
+            for item in unsent:
+                set_item(item, "pending", now_fn(), "batch_unsent")
+                item["first_inflight_at"] = previous_first[item["id"]]
+            eligible = unsent + eligible
+            # Второй CAS сохраняет все волны группы и возвращённый хвост одним результатом.
             save()
         if state["pause_reason"]:
             return output("paused")
@@ -455,7 +479,9 @@ def run(store, api, *, enabled=False, mode="existing", now_fn=utcnow, monotonic=
                 return output("paused")
         else:
             busy_waits = 0
-    save()
+    # Все изменения очереди уже записаны initial GET или вторым CAS группы.
+    if not candidates:
+        save()
     return output("completed" if counts(state)["remaining"] == 0 else "started")
 
 

@@ -78,8 +78,8 @@ def test_cache_before_post_and_terminal_cache_never_posts():
     assert [item["status"] for item in store.state["items"]] == ["ready", "no_text", "review"]
 
 
-def test_write_ahead_and_two_simultaneous_posts():
-    api = Api(count=4)
+def test_ten_item_checkpoint_uses_two_cas_writes_and_two_simultaneous_posts():
+    api = Api(count=10)
     store = Store()
     lock, barrier = Lock(), Barrier(2)
     active = 0
@@ -88,7 +88,7 @@ def test_write_ahead_and_two_simultaneous_posts():
     def post(item):
         nonlocal active, maximum
         checkpoint = store.saves[-1]
-        assert sum(i["status"] == "inflight" for i in checkpoint["items"]) == 2
+        assert sum(i["status"] == "inflight" for i in checkpoint["items"]) == 10
         assert next(i for i in checkpoint["items"] if i["id"] == item["id"])["status"] == "inflight"
         with lock:
             active += 1
@@ -100,14 +100,21 @@ def test_write_ahead_and_two_simultaneous_posts():
     api.post = post
     assert execute(store, api)[0] == "completed"
     assert maximum == 2
-    assert store.state["counters"]["posts"] == 4
+    assert store.state["counters"]["posts"] == 10
+    # Первые две записи — inventory и GET; вся группа использует один intent и один итог.
+    assert len(store.saves) == 4
+    assert all(item['status'] == 'inflight' for item in store.saves[2]['items'])
+    assert all(item['status'] == 'ready' for item in store.saves[3]['items'])
 
 
 def test_unknown_transport_stops_new_posts_and_never_retries_missing():
     api = Api(result=httpx.ReadTimeout("Таймаут"), count=10)
     store = Store()
     assert execute(store, api)[0] == "paused"
-    assert 1 <= len(api.posts) <= 2
+    assert len(api.posts) == 2
+    unsent = [item for item in store.state['items'] if item['id'] not in api.posts]
+    assert len(unsent) == 8
+    assert all(item['status'] == 'pending' and item['first_inflight_at'] is None for item in unsent)
     unknown = {i["id"] for i in store.state["items"] if i["status"] == "unknown"}
     api.result = "ready"
     api.posts = []
@@ -324,7 +331,7 @@ def test_cache_and_rejections_do_not_consume_new_attempt_cap():
     assert store.state['items'][3]['status'] == 'pending'
 
 
-def test_busy_backpressure_waits_gets_and_never_marks_whole_queue_inflight():
+def test_first_wave_busy_waits_gets_and_returns_next_eight_pending_without_post():
     api, store = Api(result='busy', count=10), Store()
     delays = []
     api.last_budget = {'available_slots': 2}
@@ -343,6 +350,11 @@ def test_busy_backpressure_waits_gets_and_never_marks_whole_queue_inflight():
     assert store.state['counters']['busy_rejections'] == 2
     assert store.state['counters']['http_requests'] == 2
     assert all(i['status'] == 'pending' for i in store.state['items'])
+    unsent = [item for item in store.state['items'] if item['id'] not in api.posts]
+    assert len(unsent) == 8 and all(item['first_inflight_at'] is None for item in unsent)
+    # В исходном intent все10 были защищены от crash; живой процесс вернул хвост до паузы.
+    assert all(item['status'] == 'inflight' for item in store.saves[2]['items'])
+    assert all(item['status'] == 'pending' for item in store.saves[3]['items'])
     assert store.state['pause_reason'] == 'busy_backpressure'
     assert not values['needs_continuation']
 
@@ -404,3 +416,54 @@ def test_provider_rate_limit_pauses_new_ids_and_preserves_paid_error_terminal():
     before = api.posts[:]
     execute(store, api)
     assert api.posts == before
+
+
+def test_crash_after_first_wave_keeps_group_intent_get_only_without_repeating_posts():
+    api, store = Api(count=10), Store()
+    barrier = Barrier(2)
+    def crash(item):
+        api.posts.append(item['id'])
+        barrier.wait(timeout=3)
+        raise SystemExit('Имитируем обрыв процесса до итогового CAS')
+    api.post = crash
+    with pytest.raises(SystemExit):
+        execute(store, api)
+    assert len(api.posts) == 2
+    assert all(item['status'] == 'inflight' for item in store.state['items'])
+    assert len(store.saves) == 3  # inventory, GET и общий intent; итог ещё не записан.
+    recovered = Api(count=10)
+    execute(store, recovered)
+    assert not recovered.posts
+    assert all(item['status'] == 'unknown' for item in store.state['items'])
+    assert store.state['counters']['attempts_reserved'] == 0
+
+
+@pytest.mark.parametrize('kind', ['limit', 'provider'])
+def test_first_wave_pause_returns_eight_unsent_without_any_post(kind):
+    api, store = Api(count=10), Store()
+    def post(item):
+        api.posts.append(item['id'])
+        if kind == 'limit':
+            return {'status': 'limit_reached', 'attempt_reserved': False, 'http_ms': 1}
+        return {'status': 'error', 'reason_code': 'provider_rate_limit', 'retry_after': '2026-10-23T17:02:00Z',
+                'attempt_reserved': True, 'http_ms': 1}
+    api.post = post
+    assert execute(store, api)[0] == 'paused'
+    assert len(api.posts) == 2
+    unsent = [item for item in store.state['items'] if item['id'] not in api.posts]
+    assert len(unsent) == 8
+    assert all(item['status'] == 'pending' and item['first_inflight_at'] is None for item in unsent)
+    assert len(store.saves) == 4
+    assert store.state['counters']['attempts_reserved'] == (0 if kind == 'limit' else 2)
+
+
+def test_checkpoint_logs_github_quota_metadata_without_request_or_credentials():
+    api, store = Api(count=10), Store()
+    store.reset_at = NOW + timedelta(hours=1)
+    logs = []
+    run(store, api, enabled=True, now_fn=lambda: NOW, monotonic=lambda: 0,
+        sleep_fn=lambda _: None, log=logs.append)
+    checkpoints = [line for line in logs if line.startswith('checkpoint ')]
+    assert len(checkpoints) == 4
+    assert all('github_remaining=5000' in line and 'github_reset_at=2026-10-23T18:00:00+00:00' in line for line in checkpoints)
+    assert not any(word in '\n'.join(logs).lower() for word in ('authorization', 'bearer', 'token', 'https://'))
