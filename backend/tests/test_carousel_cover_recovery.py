@@ -39,6 +39,31 @@ await db.exec(ddl);
 assert((await q("select lease_expires_at=created_at+interval '600 seconds' ok from public.carousel_cover_translations where media_id='11'")).rows[0].ok,'legacy lease не600');
 const after=await rpc("select to_jsonb(t)-'lease_expires_at'-'reason_code'-'source_kind' r from public.carousel_cover_translations t where media_id='10'");
 assert(JSON.stringify(snapshot)===JSON.stringify(after),'DDL изменил готовый cache');
+// Закрытый override-cache пуст при ADD; HTTPS/длина/TTL/provenance проверяются на записи.
+assert((await q('select count(*)::int n from public.carousel_cover_source_overrides')).rows[0].n===0,'DDL заполнил override-cache');
+await db.exec("set role service_role");
+await q(`insert into public.carousel_cover_source_overrides(media_id,media_url,refreshed_at,expires_at)
+ values('90','https://x.fbcdn.net/fresh',clock_timestamp(),clock_timestamp()+interval '1 hour'),
+ ('91','https://x.fbcdn.net/expired',clock_timestamp()-interval '2 hour',clock_timestamp()-interval '1 hour')`);
+assert((await q('select media_id from public.carousel_cover_source_overrides where expires_at>clock_timestamp()')).rows[0].media_id==='90','expired override доступен');
+await q("update public.carousel_cover_source_overrides set thumbnail_url='https://x.fbcdn.net/thumb' where media_id='90'");
+for(const sql of [
+ "insert into public.carousel_cover_source_overrides(media_id,media_url,expires_at) values('92','http://x.fbcdn.net/a',clock_timestamp()+interval '1 hour')",
+ "insert into public.carousel_cover_source_overrides(media_id,media_url,expires_at) values('92','https://'||repeat('a',8193),clock_timestamp()+interval '1 hour')",
+ "insert into public.carousel_cover_source_overrides(media_id,media_url,expires_at,provenance) values('92','https://x.fbcdn.net/a',clock_timestamp()+interval '1 hour','client')",
+ "insert into public.carousel_cover_source_overrides(media_id,media_url,thumbnail_url,expires_at) values('92','https://x.fbcdn.net/a','file:///x',clock_timestamp()+interval '1 hour')",
+ "delete from public.carousel_cover_source_overrides where media_id='90'"])
+ assert(await fail(sql),'override constraint/ACL обойдён');
+await db.exec('reset role');
+for(const role of ['anon','authenticated']){
+ await db.exec('set role '+role);
+ assert(await fail('select * from public.carousel_cover_source_overrides'),'override URL раскрыт '+role);
+ assert(await fail("insert into public.carousel_cover_source_overrides(media_id,media_url,expires_at) values('92','https://x.fbcdn.net/a',clock_timestamp()+interval '1 hour')"),'override доступен для записи '+role);
+ await db.exec('reset role');
+}
+await db.exec('grant select on public.carousel_cover_source_overrides to anon; set role anon');
+assert((await q('select * from public.carousel_cover_source_overrides')).rows.length===0,'RLS override-cache не закрыт');
+await db.exec('reset role; revoke select on public.carousel_cover_source_overrides from anon');
 // Старые exact-сигнатуры finish/unavailable/reserve работают после DDL.
 await rpc("select public.finish_carousel_cover('11','cover-v1',$1,'ready','Title','Заголовок','{}',1,false) r",[legacy.claim_token]);
 await rpc("select public.unavailable_carousel_cover('12','cover-v1') r");

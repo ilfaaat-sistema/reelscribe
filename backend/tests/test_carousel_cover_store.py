@@ -63,3 +63,25 @@ def test_budget_rejects_inconsistent_or_raised_metadata(monkeypatch, changed):
     monkeypatch.setattr(store, '_rpc', Mock(return_value={**data, **changed}))
     with pytest.raises(ValueError):
         store.CoverStore().budget()
+
+
+
+@pytest.mark.parametrize('rows', [[], [{'media_id':'1','media_url':'https://x.fbcdn.net/a'}]])
+def test_source_override_read_is_id_scoped_and_excludes_expired(monkeypatch, rows):
+    from datetime import datetime, timezone
+    query = Mock()
+    query.select.return_value = query
+    query.eq.return_value = query
+    query.gt.return_value = query
+    query.limit.return_value = query
+    query.execute.return_value = SimpleNamespace(data=rows)
+    db = Mock()
+    db.table.return_value = query
+    monkeypatch.setattr(store, 'get_cover_db', Mock(return_value=db))
+    before = datetime.now(timezone.utc)
+    assert store.CoverStore().read_source_override('1') == (rows[0] if rows else None)
+    db.table.assert_called_once_with('carousel_cover_source_overrides')
+    query.eq.assert_called_once_with('media_id','1')
+    assert query.gt.call_args.args[0] == 'expires_at'
+    assert datetime.fromisoformat(query.gt.call_args.args[1]) >= before
+    query.limit.assert_called_once_with(1)

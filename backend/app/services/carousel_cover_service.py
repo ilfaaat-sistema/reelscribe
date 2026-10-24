@@ -11,14 +11,14 @@ from app.api import carousels
 from app.services.carousel_cover_image import ImageUnavailable, download_image, normalize_image, public_cover_url
 from app.services.carousel_cover_settings import get_settings
 from app.services.carousel_cover_store import CoverStore
-from app.services.carousel_cover_vertex import PROMPT_REVISION, create_vertex_client, generate, known_russian
+from app.services.carousel_cover_vertex import PROMPT_REVISION, create_vertex_client, generate, uses_russian_alphabet
 
 logger = logging.getLogger(__name__)
 STALE_RUNNING_SECONDS = 600
 # 600 > maxDuration 300 + serverTimeout 120 + запас 120 секунд.
 
 
-def item(media_id, row=None, status='missing'):
+def item(media_id, row=None, status='missing', *, legacy=False):
     row = row or {}
     status = row.get('status', status)
     if status == 'running' and row.get('created_at'):
@@ -29,10 +29,16 @@ def item(media_id, row=None, status='missing'):
                 status = 'error'
         except (ValueError, TypeError):
             status = 'error'
-    if status == 'ready' and known_russian(row.get('source_text')):
-        status = 'not_needed'
+    reason_code = row.get('reason_code')
+    if (legacy and status == 'ready'
+            and (row.get('usage') or {}).get('prompt_revision') in
+            (None, 'cover-readable-v1', 'cover-readable-v2', 'cover-readable-v3', 'cover-readable-v4')
+            and uses_russian_alphabet(row.get('source_text'))
+            and isinstance(row.get('text_ru'), str)
+            and row['source_text'].strip() == row['text_ru'].strip()):
+        status, reason_code = 'not_needed', 'unchanged_source'
     return {'id': media_id, 'status': status,
-            'reason_code': row.get('reason_code'),
+            'reason_code': reason_code,
             'attempt_recorded': bool(row.get('attempt_recorded') or row.get('claim_token')),
             'source_text': row.get('source_text'), 'text_ru': '' if status == 'not_needed' else row.get('text_ru'),
             'retry_after': (row.get('retry_after') or (row.get('usage') or {}).get('retry_after'))
@@ -52,7 +58,7 @@ async def read(ids):
     budget = await database(store.budget)
     exhausted = budget if budget['status'] == 'limit_reached' else None
     cached = {row['media_id']: row for row in rows}
-    return {'items': [item(identity, cached.get(identity, exhausted)) for identity in ids],
+    return {'items': [item(identity, cached.get(identity, exhausted), legacy=True) for identity in ids],
             'enabled': get_settings().enabled,
             'budget': {key: budget[key] for key in ('mode', 'pilot_limit', 'daily_limit', 'reset_at',
                                                        'attempts', 'daily_attempts', 'active_slots', 'available_slots') if key in budget}}
@@ -62,7 +68,7 @@ async def translate(media_id, period, *, oidc_token=None):
     store = CoverStore()
     rows = await database(store.read, [media_id])
     if rows:
-        return {'item': item(media_id, rows[0]), 'attempt_reserved': False}
+        return {'item': item(media_id, rows[0], legacy=True), 'attempt_reserved': False}
     if not get_settings().enabled:
         return {'item': item(media_id, status='disabled'), 'attempt_reserved': False}
     budget = await database(store.budget)
@@ -74,12 +80,19 @@ async def translate(media_id, period, *, oidc_token=None):
         if exc.status_code == 404:
             raise HTTPException(422, 'Карусель отсутствует в выбранном наборе') from None
         raise
-    # Только адрес существующей серверной записи, никаких URL из тела запроса.
+    # Только адреса серверных записей: клиент не передаёт URL или refresh-параметры.
+    override = await database(store.read_source_override, media_id)
+    override_sources = (
+        [('media_url', override.get('media_url')), ('thumbnail_url', override.get('thumbnail_url'))]
+        if override and str(override.get('media_id')) == str(media_id) else []
+    )
     image_normalization = 'jpeg2048'
     failures = []
     source_kind = None
-    for kind, url in (('media_url', cover.get('media_url')), ('thumbnail_url', cover.get('thumbnail_url')),
-                      ('public_first_cover', public_cover_url(cover))):
+    sources = override_sources + [
+        ('media_url', cover.get('media_url')), ('thumbnail_url', cover.get('thumbnail_url')),
+        ('public_first_cover', public_cover_url(cover))]
+    for kind, url in sources:
         if not url:
             continue
         try:

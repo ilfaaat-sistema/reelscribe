@@ -242,3 +242,20 @@ end;
 $$;
 revoke all on function public.resolve_carousel_cover_known(text,timestamptz,text,text,text) from public,anon,authenticated;
 grant execute on function public.resolve_carousel_cover_known(text,timestamptz,text,text,text) to service_role;
+
+
+-- Закрытый краткоживущий источник после ограниченного официального Meta-refresh.
+-- Исторические snapshots и готовый кэш переводов не перезаписываются.
+create table public.carousel_cover_source_overrides (
+  media_id text primary key check (media_id ~ '^[0-9]{1,40}$'),
+  media_url text not null check (length(media_url) between 9 and 8192 and media_url ~ '^https://[^[:space:]]+$'),
+  thumbnail_url text check (thumbnail_url is null or
+    (length(thumbnail_url) between 9 and 8192 and thumbnail_url ~ '^https://[^[:space:]]+$')),
+  refreshed_at timestamptz not null default clock_timestamp(),
+  expires_at timestamptz not null,
+  provenance text not null default 'meta_graph_refresh' check (provenance='meta_graph_refresh'),
+  check (expires_at>refreshed_at)
+);
+alter table public.carousel_cover_source_overrides enable row level security;
+revoke all on public.carousel_cover_source_overrides from public,anon,authenticated;
+grant select,insert,update on public.carousel_cover_source_overrides to service_role;
