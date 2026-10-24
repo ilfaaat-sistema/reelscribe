@@ -9,6 +9,7 @@ const retryDateFormat = new Intl.DateTimeFormat('ru-RU', {
 const LABELS = {
   missing: 'Перевод обложки пока не получен',
   running: 'Переводим крупный текст обложки…',
+  not_needed: 'Текст уже на русском',
   no_text: 'На обложке нет крупного текста',
   unreadable: 'Не удалось прочитать текст обложки',
   image_unavailable: 'Изображение обложки недоступно',

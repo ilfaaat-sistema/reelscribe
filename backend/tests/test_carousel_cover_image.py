@@ -137,3 +137,22 @@ def test_normalization_bounds_decoded_pixels_before_loading(monkeypatch):
     monkeypatch.setattr(image, 'MAX_NORMALIZATION_PIXELS', 100)
     with pytest.raises(image.ImageUnavailable):
         image.normalize_image(data, 'image/png')
+
+
+@pytest.mark.parametrize('cover', [{'shortcode': '../bad'}, {'shortcode': 'a?url=x'},
+    {'permalink': 'https://evil.test/p/Abc123/'}, {'permalink': 'https://instagram.com/p/Abc123/../../a'}])
+def test_public_source_rejects_untrusted_shortcode(cover):
+    assert image.public_cover_url(cover) is None
+
+
+@pytest.mark.asyncio
+async def test_expired_signature_and_timeout_are_distinct():
+    with pytest.raises(image.ImageUnavailable) as expired:
+        await image.download_image('https://x.fbcdn.net/a?oe=1', client_factory=lambda **kwargs:
+            httpx.AsyncClient(transport=httpx.MockTransport(lambda req: httpx.Response(403)), **kwargs))
+    assert expired.value.reason_code == 'expired_signature'
+    def timeout(request):
+        raise httpx.ReadTimeout('private signed URL')
+    with pytest.raises(image.ImageUnavailable) as timed:
+        await fetch(timeout)
+    assert timed.value.reason_code == 'timeout' and 'private' not in str(timed.value)

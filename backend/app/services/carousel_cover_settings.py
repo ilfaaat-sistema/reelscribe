@@ -12,8 +12,8 @@ class CoverSettings(BaseSettings):
     vertex_project: str = ''
     vertex_location: str = 'global'
     vertex_model: str = ''
-    # Включать только для отдельной проверки после подтверждённого сбоя исходного изображения.
-    image_normalization: Literal['none', 'jpeg2048'] = 'none'
+    # Старое значение none принимается при rollout; обработчик всегда проверяет и приводит полный кадр к JPEG.
+    image_normalization: Literal['none', 'jpeg2048'] = 'jpeg2048'
     auth_mode: Literal['adc', 'vercel_oidc'] = 'adc'
     wif_audience: str = ''
     service_account_email: str = ''

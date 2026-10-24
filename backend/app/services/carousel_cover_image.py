@@ -1,9 +1,13 @@
 """Загрузка полного изображения с проверкой каждого адреса и ограничением памяти."""
 import asyncio
+import re
+import time
 from io import BytesIO
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import parse_qs, urljoin, urlsplit
 
 import httpx
+
+from app.api.thumb import _UA as PUBLIC_IMAGE_USER_AGENT
 
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
 MAX_NORMALIZATION_PIXELS = 25_000_000
@@ -11,7 +15,34 @@ ALLOWED_HOSTS = ('cdninstagram.com', 'fbcdn.net', 'instagram.com')
 
 
 class ImageUnavailable(Exception):
-    pass
+    def __init__(self, reason_code='image_unavailable', source_kind=None):
+        self.reason_code = reason_code if reason_code in (
+            'expired_signature', 'permanent_missing', 'timeout', 'unsupported', 'http_error') else 'image_unavailable'
+        self.source_kind = source_kind
+        super().__init__('Изображение недоступно')
+
+
+def public_cover_url(cover):
+    shortcode = cover.get('shortcode')
+    if not shortcode:
+        try:
+            link = urlsplit(cover.get('permalink') or '')
+            if link.scheme == 'https' and link.hostname in ('www.instagram.com', 'instagram.com'):
+                match = re.fullmatch(r'/(?:p|reel|tv)/([A-Za-z0-9_-]{5,30})/?', link.path)
+                shortcode = match.group(1) if match else None
+        except ValueError:
+            pass
+    if not isinstance(shortcode, str) or not re.fullmatch(r'[A-Za-z0-9_-]{5,30}', shortcode):
+        return None
+    return f'https://www.instagram.com/p/{shortcode}/media/?size=l'
+
+
+def expired_signature(url):
+    try:
+        value = parse_qs(urlsplit(url).query).get('oe', [''])[0]
+        return bool(value and int(value, 16) < time.time())
+    except (ValueError, TypeError):
+        return False
 
 
 def validate_url(value):
@@ -22,7 +53,7 @@ def validate_url(value):
                 or url.fragment or not any(host == h or host.endswith('.' + h) for h in ALLOWED_HOSTS)):
             raise ValueError()
     except (ValueError, TypeError, AttributeError):
-        raise ImageUnavailable('Изображение недоступно') from None
+        raise ImageUnavailable('unsupported') from None
     return value
 
 
@@ -56,14 +87,14 @@ def normalize_image(data, mime):
             raise ImageUnavailable()
         return result, 'image/jpeg'
     except (OSError, ValueError, Image.DecompressionBombError, ImageUnavailable):
-        raise ImageUnavailable('Изображение недоступно') from None
+        raise ImageUnavailable('unsupported') from None
 
 
 async def download_image(url, client_factory=httpx.AsyncClient):
     try:
         async with asyncio.timeout(20):
             async with client_factory(timeout=10, follow_redirects=False, trust_env=False,
-                                      headers={'Accept-Encoding': 'identity'}) as client:
+                                      headers={'Accept-Encoding': 'identity', 'User-Agent': PUBLIC_IMAGE_USER_AGENT}) as client:
                 for _ in range(4):
                     validate_url(url)
                     async with client.stream('GET', url) as response:
@@ -73,10 +104,14 @@ async def download_image(url, client_factory=httpx.AsyncClient):
                                 raise ImageUnavailable()
                             url = validate_url(urljoin(url, location))
                             continue
+                        if response.status_code == 403 and expired_signature(url):
+                            raise ImageUnavailable('expired_signature')
+                        if response.status_code in (404, 410):
+                            raise ImageUnavailable('permanent_missing')
                         response.raise_for_status()
                         mime = response.headers.get('content-type', '').split(';')[0].strip().lower()
                         if mime not in ('image/jpeg', 'image/png', 'image/webp'):
-                            raise ImageUnavailable()
+                            raise ImageUnavailable('unsupported')
                         length = response.headers.get('content-length')
                         if length and (not length.isdigit() or int(length) > MAX_IMAGE_BYTES):
                             raise ImageUnavailable()
@@ -89,5 +124,9 @@ async def download_image(url, client_factory=httpx.AsyncClient):
                             raise ImageUnavailable()
                         return bytes(content), mime
                 raise ImageUnavailable()
-    except (httpx.HTTPError, TimeoutError, ValueError, ImageUnavailable):
-        raise ImageUnavailable('Изображение недоступно') from None
+    except ImageUnavailable:
+        raise
+    except (httpx.TimeoutException, TimeoutError):
+        raise ImageUnavailable('timeout') from None
+    except (httpx.HTTPError, ValueError):
+        raise ImageUnavailable('http_error') from None

@@ -1,5 +1,5 @@
 const BASE = (import.meta.env?.VITE_API_URL || '') + '/api/radar/carousel-cover-translations'
-const STATUSES = new Set(['missing', 'running', 'ready', 'no_text', 'unreadable', 'image_unavailable', 'error', 'busy', 'limit_reached', 'disabled'])
+const STATUSES = new Set(['missing', 'running', 'ready', 'not_needed', 'no_text', 'unreadable', 'image_unavailable', 'error', 'busy', 'limit_reached', 'disabled'])
 
 const MAX_TIMER_DELAY = 2 ** 31 - 1
 
@@ -16,7 +16,12 @@ function normalizeBudget(value) {
   if (!['pilot', 'live'].includes(value?.mode) || value.pilot_limit !== 20 ||
       !Number.isInteger(value.daily_limit) || ![500, 2500].includes(value.daily_limit)) return null
   const resetAt = normalizeUtcTimestamp(value.reset_at)
-  return resetAt ? { mode: value.mode, pilot_limit: 20, daily_limit: value.daily_limit, reset_at: resetAt } : null
+  if (!resetAt) return null
+  const result = { mode: value.mode, pilot_limit: 20, daily_limit: value.daily_limit, reset_at: resetAt }
+  for (const key of ['attempts', 'daily_attempts', 'active_slots', 'available_slots']) {
+    if (Number.isSafeInteger(value[key]) && value[key] >= 0) result[key] = value[key]
+  }
+  return result
 }
 
 function normalizeItem(item, id) {
@@ -26,6 +31,8 @@ function normalizeItem(item, id) {
     source_text: typeof item?.source_text === 'string' ? item.source_text : '',
     text_ru: typeof item?.text_ru === 'string' ? item.text_ru : '',
     retry_after: normalizeUtcTimestamp(item?.retry_after),
+    reason_code: typeof item?.reason_code === 'string' && /^[a-z_]{1,80}$/.test(item.reason_code) ? item.reason_code : null,
+    attempt_recorded: item?.attempt_recorded === true,
   }
 }
 

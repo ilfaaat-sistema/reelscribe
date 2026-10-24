@@ -25,7 +25,8 @@ class MemoryStore:
         return {'status': 'limit_reached' if limited else 'available', 'mode': self.mode,
                 'pilot_limit': 20, 'daily_limit': 500, 'reset_at': self.reset_at,
                 'retry_after': self.reset_at if limited and self.mode == 'live' else None,
-                'attempts': self.attempts, 'daily_attempts': daily}
+                'attempts': self.attempts, 'daily_attempts': daily,
+                'active_slots': len(self.held), 'available_slots': max(0, 2-len(self.held))}
 
 
     def read(self, ids):
@@ -48,13 +49,13 @@ class MemoryStore:
 
     def finish(self, media_id, token, result, usage, duration_ms, uncertain):
         assert token == media_id
-        self.rows[media_id] = result
+        self.rows[media_id] = {**result, 'attempt_recorded': True}
         if not uncertain:
             self.held.remove(media_id)
-        return result
+        return self.rows[media_id]
 
-    def unavailable(self, media_id):
-        return self.rows.setdefault(media_id, {'status': 'image_unavailable'})
+    def unavailable(self, media_id, reason_code='image_unavailable', source_kind=None):
+        return self.rows.setdefault(media_id, {'status': 'image_unavailable', 'reason_code': reason_code})
 
 
 @pytest.fixture
@@ -62,9 +63,10 @@ def runtime(monkeypatch):
     store = MemoryStore()
     monkeypatch.setattr(service, 'CoverStore', lambda: store)
     monkeypatch.setattr(service, 'get_settings', lambda: SimpleNamespace(
-        enabled=True, vertex_model='model', image_normalization='none'))
+        enabled=True, vertex_model='model', image_normalization='jpeg2048'))
     monkeypatch.setattr(service.carousels, 'detail', AsyncMock(return_value={'media_url': 'https://x.fbcdn.net/a'}))
     monkeypatch.setattr(service, 'download_image', AsyncMock(return_value=(b'jpg', 'image/jpeg')))
+    monkeypatch.setattr(service, 'normalize_image', Mock(return_value=(b'jpg', 'image/jpeg')))
     client = SimpleNamespace(aio=SimpleNamespace(aclose=AsyncMock()), close=Mock())
     monkeypatch.setattr(service, 'create_vertex_client', Mock(return_value=client))
     monkeypatch.setattr(service, 'generate', AsyncMock(return_value=({'status': 'ready', 'source_text': 'Hello', 'text_ru': 'Привет'}, {'total_token_count': 8})))
@@ -75,7 +77,8 @@ def runtime(monkeypatch):
 async def test_cache_is_shared_between_periods_and_signed_urls(runtime):
     first = await service.translate('1', '7d')
     second = await service.translate('1', 'archive14d')
-    assert first == second
+    assert first['item'] == second['item']
+    assert first['attempt_reserved'] is True and second['attempt_reserved'] is False
     assert runtime.attempts == service.generate.await_count == 1
     assert service.carousels.detail.await_count == 1
 
@@ -177,7 +180,7 @@ def test_empty_and_unreadable_do_not_invent_text(status):
 
 
 def test_russian_is_preserved_and_mixed_text_keeps_translation():
-    assert CoverResult(status='ready', source_text='Мой заголовок!', text_ru='Изменённый').text_ru == 'Мой заголовок!'
+    assert CoverResult(status='ready', source_text='Мой заголовок!', text_ru='Изменённый').status == 'not_needed'
     assert CoverResult(status='ready', source_text='Мой AI guide', text_ru='Мой гид по ИИ').text_ru == 'Мой гид по ИИ'
     with pytest.raises(ValueError):
         CoverResult(status='ready', source_text='', text_ru='Домысел')
@@ -215,7 +218,7 @@ async def test_provider_failure_records_only_safe_metadata(runtime, caplog):
     assert runtime.attempts == 1 and runtime.held == {'1'}
     assert runtime.finish.call_args.args[3] == {
         'error_type': 'ProviderError', 'provider_status': 503, 'provider_response_complete': False,
-        'prompt_revision': service.PROMPT_REVISION, 'image_preprocessing': 'none'}
+        'prompt_revision': service.PROMPT_REVISION, 'image_preprocessing': 'jpeg2048', 'source_kind': 'media_url', 'source_failures': []}
     assert 'private credential' not in caplog.text
     assert service.generate.await_count == 1
 
@@ -285,8 +288,9 @@ async def test_get_budget_exhaustion_keeps_cached_results_and_never_starts_model
     assert [value['status'] for value in result['items']] == ['ready', 'unreadable', 'limit_reached']
     assert result['items'][0]['retry_after'] is None
     assert result['items'][2]['retry_after'] == runtime.reset_at
-    assert result['budget'] == {'mode': 'live', 'pilot_limit': 20, 'daily_limit': 500, 'reset_at': runtime.reset_at}
-    assert 'attempts' not in result['budget']
+    assert result['budget'] == {'mode': 'live', 'pilot_limit': 20, 'daily_limit': 500, 'reset_at': runtime.reset_at,
+                                'attempts': 500, 'daily_attempts': 500, 'active_slots': 0, 'available_slots': 2}
+    assert result['budget']['attempts'] == 500
     service.generate.assert_not_awaited()
     service.download_image.assert_not_awaited()
 
@@ -357,17 +361,17 @@ async def test_budget_metadata_failure_is_fail_closed(runtime):
 
 
 @pytest.mark.asyncio
-async def test_original_image_is_default_and_revision_does_not_change_cache(runtime, monkeypatch):
-    assert CoverSettings(_env_file=None).image_normalization == 'none'
-    normalize = Mock(side_effect=AssertionError('Неожиданная нормализация'))
+async def test_normalized_image_is_default_and_revision_does_not_change_cache(runtime, monkeypatch):
+    assert CoverSettings(_env_file=None).image_normalization == 'jpeg2048'
+    normalize = Mock(return_value=(b'jpg', 'image/jpeg'))
     monkeypatch.setattr(service, 'normalize_image', normalize)
     runtime.finish = Mock(wraps=runtime.finish)
     await service.translate('1', '7d')
     service.generate.assert_awaited_once_with(service.create_vertex_client.return_value, b'jpg', 'image/jpeg')
-    normalize.assert_not_called()
+    normalize.assert_called_once_with(b'jpg', 'image/jpeg')
     assert runtime.finish.call_args.args[3] == {
         'total_token_count': 8, 'prompt_revision': service.PROMPT_REVISION,
-        'image_preprocessing': 'none'}
+        'image_preprocessing': 'jpeg2048', 'source_kind': 'media_url', 'source_failures': []}
     await service.translate('1', '14d')
     assert service.generate.await_count == 1 and runtime.attempts == 1
 
@@ -399,3 +403,72 @@ async def test_normalization_failure_precedes_auth_and_paid_reservation(runtime,
     service.create_vertex_client.assert_not_called()
     service.generate.assert_not_awaited()
     assert runtime.attempts == 0
+
+
+@pytest.mark.asyncio
+async def test_known_russian_cache_never_opens_image_auth_or_model(runtime):
+    runtime.rows['1'] = {'status': 'ready', 'source_text': 'Как сохранить текст?', 'text_ru': 'Другая формулировка',
+                         'attempt_recorded': True}
+    result = await service.translate('1', '7d')
+    assert result['item']['status'] == 'not_needed' and result['item']['text_ru'] == ''
+    assert result['item']['source_text'] == 'Как сохранить текст?'
+    assert result['attempt_reserved'] is False and result['item']['attempt_recorded'] is True
+    assert runtime.rows['1']['status'] == 'ready'
+    service.download_image.assert_not_awaited()
+    service.create_vertex_client.assert_not_called()
+    service.generate.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_sources_fail_over_before_one_reservation(runtime):
+    service.carousels.detail.return_value = {'media_url': 'https://x.fbcdn.net/expired',
+        'thumbnail_url': 'https://x.fbcdn.net/thumb', 'shortcode': 'Abc123_'}
+    service.download_image.side_effect = [service.ImageUnavailable('expired_signature'),
+        service.ImageUnavailable('timeout'), (b'jpg', 'image/jpeg')]
+    runtime.finish = Mock(wraps=runtime.finish)
+    result = await service.translate('1', '7d')
+    assert result['attempt_reserved'] is True and runtime.attempts == 1
+    assert [call.args[0] for call in service.download_image.await_args_list] == [
+        'https://x.fbcdn.net/expired','https://x.fbcdn.net/thumb',
+        'https://www.instagram.com/p/Abc123_/media/?size=l']
+    assert runtime.finish.call_args.args[3]['source_kind'] == 'public_first_cover'
+    assert runtime.finish.call_args.args[3]['source_failures'] == [
+        {'source_kind': 'media_url', 'reason_code': 'expired_signature'},
+        {'source_kind': 'thumbnail_url', 'reason_code': 'timeout'}]
+    service.generate.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_unknown_russian_image_uses_single_combined_request(runtime):
+    service.generate.return_value = ({'status': 'not_needed', 'source_text': 'Мой текст', 'text_ru': ''}, {})
+    result = await service.translate('1','7d')
+    assert result['item']['status'] == 'not_needed'
+    assert result['attempt_reserved'] is True and runtime.attempts == 1
+    service.generate.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_image_failure_is_safe_and_never_reserves(runtime):
+    service.download_image.side_effect = service.ImageUnavailable('timeout')
+    result = await service.translate('1','7d')
+    assert result['attempt_reserved'] is False and result['item']['attempt_recorded'] is False
+    assert result['item']['reason_code'] == 'timeout'
+    assert runtime.attempts == 0
+    service.generate.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('header,minimum,maximum', [('120',119,121), ('999999',299,301), ('invalid',59,61)])
+async def test_completed_429_reports_bounded_pause_without_refund(runtime, header, minimum, maximum):
+    import httpx
+    from datetime import datetime, timezone
+    from google.genai.errors import ClientError
+    response = httpx.Response(429, headers={'Retry-After': header}, json={'error': {'code':429}})
+    service.generate.side_effect = ClientError(429, {'error': {'message': 'private detail'}}, response=response)
+    runtime.finish = Mock(wraps=runtime.finish)
+    result = await service.translate('1','7d')
+    assert result['attempt_reserved'] and runtime.attempts == 1 and not runtime.held
+    usage = runtime.finish.call_args.args[3]
+    seconds = (datetime.fromisoformat(usage['retry_after'])-datetime.now(timezone.utc)).total_seconds()
+    assert minimum <= seconds <= maximum
+    assert usage['provider_response_complete'] is True and usage['provider_status'] == 429

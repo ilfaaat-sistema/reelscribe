@@ -396,3 +396,27 @@ test('Подписки focus/visibility общие для карточки и Dr
   releaseDrawer()
   assert.deepEqual(counts, { added: 2, removed: 2 })
 })
+
+test('not_needed терминален; metadata и budget counters сохраняются без claim token', async () => {
+  const original = globalThis.fetch
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ enabled: true,
+    budget: { ...liveBudget, attempts: 1102, daily_attempts: 402, active_slots: 1, available_slots: 1 },
+    items: [{ id: '1', status: 'not_needed', source_text: 'Русский текст', text_ru: '',
+      reason_code: null, attempt_recorded: true, claim_token: 'секрет' }] }) })
+  try {
+    const result = await getCarouselCoverTranslations(['1'])
+    assert.equal(result.items[0].status, 'not_needed')
+    assert.equal(result.items[0].attempt_recorded, true)
+    assert.equal('claim_token' in result.items[0], false)
+    assert.equal(result.budget.attempts, 1102)
+    assert.equal(result.budget.available_slots, 1)
+    const time = clock()
+    let starts = 0
+    const store = createCarouselCoverTranslationStore({ ...time, isVisible: () => true, read: async () => result,
+      start: async () => { starts++; return item('1', 'ready') } })
+    store.watch('1','7d')
+    await time.advance(0)
+    assert.equal(store.getSnapshot('1').status, 'not_needed')
+    assert.equal(starts, 0)
+  } finally { globalThis.fetch = original }
+})
