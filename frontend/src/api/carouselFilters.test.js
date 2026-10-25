@@ -44,3 +44,23 @@ test('30d по умолчанию включает избранное и toggle 
   toggle(params)
   assert.equal(favoriteFilterEnabled(params), true)
 })
+
+test('четыре месяца для избранного по умолчанию сохраняют семантику старых карточек и архивов', async () => {
+  const { carouselPeriod, isLiveCarouselPeriod } = await import('./carouselFilters.js')
+  assert.equal(carouselPeriod(new URLSearchParams('favorite=1')), '4m')
+  assert.equal(carouselPeriod(new URLSearchParams('favorite=1&id=old')), null)
+  assert.equal(carouselPeriod(new URLSearchParams('favorite=1&period=7d')), '7d')
+  assert.equal(isLiveCarouselPeriod('custom'), true)
+  assert.equal(isLiveCarouselPeriod('4m'), true)
+  assert.equal(isLiveCarouselPeriod('7d'), false)
+})
+
+test('диапазоны проверяют календарные даты, целые значения и обе границы', async () => {
+  const { validateCarouselRanges } = await import('./carouselFilters.js')
+  const draft = { date_from: '2026-10-25', date_to: '2026-10-25', min_likes: '0', max_likes: '100', min_comments: '', max_comments: '2' }
+  assert.deepEqual(validateCarouselRanges(draft, true).values, { ...draft, min_likes: 0, max_likes: 100, min_comments: null, max_comments: 2 })
+  for (const changes of [{ date_to: '' }, { date_to: '2026-02-30' }, { date_to: '2026-10-24' }, { min_likes: '-1' }, { max_comments: '1.2' }, { min_likes: '101' }, { min_likes: '9007199254740992' }]) {
+    assert.ok(validateCarouselRanges({ ...draft, ...changes }, true).error)
+  }
+  assert.equal(validateCarouselRanges({ min_likes: '0' }).error, '')
+})

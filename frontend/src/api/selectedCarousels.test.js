@@ -82,3 +82,13 @@ test('30d запрос сохраняет исходный snapshot через �
   assert.equal(result.snapshot.timestamp, saved.snapshot.timestamp)
   assert.equal(result.snapshot.caption, saved.snapshot.caption)
 })
+
+test('4m и custom сохраняют отбор через совместимый live snapshot', async () => {
+  for (const period of ['4m', 'custom']) {
+    const result = await setCarouselSelected('123', period, true, async (_, options) => {
+      assert.deepEqual(JSON.parse(options.body), { period })
+      return ok({ item: item('123') })
+    })
+    assert.equal(result.source_period, '14d')
+  }
+})

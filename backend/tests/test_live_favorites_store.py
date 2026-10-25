@@ -268,3 +268,15 @@ def test_success_page_and_usage_pause_commit_together():
     assert git.writes == 1
     assert git.state['authors'][0]['checkpoint'] == {'after': 'next'}
     assert git.state['authors'][0]['status'] == 'meta_paused'
+
+
+def test_stale_worker_does_not_overwrite_readded_author_generation():
+    git = MemoryGit()
+    git.state['authors'][0]['tracking_generation'] = 'new-generation'
+    worker = WorkerStore(git)
+    worker.save([{'id':'new', 'username':git.state['authors'][0]['username']}])
+    worker.update(git.state['authors'][0]['username'], expected_generation='old-generation',
+                  history_status='complete', history_checkpoint={})
+    assert git.writes == 0
+    assert git.state['items'] == []
+    assert git.state['authors'][0].get('history_status') is None

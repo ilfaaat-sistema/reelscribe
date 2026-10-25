@@ -1,8 +1,35 @@
 import { useState, useEffect } from 'react'
 import { getSources, addSources, removeSource, restoreSource } from '../../api/radar'
+import { removeFavoriteAuthor } from '../../api/favoriteAuthors'
+import { Link } from 'react-router-dom'
 import { fmtNum, fmtDate, fmtAgo } from './format'
 
 // Вкладка «Источники» (ТЗ 10): отслеживаемые аккаунты, добавление, «Убрать»/«Вернуть».
+
+const CAROUSEL_STATUSES = {
+  pending: 'В очереди', collecting: 'Загружаются', updated: 'Проверены',
+  meta_paused: 'Пауза API', unavailable: 'Профиль недоступен', error: 'Ошибка проверки',
+}
+const HISTORY_STATUSES = {
+  pending: 'История в очереди', collecting: 'История загружается',
+  complete: 'Покрытие подтверждено', partial: 'История частично',
+  meta_paused: 'История: пауза API', unavailable: 'История недоступна',
+  error: 'Ошибка загрузки истории',
+}
+
+function CarouselTracking({ source }) {
+  if (!source.tracking_carousels) return null
+  return (
+    <div style={{ marginTop: 6, fontSize: 12, lineHeight: 1.5 }}>
+      <Link to={`/radar/carousels?favorite=1&period=4m&author=${encodeURIComponent(source.username)}`}>Карусели автора</Link>
+      <div>{CAROUSEL_STATUSES[source.carousel_status] || 'Ожидают проверки'}</div>
+      {source.history_status && <div>{HISTORY_STATUSES[source.history_status] || 'История: статус уточняется'}</div>}
+      <div title={source.last_checked_at || undefined}>
+        {source.last_checked_at ? `Проверка: ${fmtAgo(source.last_checked_at)}` : 'Карусели ещё не проверялись'}
+      </div>
+    </div>
+  )
+}
 
 function addSummary(res) {
   const parts = []
@@ -98,6 +125,13 @@ export default function Sources({ refreshKey, onChanged }) {
           {msg?.hint && <> · {msg.hint}</>}
         </div>
 
+        {data?.carousel_tracking_error && (
+          <div className="rs-empty" role="alert">
+            {data.carousel_tracking_error}{' '}
+            <button className="btn btn-ghost" onClick={() => load()}>Повторить</button>
+          </div>
+        )}
+
         {loadError && (
           <div className="rs-empty">
             Не удалось загрузить источники: {loadError}{' '}
@@ -125,7 +159,7 @@ export default function Sources({ refreshKey, onChanged }) {
                   <th className="rs-th">Последний рилс</th>
                   <th className="rs-th">Рилсов</th>
                   <th className="rs-th">Залётных</th>
-                  <th className="rs-th">Обновлён</th>
+                  <th className="rs-th">Reels обновлены</th>
                   <th className="rs-th"></th>
                 </tr>
               </thead>
@@ -140,6 +174,7 @@ export default function Sources({ refreshKey, onChanged }) {
                         rel="noopener noreferrer"
                       >@{s.username}</a>
                       {s.full_name && <span className="rs-fullname">{s.full_name}</span>}
+                      <CarouselTracking source={s} />
                     </td>
                     <td className="rs-td-num">
                       <span className="num">{fmtNum(s.followers)}</span>
@@ -150,10 +185,10 @@ export default function Sources({ refreshKey, onChanged }) {
                         : <span className="rs-viral-none" title="мало данных">—</span>}
                     </td>
                     <td className="rs-td-num">{fmtDate(s.last_reel_at)}</td>
-                    <td className="rs-td-num"><span className="num">{s.reels_count ?? 0}</span></td>
-                    <td className="rs-td-num"><span className="num">{s.viral_count ?? 0}</span></td>
+                    <td className="rs-td-num"><span className="num">{s.tracking_reels === false ? '—' : s.reels_count ?? 0}</span></td>
+                    <td className="rs-td-num"><span className="num">{s.tracking_reels === false ? '—' : s.viral_count ?? 0}</span></td>
                     <td className="rs-td-num">
-                      {s.last_scraped_at
+                      {s.tracking_reels === false ? '—' : s.last_scraped_at
                         ? fmtAgo(s.last_scraped_at)
                         : <span className="rs-badge new">ещё не обновлялся</span>}
                     </td>
@@ -161,8 +196,8 @@ export default function Sources({ refreshKey, onChanged }) {
                       <button
                         className="btn btn-ghost rs-remove"
                         disabled={busyUser === s.username}
-                        onClick={() => act(s.username, removeSource)}
-                      >Убрать</button>
+                        onClick={() => act(s.username, s.tracking_reels === false ? removeFavoriteAuthor : removeSource)}
+                      >{s.tracking_reels === false ? 'Убрать из избранных' : s.tracking_carousels ? 'Убрать Reels' : 'Убрать'}</button>
                     </td>
                   </tr>
                 ))}

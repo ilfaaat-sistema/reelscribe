@@ -199,3 +199,24 @@ test('ошибки перевода показывают короткие ста
     await assert.rejects(translateCarousel('123', { sourceHash: 'abc' }), error => error === abort)
   } finally { globalThis.fetch = previous }
 })
+
+test('произвольные даты и числовые фильтры отправляются POST также для архивов', async () => {
+  const previous = globalThis.fetch
+  const bodies = []
+  globalThis.fetch = async (url, options) => {
+    assert.equal(url, '/api/radar/carousels')
+    assert.equal(options.method, 'POST')
+    bodies.push(JSON.parse(options.body))
+    return { ok: true, json: async () => ({ items: [], total: 0 }) }
+  }
+  try {
+    await getCarousels({ period: 'custom', date_from: '2026-06-25', date_to: '2026-10-25', min_likes: 0, max_comments: 20 })
+    assert.equal(bodies[0].favorites_only, true)
+    assert.equal(bodies[0].date_from, '2026-06-25')
+    assert.equal(bodies[0].min_likes, 0)
+    assert.equal(bodies[0].max_likes, null)
+    await getCarousels({ period: '7d', min_comments: 3 })
+    assert.equal(bodies[1].period, '7d')
+    assert.equal(bodies[1].min_comments, 3)
+  } finally { globalThis.fetch = previous }
+})

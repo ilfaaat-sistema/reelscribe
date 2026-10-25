@@ -8,6 +8,8 @@ from fastapi import APIRouter, HTTPException, Query
 
 from app.models.radar_intel_schemas import AddSourcesRequest
 from app.radar import feed, sources
+from app.radar.carousel_sources import merge_sources
+from app.api import carousel_favorites
 
 router = APIRouter(prefix="/radar", tags=["radar-intel"])
 
@@ -39,8 +41,14 @@ async def get_feed(
 
 
 @router.get("/sources")
-async def get_sources() -> dict[str, Any]:
-    return feed.build_sources()
+def get_sources() -> dict[str, Any]:
+    result = feed.build_sources()
+    try:
+        authors = carousel_favorites.list_favorites()['authors']
+    except Exception:  # Не раскрываем внутренние URL или ответ хранилища избранного.
+        return {**merge_sources(result, []),
+                'carousel_tracking_error': 'Не удалось загрузить отслеживаемые карусели. Список избранных может быть неполным.'}
+    return merge_sources(result, authors)
 
 
 @router.post("/sources")

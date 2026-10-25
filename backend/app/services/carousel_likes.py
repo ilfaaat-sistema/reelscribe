@@ -66,7 +66,7 @@ def _read_saved(media_id):
 
 def _write(media_id, selected, value=None, period=None):
     data = get_db().rpc('set_carousel_like', {'p_id': media_id, 'p_selected': selected,
-                       'p_snapshot': value, 'p_period': '14d' if period == '30d' else period}).execute().data
+                       'p_snapshot': value, 'p_period': '14d' if period in ('30d', '4m', 'custom') else period}).execute().data
     if isinstance(data, list) and len(data) == 1:
         data = data[0]
     if not isinstance(data, dict):
@@ -92,7 +92,7 @@ async def list_likes():
 async def select(media_id, period):
     validate_id(media_id)
     failure = None
-    for candidate in dict.fromkeys((period, '7d', '14d', 'archive14d', '30d')):
+    for candidate in dict.fromkeys((period, '7d', '14d', 'archive14d', '30d', '4m')):
         try:
             value = snapshot(await carousels.detail(media_id, candidate), media_id)
         except HTTPException as error:
