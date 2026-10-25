@@ -20,6 +20,11 @@ const periodDateFormat = new Intl.DateTimeFormat('ru-RU', {
   timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', year: 'numeric',
 })
 const SORTS = new Set(['timestamp', 'likes', 'comments'])
+const ORDER_LABELS = {
+  timestamp: { desc: 'От новых к старым', asc: 'От старых к новым' },
+  likes: { desc: 'От большего числа лайков к меньшему', asc: 'От меньшего числа лайков к большему' },
+  comments: { desc: 'От большего числа комментариев к меньшему', asc: 'От меньшего числа комментариев к большему' },
+}
 const CYRILLIC = { а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'kh', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'shch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya' }
 const searchName = value => String(value || '').trim().replace(/^@/, '').toLowerCase().replace(/[а-яё]/g, letter => CYRILLIC[letter])
 const STATUS_LABELS = {
@@ -614,8 +619,8 @@ export default function Carousels() {
         </label>
         <label>Порядок
           <select value={order} onChange={event => changePage({ order: event.target.value, offset: 0 })}>
-            <option value="desc">Сначала больше / новые</option>
-            <option value="asc">Сначала меньше / старые</option>
+            <option value="desc">{ORDER_LABELS[sort].desc}</option>
+            <option value="asc">{ORDER_LABELS[sort].asc}</option>
           </select>
         </label>
         <div className="carousels-page-actions">
