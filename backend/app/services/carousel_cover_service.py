@@ -11,7 +11,9 @@ from app.api import carousels
 from app.services.carousel_cover_image import ImageUnavailable, download_image, normalize_image, public_cover_url
 from app.services.carousel_cover_settings import get_settings
 from app.services.carousel_cover_store import CoverStore
-from app.services.carousel_cover_vertex import PROMPT_REVISION, create_vertex_client, generate, uses_russian_alphabet
+from app.services.carousel_cover_vertex import (
+    CompletedCoverResponseError, PROMPT_REVISION, create_vertex_client, generate, uses_russian_alphabet,
+)
 
 logger = logging.getLogger(__name__)
 STALE_RUNNING_SECONDS = 600
@@ -123,13 +125,15 @@ async def translate(media_id, period, *, oidc_token=None):
             from google.genai.errors import APIError
             from httpx import Response
             # Закрытый HTTP-ответ — завершённый вызов. Сетевой таймаут остаётся неизвестным.
-            usage = {'error_type': type(error).__name__}
+            usage = (dict(error.usage) if isinstance(error, CompletedCoverResponseError)
+                     else {'error_type': type(error).__name__})
             code = getattr(error, 'code', None)
             if isinstance(code, int):
                 usage['provider_status'] = code
             response = getattr(error, 'response', None)
-            completed = (isinstance(error, APIError) and isinstance(response, Response)
-                         and response.is_closed and isinstance(code, int) and 400 <= code < 600)
+            completed = (isinstance(error, CompletedCoverResponseError)
+                         or (isinstance(error, APIError) and isinstance(response, Response)
+                             and response.is_closed and isinstance(code, int) and 400 <= code < 600))
             usage['provider_response_complete'] = completed
             if completed and code == 429:
                 # Внешний заголовок превращается только в ограниченный серверный срок ожидания.

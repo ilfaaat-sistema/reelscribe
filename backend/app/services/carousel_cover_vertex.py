@@ -53,6 +53,16 @@ class CoverResult(BaseModel):
     source_text: str = Field(max_length=6000)
     text_ru: str = Field(max_length=6000)
 
+    @model_validator(mode='before')
+    @classmethod
+    def normalize_absent_text(cls, value):
+        if isinstance(value, dict) and value.get('status') in ('no_text', 'unreadable'):
+            value = dict(value)
+            for name in ('source_text', 'text_ru'):
+                if value.get(name) is None:
+                    value[name] = ''
+        return value
+
     @model_validator(mode='after')
     def check_text(self):
         self.source_text = self.source_text.strip()
@@ -67,6 +77,14 @@ class CoverResult(BaseModel):
         else:
             self.source_text = self.text_ru = ''
         return self
+
+
+class CompletedCoverResponseError(Exception):
+    """Ответ уже получен, но содержимое не прошло проверку приложения."""
+
+    def __init__(self, usage, error_type):
+        super().__init__('Некорректный ответ перевода обложки')
+        self.usage = {**usage, 'error_type': error_type, 'provider_response_complete': True}
 
 
 def create_vertex_client(*, oidc_token=None):
@@ -92,17 +110,21 @@ async def generate(client, data, mime):
         config=types.GenerateContentConfig(system_instruction=PROMPT,
                                           response_mime_type='application/json',
                                           thinking_config=types.ThinkingConfig(thinking_level='LOW'),
-                                          response_schema=CoverResult, max_output_tokens=4096))
-    parsed = response.parsed
-    result = (CoverResult.model_validate(parsed) if isinstance(parsed, dict)
-              else parsed if isinstance(parsed, CoverResult)
-              else CoverResult.model_validate_json(response.text))
+                                          response_schema=CoverResult.model_json_schema(), max_output_tokens=4096))
+    # Сначала сохраняем безопасный расход: проверка содержимого может завершиться ошибкой.
     usage = {}
     metadata = response.usage_metadata
     if metadata:
         for name in ('prompt_token_count', 'candidates_token_count', 'total_token_count',
                      'cached_content_token_count', 'thoughts_token_count'):
             value = getattr(metadata, name, None)
-            if isinstance(value, int) and value >= 0:
+            if type(value) is int and value >= 0:
                 usage[name] = value
+    try:
+        parsed = response.parsed
+        result = (CoverResult.model_validate(parsed) if isinstance(parsed, dict)
+                  else CoverResult.model_validate_json(response.text))
+    except (ValueError, TypeError) as error:
+        # Только успешный возврат await доказывает завершённый ответ SDK.
+        raise CompletedCoverResponseError(usage, type(error).__name__) from None
     return result.model_dump(), usage
