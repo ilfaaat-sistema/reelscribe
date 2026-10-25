@@ -4,16 +4,17 @@ from __future__ import annotations
 import asyncio
 import re
 import time
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import Literal, Optional
 from urllib.parse import urlsplit
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query, Response
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.api import carousel_favorites
 from app.core.db import get_db
+from app.radar.carousel_window import date_window, matches_metrics
 
 router = APIRouter(prefix='/radar/carousels', tags=['carousels'])
 REPORT_URL = 'https://raw.githubusercontent.com/ilfaaat-sistema/reelscribe/refs/heads/data/authors-carousels-20261013-20261019/activity-report.json'
@@ -134,7 +135,8 @@ async def _neyro_source_authors():
 
 
 def page(report, author='', sort='likes', order='desc', limit=50, offset=0,
-         exclude_authors=(), include_authors=None):
+         exclude_authors=(), include_authors=None, date_from=None, date_to=None,
+         min_likes=None, max_likes=None, min_comments=None, max_comments=None):
     items, seen = [], set()
     excluded = {username.lower().lstrip('@') for username in exclude_authors}
     included = ({username.lower().lstrip('@') for username in include_authors}
@@ -152,7 +154,15 @@ def page(report, author='', sort='likes', order='desc', limit=50, offset=0,
         if identity in seen:
             continue
         seen.add(identity)
-        items.append(_item(raw))
+        item = _item(raw)
+        if date_from is not None:
+            start, end = date_window(date_from, date_to)
+            stamp = carousel_favorites._moment(item.get('timestamp'))
+            if stamp is None or not start <= stamp < end:
+                continue
+        if matches_metrics(item, min_likes=min_likes, max_likes=max_likes,
+                           min_comments=min_comments, max_comments=max_comments):
+            items.append(item)
     # ID задаёт стабильный порядок совпадающих значений; неизвестные всегда в конце.
     items.sort(key=lambda row: row['id'])
     present = [row for row in items if row.get(sort) is not None]
@@ -165,11 +175,13 @@ def page(report, author='', sort='likes', order='desc', limit=50, offset=0,
 
 async def _rolling_page(*, favorites_only=True, history_days=14, **filters):
     archives = []
+    archive_authors = []
     if not favorites_only:
         reports = await asyncio.gather(_report('7d'), _report('14d'))
         archives = [item for report in reports for item in report['items']]
+        archive_authors = [row['username'] for report in reports for row in report.get('profiles', []) if isinstance(row, dict) and isinstance(row.get('username'), str)]
     return await asyncio.to_thread(carousel_favorites.live_page, favorites_only=favorites_only,
-                                   archive_items=archives, history_days=history_days, **filters)
+                                   archive_items=archives, archive_authors=archive_authors, history_days=history_days, **filters)
 
 
 async def _rolling_detail(media_id, history_days=14):
@@ -181,7 +193,8 @@ async def _rolling_detail(media_id, history_days=14):
     reports = await asyncio.gather(_report('7d'), _report('14d'))
     start, end = carousel_favorites.window(history_days)
     for report in reversed(reports):
-        for row in reversed(carousel_favorites._state_items(report, start, end, None)):
+        rows = report['items'] if history_days == '4m' else carousel_favorites._state_items(report, start, end, None)
+        for row in reversed(rows):
             if str(row.get('id')) == media_id:
                 return {**_item(row), 'start_date': start.date().isoformat(),
                         'end_date': (end - timedelta(days=1)).date().isoformat()}
@@ -193,19 +206,38 @@ async def list_carousels(author: str = Query('', pattern=r'^@?[A-Za-z0-9._]{0,30
                          sort: Literal['likes', 'comments', 'timestamp'] = 'likes',
                          order: Literal['desc', 'asc'] = 'desc',
                          limit: int = Query(50, ge=50, le=100), offset: int = Query(0, ge=0),
-                         period: Optional[Literal['', '7d', '14d', '30d', 'archive14d']] = None,
-                         favorites_only: bool = True):
+                         period: Optional[Literal['', '7d', '14d', '30d', '4m', 'custom', 'archive14d']] = None,
+                         favorites_only: bool = True, date_from: Optional[date] = None, date_to: Optional[date] = None,
+                         min_likes: Optional[int] = Query(None, ge=0), max_likes: Optional[int] = Query(None, ge=0),
+                         min_comments: Optional[int] = Query(None, ge=0), max_comments: Optional[int] = Query(None, ge=0)):
+    if period in ('4m', 'custom') or any(value is not None for value in
+            (date_from, date_to, min_likes, max_likes, min_comments, max_comments)):
+        from pydantic import ValidationError
+        try:
+            query = CarouselQuery(period=period, author=author, sort=sort, order=order,
+                limit=limit, offset=offset, favorites_only=favorites_only, date_from=date_from,
+                date_to=date_to, min_likes=min_likes, max_likes=max_likes,
+                min_comments=min_comments, max_comments=max_comments)
+        except (ValueError, ValidationError):
+            raise HTTPException(422, 'Некорректный период или диапазон показателей') from None
+        return await filtered_carousels(query)
     if limit not in (50, 100):
         raise HTTPException(422, 'Размер страницы: 50 или 100')
-    if period in ('14d', '30d'):
-        return await _rolling_page(history_days=30 if period == '30d' else 14, favorites_only=favorites_only, author=author, sort=sort,
+    if period in ('14d', '30d', '4m', 'custom'):
+        return await _rolling_page(history_days={'30d': 30, '14d': 14}.get(period, '4m'), favorites_only=favorites_only, author=author, sort=sort,
                                    order=order, limit=limit, offset=offset)
     return page(await _selected_report(period), author, sort, order, limit, offset)
 
 
 class CarouselQuery(BaseModel):
     favorites_only: bool = True
-    period: Optional[Literal['', '7d', '14d', '30d', 'archive14d']] = None
+    date_from: Optional[date] = None
+    date_to: Optional[date] = None
+    min_likes: Optional[int] = Field(None, ge=0, le=9007199254740991, strict=True)
+    max_likes: Optional[int] = Field(None, ge=0, le=9007199254740991, strict=True)
+    min_comments: Optional[int] = Field(None, ge=0, le=9007199254740991, strict=True)
+    max_comments: Optional[int] = Field(None, ge=0, le=9007199254740991, strict=True)
+    period: Optional[Literal['', '7d', '14d', '30d', '4m', 'custom', 'archive14d']] = None
     author: str = Field('', pattern=r'^@?[A-Za-z0-9._]{0,30}$')
     sort: Literal['likes', 'comments', 'timestamp'] = 'likes'
     order: Literal['desc', 'asc'] = 'desc'
@@ -214,6 +246,15 @@ class CarouselQuery(BaseModel):
     exclude_authors: list[str] = Field(default_factory=list, max_length=1600)
     include_authors: Optional[list[str]] = Field(None, max_length=1600)
     source_account: Optional[Literal['neyro_set7']] = None
+
+    @model_validator(mode='after')
+    def valid_ranges(self):
+        if self.period == 'custom' or self.date_from is not None or self.date_to is not None:
+            date_window(self.date_from, self.date_to)
+        for lower, upper in ((self.min_likes, self.max_likes), (self.min_comments, self.max_comments)):
+            if lower is not None and upper is not None and lower > upper:
+                raise ValueError('Минимум не может быть больше максимума')
+        return self
 
     @field_validator('exclude_authors', 'include_authors')
     @classmethod
@@ -237,12 +278,12 @@ async def filtered_carousels(query: CarouselQuery):
     source = filters.pop('source_account')
     period = filters.pop('period')
     favorites_only = filters.pop('favorites_only')
-    if period in ('14d', '30d'):
+    if period in ('14d', '30d', '4m', 'custom') or filters.get('date_from') is not None:
         if source == 'neyro_set7':
             filters['source_account'] = await _neyro_source_authors()
         else:
             filters['source_account'] = None
-        return await _rolling_page(history_days=30 if period == '30d' else 14, favorites_only=favorites_only, **filters)
+        return await _rolling_page(history_days={'30d': 30, '14d': 14}.get(period, '4m'), favorites_only=favorites_only, **filters)
     if source == 'neyro_set7':
         allowed = await _neyro_source_authors()
         included = filters['include_authors']
@@ -253,8 +294,8 @@ async def filtered_carousels(query: CarouselQuery):
 async def resolve_detail(media_id: str, period=None):
     if not re.fullmatch(r'[0-9]{1,40}', media_id):
         raise HTTPException(422, 'Некорректный ID карусели')
-    if period in ('14d', '30d'):
-        return await _rolling_detail(media_id, history_days=30 if period == '30d' else 14)
+    if period in ('14d', '30d', '4m', 'custom'):
+        return await _rolling_detail(media_id, history_days={'30d': 30, '14d': 14}.get(period, '4m'))
     report = await _selected_report(period)
     for raw in report['items']:
         if str(raw.get('id')) == media_id and raw.get('media_type') == 'CAROUSEL_ALBUM':
@@ -270,7 +311,7 @@ async def resolve_detail(media_id: str, period=None):
 
 
 @router.get('/{media_id}')
-async def detail(media_id: str, period: Optional[Literal['', '7d', '14d', '30d', 'archive14d']] = None,
+async def detail(media_id: str, period: Optional[Literal['', '7d', '14d', '30d', '4m', 'custom', 'archive14d']] = None,
                  response: Response = None):
     from app.services.carousel_translation import detail_translation
 

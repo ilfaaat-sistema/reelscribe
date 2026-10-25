@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { thumbUrl } from '../api/client'
 import { getCarousel, translateCarousel } from '../api/carousels'
-import { favoriteFilterEnabled, isLiveCarouselPeriod, toggleFavoriteFilter } from '../api/carouselFilters'
+import { CAROUSEL_RANGE_KEYS, carouselPeriod, carouselRangeDraft, validateCarouselRanges, favoriteFilterEnabled, isLiveCarouselPeriod, toggleFavoriteFilter } from '../api/carouselFilters'
 import useHiddenAuthors from '../hooks/useHiddenAuthors'
 import { FAVORITES_IMPORT_KEY, readFavoriteAuthors, getFavoriteAuthors, addFavoriteAuthor, removeFavoriteAuthor } from '../api/favoriteAuthors'
 import useSelectedCarousels from '../hooks/useSelectedCarousels'
@@ -383,7 +383,15 @@ export default function Carousels() {
 
   const author = searchParams.get('author')?.trim() || ''
   useEffect(() => { setSearchDraft(author) }, [author])
-  const period = ['7d', '14d', '30d', 'archive14d'].includes(searchParams.get('period')) ? searchParams.get('period') : null
+  const period = carouselPeriod(searchParams)
+  const rangeKey = JSON.stringify(carouselRangeDraft(searchParams))
+  const [rangeDraft, setRangeDraft] = useState(() => carouselRangeDraft(searchParams))
+  const [rangeError, setRangeError] = useState('')
+  useEffect(() => { setRangeDraft(JSON.parse(rangeKey)); setRangeError('') }, [rangeKey])
+  const ranges = useMemo(() => {
+    const draft = JSON.parse(rangeKey)
+    return Object.fromEntries(CAROUSEL_RANGE_KEYS.map(key => [key, key.startsWith('date_') ? (period === 'custom' ? draft[key] || null : null) : draft[key] === '' ? null : Number(draft[key])]))
+  }, [rangeKey, period])
   const favoriteOnly = favoriteFilterEnabled(searchParams)
   const sourceAccount = searchParams.get('source') === 'neyro_set7' ? 'neyro_set7' : null
   const sort = SORTS.has(searchParams.get('sort')) ? searchParams.get('sort') : 'likes'
@@ -391,7 +399,7 @@ export default function Carousels() {
   const limit = searchParams.get('limit') === '100' ? 100 : 50
   const detailId = searchParams.get('id')
   const includeAuthors = !isLiveCarouselPeriod(period) && favoriteOnly ? favorites.authors : null
-  const listParams = useMemo(() => ({ period, favorites_only: favoriteOnly, author, sort, order, limit, exclude_authors: excludedAuthors, include_authors: includeAuthors, source_account: sourceAccount }), [period, favoriteOnly, author, sort, order, limit, excludedAuthors, includeAuthors, sourceAccount])
+  const listParams = useMemo(() => ({ ...ranges, period, favorites_only: favoriteOnly, author, sort, order, limit, exclude_authors: excludedAuthors, include_authors: includeAuthors, source_account: sourceAccount }), [ranges, period, favoriteOnly, author, sort, order, limit, excludedAuthors, includeAuthors, sourceAccount])
   const { data, loading, error, loadingMore, moreError, loadMore, refresh, hasMore } = useCarouselFeed(listParams)
 
   useEffect(() => {
@@ -419,6 +427,7 @@ export default function Carousels() {
 
   const updateQuery = useCallback((changes) => {
     const next = new URLSearchParams(location.search)
+    if (!next.has('period') && carouselPeriod(next) === '4m') next.set('period', '4m')
     Object.entries(changes).forEach(([key, value]) => {
       if (value == null || value === '') next.delete(key)
       else next.set(key, String(value))
@@ -431,6 +440,14 @@ export default function Carousels() {
     pageRef.current?.scrollTo({ top: 0, behavior: 'instant' })
   }
 
+  const applyRanges = event => {
+    event.preventDefault()
+    const customDates = Boolean(rangeDraft.date_from || rangeDraft.date_to || period === 'custom')
+    const result = validateCarouselRanges(rangeDraft, customDates)
+    setRangeError(result.error)
+    if (result.error) return
+    changePage({ ...result.values, ...(customDates ? { period: 'custom' } : {}), id: null, offset: 0 })
+  }
   const searchTerm = searchName(searchDraft)
   const searchMatches = searchTerm.length >= 2
     ? (data?.profiles || []).filter(profile => profile.username?.toLowerCase().includes(searchTerm)).slice(0, 6)
@@ -528,12 +545,13 @@ export default function Carousels() {
   })
   const total = Number.isFinite(Number(data?.total)) && data?.total != null ? Number(data.total) : null
   const selectedPeriod = period || (data?.start_date === '2026-10-06' ? 'archive14d' : data ? '7d' : null)
+  const coverage = data?.coverage
   const collection = data?.collection
   const checked = collection?.checked
   const target = collection?.target
   const profile = author && data?.profiles?.find(p => p.username?.toLowerCase() === author.toLowerCase())
   const authorCount = profile?.carousels
-  const isPartial = collection && collection.status !== 'finished'
+  const isPartial = coverage?.status === 'partial' || (collection && collection.status !== 'finished')
   const authorUnknown = author && authorCount == null
   const items = (hidden.loading ? [] : data?.items || []).filter(item => !excluded.has(item.username?.toLowerCase()))
   const listItem = items.find(item => String(item.id) === detailId)
@@ -572,13 +590,23 @@ export default function Carousels() {
         <button type="button" className="carousels-reload" onClick={() => { refresh(); syncFavorites() }} disabled={loading}>Обновить</button>
       </div>
 
+      {coverage && <div className={`carousels-coverage${coverage.status === 'partial' ? ' is-partial' : ''}`} role="status">
+        <strong>{coverage.status === 'complete' ? 'Покрытие периода подтверждено' : 'История загружена частично'}</strong>
+        <span>{count(coverage.complete_authors)} / {count(coverage.total_authors)} авторов с подтверждённым покрытием.</span>
+        <span>Доступные границы: {coverage.available_from || 'ещё нет'} — {coverage.available_to || 'ещё нет'}.</span>
+        {coverage.status === 'partial' && <span>Результат может пополняться; отсутствие карточек не означает отсутствие публикаций.</span>}
+      </div>}
+      {data?.collected_at && <p className="carousels-muted">Счётчики по последнему сбору: {date(data.collected_at)} МСК. Фильтры не запускают повторный сбор.</p>}
+
       <div className="carousels-controls">
         <label>Период
-          <select aria-label="Период каруселей" value={selectedPeriod || ''} onChange={event => changePage({ period: event.target.value, id: null, offset: 0 })}>
+          <select aria-label="Период каруселей" value={selectedPeriod || ''} onChange={event => { if (event.target.value === 'custom') { changePage({ period: 'custom', date_from: data.start_date, date_to: data.end_date, id: null, offset: 0 }); return } changePage({ period: event.target.value, date_from: null, date_to: null, id: null, offset: 0 }) }}>
             {!period && !data && <option value="">Автоматически</option>}
             <option value="7d">7 дней · 13–19 октября</option>
             <option value="14d">Последние 14 дней</option>
             <option value="30d">Последние 30 дней</option>
+            <option value="4m">Последние 4 месяца</option>
+            <option value="custom" disabled={!data?.start_date || !data?.end_date}>Произвольные даты</option>
             <option value="archive14d">Архив 6–19 октября</option>
           </select>
         </label>
@@ -634,6 +662,19 @@ export default function Carousels() {
         </div>
       </div>
 
+      <form className="carousels-range-form" onSubmit={applyRanges} noValidate>
+        <fieldset><legend>Даты публикации · Москва</legend>
+          <label>С<input type="date" aria-label="Дата с" value={rangeDraft.date_from} onChange={event => setRangeDraft(value => ({ ...value, date_from: event.target.value }))} /></label>
+          <label>По<input type="date" aria-label="Дата по" value={rangeDraft.date_to} onChange={event => setRangeDraft(value => ({ ...value, date_to: event.target.value }))} /></label>
+        </fieldset>
+        {[['likes', 'Лайки'], ['comments', 'Комментарии']].map(([key, title]) => <fieldset key={key}><legend>{title}</legend>
+          {['min', 'max'].map((bound, index) => <label key={bound}>{index ? 'До' : 'От'}<input type="number" min="0" step="1" inputMode="numeric" aria-label={`${title} ${index ? 'до' : 'от'}`} placeholder="Любое" value={rangeDraft[`${bound}_${key}`]} onChange={event => setRangeDraft(value => ({ ...value, [`${bound}_${key}`]: event.target.value }))} /></label>)}
+        </fieldset>)}
+        <div className="carousels-range-actions"><button type="submit">Применить фильтры</button>
+          <button type="button" onClick={() => { setRangeError(''); setRangeDraft(Object.fromEntries(CAROUSEL_RANGE_KEYS.map(key => [key, '']))); changePage({ ...Object.fromEntries(CAROUSEL_RANGE_KEYS.map(key => [key, null])), period: period === 'custom' ? '4m' : period, id: null, offset: 0 }) }}>Сбросить диапазоны</button></div>
+        {rangeError && <p className="carousels-range-error" role="alert">{rangeError}</p>}
+      </form>
+
       <section className="carousels-favorites-list" aria-label="Избранные авторы">
         <div className="carousels-favorites-heading">
           <h2><button type="button" className="carousels-favorites-toggle" aria-expanded={favoritesExpanded}
@@ -657,7 +698,7 @@ export default function Carousels() {
           <button type="button" className="carousels-favorite-filter"
             aria-pressed={author.toLowerCase().replace(/^@/, '') === row.username}
             aria-label={`Показать карусели @${row.username}`} onClick={() => chooseFavoriteAuthor(row.username)}>
-            <span>@{row.username}</span><small>{selectedPeriod === '30d' && row.status === 'updated' && (row.history_days !== 30 || row.coverage_version !== 2) ? 'Ожидает историю 30 дней' : FAVORITE_STATUS[row.status] || 'Ожидает'}{row.last_checked_at ? ` · ${date(row.last_checked_at)} МСК` : ' · ещё не проверен'}</small>{row.error && <small>{row.error}</small>}
+            <span>@{row.username}</span><small>{FAVORITE_STATUS[row.status] || 'Ожидает'}{row.last_checked_at ? ` · ${date(row.last_checked_at)} МСК` : ' · ещё не проверен'}</small>{row.error && <small>{row.error}</small>}{row.history_status && <small>История: {({ pending: 'ожидает загрузки', queued: 'в очереди', running: 'загружается', collecting: 'загружается', complete: 'покрытие подтверждено', partial: 'частично', cooldown: 'пауза API', unavailable: 'профиль недоступен', error: 'ошибка', failed: 'ошибка' })[row.history_status] || 'статус уточняется'}{row.history_from ? ` · ${date(row.history_from)} — ${date(row.history_to)}` : ''}</small>}{row.history_error && <small>{row.history_error}</small>}
           </button>
           <button type="button" disabled={favoriteBusy} onClick={() => changeFavorite(row.username)} aria-label={`Убрать @${row.username} из избранного`}>Убрать</button>
         </li>)}</ul> : <p>Список пуст. Вставьте ссылку на профиль выше.</p>}
@@ -693,7 +734,7 @@ export default function Carousels() {
 
       {error && <div className="carousels-error" role="alert">{error}<button type="button" onClick={refresh}>Повторить</button></div>}
       {(hidden.loading || (loading && !data)) && <p className="carousels-loading" role="status">Загружаем карусели…</p>}
-      {!hidden.loading && !loading && !error && !items.length && <p className="carousels-empty">{isLiveCarouselPeriod(period) && favoriteOnly ? favoriteLoading ? 'Проверяем общий список избранных…' : !favorites.authors.length ? 'Добавьте профиль в общий список избранных.' : favoriteRows.some(row => (!author || row.username === author.toLowerCase()) && (!row.last_checked_at || (period === '30d' && (row.history_days !== 30 || row.coverage_version !== 2)))) ? 'Автор ещё не проверен. Сбор начнётся автоматически; статус доступен выше.' : 'Авторы проверены. За выбранный период и с текущими фильтрами каруселей нет.' : favoriteOnly && !favorites.authors.length ? 'Список избранных авторов пуст. Добавьте авторов звёздой на карточках.' : authorUnknown ? 'Данные каруселей этого автора пока недоступны.' : 'Каруселей по выбранному фильтру пока нет.'}</p>}
+      {!hidden.loading && !loading && !error && !items.length && <p className="carousels-empty">{isLiveCarouselPeriod(period) && favoriteOnly ? favoriteLoading ? 'Проверяем общий список избранных…' : !favorites.authors.length ? 'Добавьте профиль в общий список избранных.' : data?.coverage?.status === 'partial' ? 'История загружена не полностью. За выбранные даты и с этими фильтрами пока ничего не найдено; результат может пополниться.' : 'Авторы проверены. За выбранный период и с текущими фильтрами каруселей нет.' : favoriteOnly && !favorites.authors.length ? 'Список избранных авторов пуст. Добавьте авторов звёздой на карточках.' : authorUnknown ? 'Данные каруселей этого автора пока недоступны.' : 'Каруселей по выбранному фильтру пока нет.'}</p>}
       {isLiveCarouselPeriod(period) && !favoriteOnly && <p className="carousels-muted">Уже собранные карусели всех авторов за текущее окно. Новый сбор по всем авторам не запускается.</p>}
       {!!items.length && <div className="carousels-grid">
         {items.map(item => <div className="carousels-tile" key={item.id}><button

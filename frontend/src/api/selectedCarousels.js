@@ -1,5 +1,5 @@
 const ID = /^[0-9]{1,40}$/
-const PERIODS = new Set(['7d', '14d', '30d', 'archive14d'])
+const PERIODS = new Set(['7d', '14d', '30d', '4m', 'custom', 'archive14d'])
 const FIELDS = ['id', 'username', 'permalink', 'shortcode', 'timestamp', 'caption', 'media_type',
   'media_url', 'thumbnail_url', 'likes', 'comments', 'views', 'followers', 'collected_at']
 

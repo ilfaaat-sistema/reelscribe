@@ -46,11 +46,14 @@ def validate_state(state):
         names.add(name)
         if row.get('status') not in STATUSES or not isinstance(row.get('active'), bool):
             raise ValueError('Некорректное состояние автора')
-        if not isinstance(row.get('checkpoint', {}), dict):
+        if not isinstance(row.get('checkpoint', {}), dict) or not isinstance(row.get('history_checkpoint', {}), dict):
             raise ValueError('Некорректная контрольная точка')  # noqa: TRY004 — единый тип ошибки данных.
-        for field in ('added_at', 'last_checked_at', 'last_attempt_at', 'next_check_at'):
+        for field in ('added_at', 'last_checked_at', 'last_attempt_at', 'next_check_at', 'history_from', 'history_to',
+                      'history_last_attempt_at', 'recent_last_attempt_at', 'history_next_check_at'):
             if row.get(field) is not None and _stamp(row[field]) is None:
                 raise ValueError('Некорректная дата автора')
+        if row.get('history_status') not in (None, 'pending', 'collecting', 'complete', 'error', 'unavailable'):
+            raise ValueError('Некорректное состояние истории')
     for item in items:
         if not isinstance(item, dict) or not isinstance(item.get('id'), str) or not item['id'] or item['id'] in ids:
             raise ValueError('Некорректный ID карточки')
@@ -230,11 +233,11 @@ class WorkerStore:
         # Карточки и курсор страницы отправляются одним атомарным коммитом update.
         self.pending_items = deepcopy(items)
 
-    def update(self, username, *, pause_until=None, pause_reason=None, **values):
+    def update(self, username, *, pause_until=None, pause_reason=None, expected_generation=None, **values):
         items = deepcopy(self.pending_items)
         def operation(state):
             row = next((row for row in state['authors'] if row['username'] == username and row['active']), None)
-            if row is None:
+            if row is None or row.get('tracking_generation') != expected_generation:
                 return
             row.update(deepcopy(values))
             existing = {item['id']: item for item in state['items']}

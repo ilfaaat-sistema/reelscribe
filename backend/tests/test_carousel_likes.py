@@ -205,7 +205,7 @@ def test_fallback_checks_every_report_once_before_saved_restore(setup, monkeypat
     monkeypatch.setattr(service.carousels, 'detail', detail)
     response = client.put(URL + '/123', json={'period': requested})
     assert response.status_code == 200
-    assert periods == expected
+    assert periods == expected + ['4m']
     assert response.json()['item']['source_period'] == 'archive14d'
     assert db.calls[-1][1]['p_period'] == 'archive14d'
 
@@ -237,7 +237,7 @@ def test_fallback_keeps_unavailable_report_error_when_other_reports_miss(setup, 
         raise HTTPException(503 if period == 'archive14d' else 404, 'Отчёт недоступен')
     monkeypatch.setattr(service.carousels, 'detail', detail)
     assert client.put(URL + '/123', json={'period': 'archive14d'}).status_code == 503
-    assert periods == ['archive14d', '7d', '14d', '30d']
+    assert periods == ['archive14d', '7d', '14d', '30d', '4m']
     assert not any(call[0] == 'rpc' for call in db.calls)
 
 

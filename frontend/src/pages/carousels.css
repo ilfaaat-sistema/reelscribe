@@ -220,3 +220,18 @@
 }
 
 .carousels-cover-translation-popup { position: fixed; z-index: 1000; box-sizing: border-box; display: block; padding: 12px; overflow-y: auto; overscroll-behavior: contain; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 19px; color: var(--tx); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 28px #0004; text-align: left; }
+
+/* Диапазоны применяются одной формой после ввода обеих границ. */
+.carousels-range-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin: 14px 0; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.carousels-range-form fieldset { display: flex; flex: 1 1 210px; min-width: 0; gap: 8px; padding: 0; margin: 0; border: 0; }
+.carousels-range-form legend { margin-bottom: 7px; color: var(--mut); font-size: 12px; }
+.carousels-range-form label { display: flex; flex: 1; flex-direction: column; min-width: 0; gap: 4px; color: var(--mut); font-size: 11px; }
+.carousels-range-form input { width: 100%; min-width: 0; min-height: 38px; padding: 7px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--tx); font: inherit; font-size: 13px; color-scheme: dark; }
+.carousels-range-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.carousels-range-actions button { min-height: 38px; padding: 8px 11px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel2); color: var(--tx); font-size: 12px; }
+.carousels-range-actions button[type="submit"] { border-color: var(--iris); }
+.carousels-range-error { flex-basis: 100%; margin: 0; color: var(--rose); font-size: 12px; }
+.carousels-coverage { display: flex; flex-wrap: wrap; gap: 5px 12px; padding: 10px 12px; margin-top: 12px; border: 1px solid var(--teal); border-radius: 8px; color: var(--mut); font-size: 12px; }
+.carousels-coverage strong { color: var(--tx); }
+.carousels-coverage.is-partial { border-color: var(--line); }
+@media (max-width: 540px) { .carousels-range-form fieldset { flex-basis: 100%; } .carousels-range-actions { width: 100%; } }

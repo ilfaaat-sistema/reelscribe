@@ -12,7 +12,7 @@ router = APIRouter(prefix='/radar/carousels', tags=['carousels'])
 
 class TranslateCarousel(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    period: Literal['7d', '14d', '30d', 'archive14d'] | None = None
+    period: Literal['7d', '14d', '30d', '4m', 'custom', 'archive14d'] | None = None
     source_hash: str = Field(pattern=r'^[0-9a-f]{64}$')
     automatic: bool = Field(default=False, strict=True)
 

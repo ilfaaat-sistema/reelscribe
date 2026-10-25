@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+from uuid import uuid4
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
@@ -12,13 +13,14 @@ from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from app.radar.live_favorites_store import Conflict, LiveFavoritesStore
-from app.radar.carousel_window import rolling_window
+from app.radar.carousel_window import rolling_window, history_window, date_window, matches_metrics
 
 router = APIRouter(prefix='/radar/carousels/favorites', tags=['carousels'])
 NAME = re.compile(r'[a-z0-9._]{1,30}\Z')
 RESERVED = {'p', 'reel', 'reels', 'stories', 'explore', 'accounts', 'direct'}
 MOSCOW = ZoneInfo('Europe/Moscow')
-PUBLIC_FIELDS = ('username', 'status', 'last_checked_at', 'next_check_at', 'error', 'history_days', 'coverage_version')
+PUBLIC_FIELDS = ('username', 'status', 'last_checked_at', 'next_check_at', 'error', 'history_days', 'coverage_version',
+                 'history_months', 'history_status', 'history_from', 'history_to', 'history_error')
 
 
 def _store(client):
@@ -89,7 +91,9 @@ def _mutate(username, *, add):
                 if sum(bool(item.get('active', True)) for item in authors) >= 200:
                     raise HTTPException(429, 'Достигнут защитный лимит избранных авторов')
                 if row:
-                    row.update(active=True, status='pending', error=None, checkpoint={}, next_check_at=None)
+                    row.update(active=True, status='pending', error=None, checkpoint={}, next_check_at=None,
+                               history_status='pending', history_checkpoint={}, history_next_check_at=None,
+                               history_months=0, coverage_version=0, history_error=None, tracking_generation=uuid4().hex)
                 else:
                     now = datetime.now(timezone.utc)
                     today = now.astimezone(MOSCOW).date()
@@ -98,7 +102,7 @@ def _mutate(username, *, add):
                         raise HTTPException(429, 'Защитный дневной лимит новых авторов достигнут')
                     row = {'username': username, 'active': True, 'status': 'pending',
                            'added_at': now.isoformat(), 'last_checked_at': None,
-                           'next_check_at': None, 'error': None, 'checkpoint': {}}
+                           'next_check_at': None, 'error': None, 'checkpoint': {}, 'tracking_generation': uuid4().hex}
                     authors.append(row)
             else:
                 if not row or not row.get('active', True):
@@ -134,7 +138,8 @@ def remove_favorite(username: str):
 
 
 def window(history_days=14, now=None):
-    return rolling_window(now or datetime.now(MOSCOW), history_days)
+    now = now or datetime.now(MOSCOW)
+    return history_window(now) if history_days == '4m' else rolling_window(now, history_days)
 
 
 def _moment(value):
@@ -162,10 +167,11 @@ def _sorted_items(items, sort, order):
 
 
 def live_page(*, author='', sort='likes', order='desc', limit=50, offset=0,
-              exclude_authors=(), include_authors=None, source_account=None, favorites_only=True, archive_items=(), history_days=14):
+              exclude_authors=(), include_authors=None, source_account=None, favorites_only=True, archive_items=(), archive_authors=(), history_days=14,
+              date_from=None, date_to=None, min_likes=None, max_likes=None, min_comments=None, max_comments=None):
     from app.api.carousels import _item
 
-    start, end = window(history_days)
+    start, end = date_window(date_from, date_to) if date_from is not None else window(history_days)
     with httpx.Client(timeout=20, follow_redirects=False) as client:
         state = _read_state(_store(client))
     active = [row for row in state['authors'] if row.get('active', True)]
@@ -174,7 +180,7 @@ def live_page(*, author='', sort='likes', order='desc', limit=50, offset=0,
     in_window = _state_items({'items': raw_items}, start, end, names if favorites_only else None)
     all_items = list({str(row['id']): row for row in in_window if row.get('id') is not None}.values())
     if not favorites_only:
-        names = {row['username'] for row in all_items}
+        names |= {row['username'] for row in all_items} | set(archive_authors)
     profile_counts = {name: 0 for name in names}
     for row in all_items:
         profile_counts[row['username']] += 1
@@ -185,9 +191,13 @@ def live_page(*, author='', sort='likes', order='desc', limit=50, offset=0,
         selected &= {author.lower().lstrip('@')}
     if source_account is not None:
         selected &= set(source_account)
-    items = _sorted_items([row for row in all_items if row['username'] in selected], sort, order)
+    items = _sorted_items([_item(row) for row in all_items if row['username'] in selected
+                          and matches_metrics(_item(row), min_likes=min_likes, max_likes=max_likes,
+                                              min_comments=min_comments, max_comments=max_comments)], sort, order)
     def coverage_status(row):
-        if history_days == 30 and row['status'] == 'updated' and (row.get('history_days', 0) < 30 or row.get('coverage_version') != 2):
+        if (history_days == '4m' or date_from is not None) and row.get('history_status') != 'complete':
+            return 'error' if row.get('history_status') == 'error' else row['status'] if row['status'] in ('unavailable', 'meta_paused', 'error') else 'collecting'
+        if history_days == 30 and row['status'] == 'updated' and not (row.get('history_months') == 4 and row.get('history_status') == 'complete' and row.get('coverage_version', 0) >= 3) and (row.get('history_days', 0) < 30 or row.get('coverage_version', 0) < 2):
             return 'pending'
         return row['status']
 
@@ -199,7 +209,21 @@ def live_page(*, author='', sort='likes', order='desc', limit=50, offset=0,
     last_checked = [row['last_checked_at'] for row in active if row.get('last_checked_at')]
     collected = [row['collected_at'] for row in all_items if _moment(row.get('collected_at'))]
     latest = max(last_checked + collected, key=_moment, default=None)
+    selected_active = [row for row in state['authors'] if row['username'] in selected]
+    complete_rows = [row for row in selected_active if row.get('history_status') == 'complete' and not row.get('checkpoint')
+                     and (first := _moment(row.get('history_from'))) and first <= start
+                     and (last := _moment(row.get('last_checked_at'))) and last.astimezone(MOSCOW).date() >= (end - timedelta(days=1)).date()]
+    coverage_dates = [_moment(row.get('history_from')) for row in selected_active]
+    checked_dates = [_moment(row.get('last_checked_at')) for row in selected_active]
+    coverage_dates = [value for value in coverage_dates if value is not None]
+    # Полнота описывает выбранных авторов, а не только найденные карточки.
+    coverage = {'status': 'complete' if selected and len(complete_rows) == len(selected) else 'partial',
+                'requested_from': start.date().isoformat(), 'requested_to': (end - timedelta(days=1)).date().isoformat(),
+                'available_from': max(coverage_dates).astimezone(MOSCOW).date().isoformat() if len(coverage_dates) == len(selected) and selected else None,
+                'available_to': min(checked_dates).astimezone(MOSCOW).date().isoformat() if selected and len(checked_dates) == len(selected) and all(checked_dates) else None,
+                'complete_authors': len(complete_rows), 'total_authors': len(selected), 'history_months': 4}
     return {
+        'coverage': coverage,
         'start_date': start.date().isoformat(),
         'end_date': (end - timedelta(days=1)).date().isoformat(),
         'timezone': 'Europe/Moscow',
@@ -227,7 +251,8 @@ def live_detail(media_id: str, history_days=14):
     start, end = window(history_days)
     with httpx.Client(timeout=20, follow_redirects=False) as client:
         state = _read_state(_store(client))
-    for row in _state_items(state, start, end, None):
+    rows = state['items'] if history_days == '4m' else _state_items(state, start, end, None)
+    for row in rows:
         if str(row.get('id')) == media_id:
             return {**_item(row), 'start_date': start.date().isoformat(),
                     'end_date': (end - timedelta(days=1)).date().isoformat()}

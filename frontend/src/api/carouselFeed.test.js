@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { carouselFeedBaseKey, mergeCarouselItems, readCarouselPrefix } from './carouselFeed.js'
+import { carouselRefreshInterval, carouselFeedBaseKey, mergeCarouselItems, readCarouselPrefix } from './carouselFeed.js'
 
 const query = { author: 'alice', sort: 'likes', order: 'desc', limit: 50, exclude_authors: ['bob'] }
 
@@ -65,7 +65,7 @@ test('on/off избранного меняет ключ сброса загру�
   const on = { ...query, period: '14d', favorites_only: true }
   const off = { ...on, favorites_only: false }
   assert.notEqual(carouselFeedBaseKey(on), carouselFeedBaseKey(off))
-  assert.equal(carouselFeedBaseKey(on), carouselFeedBaseKey({ ...on, exclude_authors: ['hidden'] }))
+  assert.notEqual(carouselFeedBaseKey(on), carouselFeedBaseKey({ ...on, exclude_authors: ['hidden'] }))
 })
 
 test('живые 14d/30d продолжают обновляться после finished, архив не опрашивается', async () => {
@@ -74,4 +74,13 @@ test('живые 14d/30d продолжают обновляться после 
   assert.equal(carouselRefreshInterval('14d', 'finished'), 60000)
   assert.equal(carouselRefreshInterval('30d', 'running'), 30000)
   assert.equal(carouselRefreshInterval('archive14d', 'finished'), null)
+})
+
+test('каждый диапазон и скрытые авторы сбрасывают ключ накопленной ленты', () => {
+  const query = { period: 'custom', sort: 'likes', order: 'desc', limit: 50 }
+  for (const key of ['date_from', 'date_to', 'min_likes', 'max_likes', 'min_comments', 'max_comments', 'exclude_authors']) {
+    assert.notEqual(carouselFeedBaseKey(query), carouselFeedBaseKey({ ...query, [key]: key === 'exclude_authors' ? ['hidden'] : 1 }))
+  }
+  assert.equal(carouselRefreshInterval('4m', 'finished'), 60000)
+  assert.equal(carouselRefreshInterval('custom', 'finished'), 60000)
 })

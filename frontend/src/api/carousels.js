@@ -54,11 +54,13 @@ function translationError(response, body) {
   return error
 }
 
-export function getCarousels({ period = null, author = '', sort = 'likes', order = 'desc', limit = 50, offset = 0, exclude_authors = [], include_authors = null, source_account = null, favorites_only = true } = {}, signal) {
-  if (isLiveCarouselPeriod(period) || include_authors != null || exclude_authors.length || source_account === 'neyro_set7') {
+export function getCarousels({ period = null, author = '', sort = 'likes', order = 'desc', limit = 50, offset = 0, exclude_authors = [], include_authors = null, source_account = null, favorites_only = true, date_from = null, date_to = null, min_likes = null, max_likes = null, min_comments = null, max_comments = null } = {}, signal) {
+  const ranges = { date_from, date_to, min_likes, max_likes, min_comments, max_comments }
+  const hasRanges = Object.values(ranges).some(value => value != null)
+  if (hasRanges || isLiveCarouselPeriod(period) || include_authors != null || exclude_authors.length || source_account === 'neyro_set7') {
     return readJson(BASE, signal, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...(period ? { period } : {}), ...(isLiveCarouselPeriod(period) ? { favorites_only } : {}), author, sort, order, limit, offset, exclude_authors, ...(include_authors == null ? {} : { include_authors }), ...(source_account === 'neyro_set7' ? { source_account } : {}) }),
+      body: JSON.stringify({ ...(hasRanges ? ranges : {}), ...(period ? { period } : {}), ...(isLiveCarouselPeriod(period) ? { favorites_only } : {}), author, sort, order, limit, offset, exclude_authors, ...(include_authors == null ? {} : { include_authors }), ...(source_account === 'neyro_set7' ? { source_account } : {}) }),
     })
   }
   const query = new URLSearchParams({ sort, order, limit: String(limit), offset: String(offset) })

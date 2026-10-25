@@ -1,7 +1,7 @@
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 
-from app.radar.live_carousel_job import run, window
+from app.radar.live_carousel_job import run, window, _run_lane
 
 from tests.test_carousel_job import Client, Response, detail, page
 
@@ -40,33 +40,33 @@ class MemoryStore:
 
 
 def collect(store, client, **kwargs):
-    return run(store, client, token='test', account_id='123', clock=lambda: NOW, **kwargs)
+    return _run_lane(store, client, token='test', account_id='123', clock=lambda: NOW, **kwargs)
 
 
 def test_moscow_window_and_filter():
     start, end = window(datetime(2026, 10, 19, 22, tzinfo=timezone.utc))
-    assert start.isoformat() == '2026-09-21T00:00:00+03:00'
+    assert start.isoformat() == '2026-06-20T00:00:00+03:00'
     assert end.isoformat() == '2026-10-21T00:00:00+03:00'
     store = MemoryStore()
-    collect(store, Client(page([detail('1'), detail('2', timestamp='2026-09-01T12:00:00+0000')])))
+    collect(store, Client(page([detail('1'), detail('2', timestamp='2026-05-01T12:00:00+0000')])))
     assert set(store.items) == {'1'}
-    assert store.rows[0]['status'] == 'updated'
-    assert store.rows[0]['checkpoint'] == {}
+    assert store.rows[0]['history_status'] == 'complete'
+    assert store.rows[0]['history_checkpoint'] == {}
 
 
 def test_checkpoint_resume_and_dedup():
     store = MemoryStore()
     collect(store, Client(page([detail('1')], after='next')), max_requests=1)
-    assert store.rows[0]['checkpoint']['after'] == 'next'
+    assert store.rows[0]['history_checkpoint']['after'] == 'next'
     client = Client(page([detail('1'), detail('2')]))
     collect(store, client)
     assert '.after(next)' in client.calls[0][2]['fields']
     assert set(store.items) == {'1', '2'}
-    assert store.rows[0]['status'] == 'updated'
+    assert store.rows[0]['history_status'] == 'complete'
 
 
 def test_new_author_priority():
-    store = MemoryStore([{'username': 'old', 'added_at': '1', 'last_checked_at': NOW.isoformat(), 'last_attempt_at': NOW.isoformat()},
+    store = MemoryStore([{'username': 'old', 'added_at': '1', 'last_checked_at': NOW.isoformat(), 'history_last_attempt_at': NOW.isoformat()},
                          {'username': 'new', 'added_at': '2'}])
     client = Client(page([]))
     collect(store, client, max_requests=1)
@@ -76,9 +76,9 @@ def test_new_author_priority():
 def test_regular_check_reads_only_recent_overlap():
     store = MemoryStore([{'username': 'one', 'added_at': '1',
                           'last_checked_at': (NOW - timedelta(minutes=15)).isoformat(), 'history_days': 30, 'coverage_version': 2}])
-    collect(store, Client(page([detail('old', timestamp='2026-10-18T12:00:00+0000')])))
+    collect(store, Client(page([detail('old', timestamp='2026-10-18T12:00:00+0000')])), lane='recent')
     assert store.items == {}
-    assert store.rows[0]['status'] == 'updated'
+    assert store.rows[0]['last_checked_at'] == NOW.isoformat()
 
 
 def test_usage_pause_is_global_and_blocks_new_author():
@@ -86,7 +86,7 @@ def test_usage_pause_is_global_and_blocks_new_author():
     client = Client(page([detail('1')], after='more', headers={'x-app-usage': '{"call_count":85}'}))
     result = collect(store, client)
     assert result['status'] == 'meta_paused'
-    assert store.rows[0]['checkpoint']['after'] == 'more'
+    assert store.rows[0]['history_checkpoint']['after'] == 'more'
     store.rows.append({'username': 'new'})
     assert collect(store, Client())['requests'] == 0
     store.rows[0]['next_check_at'] = (NOW - timedelta(seconds=1)).isoformat()
@@ -107,17 +107,17 @@ def test_429_retry_after_and_190_stop_all():
 def test_bad_author_does_not_block_next():
     store = MemoryStore([{'username': 'one'}, {'username': 'two'}])
     collect(store, Client(Response({'error': {'code': 100}}, 400), page([])))
-    assert [row['status'] for row in store.rows] == ['unavailable', 'updated']
+    assert [row['history_status'] for row in store.rows] == ['unavailable', 'complete']
 
 
 def test_repeated_cursor_and_retryable_server_error():
     store = MemoryStore()
     collect(store, Client(page([detail('1')], after='same'), page([detail('2')], after='same')))
-    assert store.rows[0]['error'] == 'pagination_stalled'
+    assert store.rows[0]['history_error'] == 'pagination_stalled'
     store = MemoryStore()
     collect(store, Client(Response({}, 503)))
-    assert store.rows[0]['error'] == 'temporary_meta_error'
-    assert store.rows[0]['next_check_at']
+    assert store.rows[0]['history_error'] == 'temporary_meta_error'
+    assert store.rows[0]['history_next_check_at']
 
 
 def test_deleted_author_is_not_requested():
@@ -133,9 +133,9 @@ def test_five_pages_per_author_then_next_and_fair_next_run():
     assert result['status'] == 'running'
     assert len(client.calls) == 6
     assert '.username(two)' in client.calls[-1][2]['fields']
-    assert store.rows[0]['checkpoint']['after'] == 'next4'
-    store.rows[1]['next_check_at'] = None
-    store.rows[0]['last_attempt_at'] = (NOW + timedelta(seconds=1)).isoformat()
+    assert store.rows[0]['history_checkpoint']['after'] == 'next4'
+    store.rows[1].update(history_next_check_at=None, history_status='pending')
+    store.rows[0]['history_last_attempt_at'] = (NOW + timedelta(seconds=1)).isoformat()
     client = Client(page([]))
     collect(store, client, max_requests=1)
     assert '.username(two)' in client.calls[0][2]['fields']
@@ -146,7 +146,7 @@ def test_unavailable_does_not_shorten_first_successful_scan():
     collect(store, Client(Response({'error': {'code': 100}}, 400)))
     assert store.rows[0].get('last_checked_at') is None
     assert store.rows[0]['last_attempt_at'] == NOW.isoformat()
-    store.rows[0]['next_check_at'] = None
+    store.rows[0]['history_next_check_at'] = None
     collect(store, Client(page([detail('older', timestamp='2026-10-10T12:00:00+0000')])))
     assert 'older' in store.items
 
@@ -162,7 +162,7 @@ def test_low_github_budget_stops_before_meta():
 def test_completed_author_checked_hourly():
     store = MemoryStore()
     collect(store, Client(page([])))
-    assert store.rows[0]['next_check_at'] == (NOW + timedelta(hours=1)).isoformat()
+    assert store.rows[0]['history_next_check_at'] == (NOW + timedelta(hours=1)).isoformat()
     assert collect(store, Client())['requests'] == 0
 
 
@@ -178,13 +178,13 @@ def test_expand_old_14_day_checkpoint_and_checked_author_backfills_before_covera
     assert 'older' in store.items
     assert store.rows[0]['history_days'] == 14
     assert store.rows[0]['last_checked_at'] == previous
-    checkpoint = store.rows[0]['checkpoint']
-    assert checkpoint['version'] == 2 and checkpoint['history_days'] == 30 and checkpoint['full_history']
+    checkpoint = store.rows[0]['history_checkpoint']
+    assert checkpoint['version'] == 3 and checkpoint['history_months'] == 4 and checkpoint['lane'] == 'history'
     client = Client(page([]))
     collect(store, client)
     assert '.after(more30)' in client.calls[0][2]['fields']
-    assert store.rows[0]['history_days'] == 30 and store.rows[0]['coverage_version'] == 2
-    assert store.rows[0]['status'] == 'updated' and store.rows[0]['checkpoint'] == {}
+    assert store.rows[0]['history_months'] == 4 and store.rows[0]['coverage_version'] == 3
+    assert store.rows[0]['history_status'] == 'complete' and store.rows[0]['history_checkpoint'] == {}
 
 
 def test_permissions_stop_all_authors_without_marking_profile_unavailable():

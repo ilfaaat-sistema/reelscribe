@@ -8,18 +8,18 @@ import httpx
 
 from app.radar.activity_job import LIMIT_CODES, USERNAME, _retry_after, _stamp, _usage
 from app.radar.carousel_job import DETAIL_FIELDS, _item
-from app.radar.carousel_window import rolling_window
+from app.radar.carousel_window import history_window, rolling_window
 
 
-HISTORY_DAYS = 30
-COVERAGE_VERSION = 2
+HISTORY_MONTHS = 4
+COVERAGE_VERSION = 3
 
 
-def window(now, days=HISTORY_DAYS):
-    return rolling_window(now, days)
+def window(now, days=None):
+    return history_window(now) if days is None else rolling_window(now, days)
 
 
-def run(store, client, *, token, account_id, api_version='v23.0', max_requests=30, clock=None):
+def _run_lane(store, client, *, token, account_id, api_version='v23.0', max_requests=30, clock=None, lane='history'):
     """Одна сессия Actions; длительность ограничена числом страниц и timeout HTTP."""
     clock = clock or (lambda: datetime.now(timezone.utc))
     now = clock()
@@ -30,34 +30,54 @@ def run(store, client, *, token, account_id, api_version='v23.0', max_requests=3
     pauses = [_stamp(row.get('next_check_at')) for row in authors if row.get('status') == 'meta_paused']
     if any(stamp and stamp > now for stamp in pauses):
         return {'requests': 0, 'status': 'meta_paused'}
-    store.prune(start)
-    authors.sort(key=lambda row: (row.get('last_attempt_at') or '', row.get('added_at', ''), row['username']))
+    attempt_field = 'history_last_attempt_at' if lane == 'history' else 'recent_last_attempt_at'
+    authors.sort(key=lambda row: (row.get(attempt_field) or '', row.get('added_at', ''), row['username']))
     requests = 0
     unfinished = False
     for row in authors:
         username = row['username']
-        needs_history = row.get('history_days', 0) < HISTORY_DAYS or row.get('coverage_version') != COVERAGE_VERSION
-        due = _stamp(row.get('next_check_at'))
-        if (due and due > now and not (needs_history and row.get('status') == 'updated')) or not USERNAME.fullmatch(username):
+        needs_history = row.get('history_months') != HISTORY_MONTHS or row.get('coverage_version') != COVERAGE_VERSION or row.get('history_status') != 'complete'
+        if lane == 'history' and not needs_history:
             continue
-        checkpoint = dict(row.get('checkpoint') or {})
-        if checkpoint.get('version') != COVERAGE_VERSION or checkpoint.get('history_days') != HISTORY_DAYS:
+        due = _stamp(row.get('history_next_check_at' if lane == 'history' else 'next_check_at'))
+        if (due and due > now) or not USERNAME.fullmatch(username):
+            continue
+        checkpoint_field = 'history_checkpoint' if lane == 'history' else 'checkpoint'
+        checkpoint = dict(row.get(checkpoint_field) or {})
+        if checkpoint.get('version') != COVERAGE_VERSION or checkpoint.get('lane') != lane:
             checkpoint = {}
-        checkpoint.update(version=COVERAGE_VERSION, history_days=HISTORY_DAYS)
-        checkpoint.setdefault('full_history', needs_history)
-        # Завершённые проверки начинают с головы: это находит новые публикации.
-        # Первый обход берёт всё окно. После него перечитываем лишь недавний хвост
-        # с небольшим перекрытием на задержанную публикацию и нестабильный порядок Meta.
-        previous = _stamp(row.get('last_checked_at')) if not needs_history else None
-        incremental_start = max(start, previous - timedelta(days=1)) if previous else start
-        checkpoint.setdefault('start', incremental_start.isoformat())
+        checkpoint.update(version=COVERAGE_VERSION, history_months=HISTORY_MONTHS, lane=lane)
+        previous = _stamp(row.get('last_checked_at'))
+        # Догрузка сохраняет первоначальную границу и курсор, новые материалы
+        # независимо перечитываются с перекрытием в сутки.
+        scan_start = start if lane == 'history' else (previous or now) - timedelta(days=1)
+        checkpoint.setdefault('start', scan_start.isoformat())
+        checkpoint.setdefault('started_at', now.isoformat())
         checkpoint.setdefault('seen', [])
         checkpoint.setdefault('ids', [])
-        scan_start = max(start, _stamp(checkpoint['start']) or start)
+        scan_start = _stamp(checkpoint['start']) or scan_start
         author_requests = 0
         author_unfinished = True
         def update(*, _username=username, **values):
-            store.update(_username, last_attempt_at=clock().isoformat(), **values)
+            if lane == 'history':
+                mapped = {}
+                for key, value in values.items():
+                    target = {'status': 'history_status', 'error': 'history_error',
+                              'checkpoint': 'history_checkpoint', 'next_check_at': 'history_next_check_at',
+                              'last_checked_at': 'history_to'}.get(key, key)
+                    mapped[target] = 'complete' if key == 'status' and value == 'updated' else value
+                if mapped.get('history_status') == 'complete':
+                    mapped['history_from'] = scan_start.isoformat()
+                    mapped['history_to'] = checkpoint['started_at']
+                phase = mapped.get('history_status')
+                mapped['status'] = ('updated' if phase == 'complete' and row.get('last_checked_at') and not row.get('checkpoint') and not row.get('error') else
+                                    'unavailable' if phase == 'unavailable' else
+                                    'error' if phase == 'error' else 'collecting')
+                values = mapped
+            elif values.get('status') == 'updated' and needs_history:
+                values['status'] = 'collecting'
+            store.update(_username, expected_generation=row.get('tracking_generation'), last_attempt_at=clock().isoformat(),
+                         **{attempt_field: clock().isoformat()}, **values)
 
         def pause(until, reason, _username=username):
             store.pause(until, reason, username=_username, last_attempt_at=clock().isoformat())
@@ -126,8 +146,8 @@ def run(store, client, *, token, account_id, api_version='v23.0', max_requests=3
                           'next_check_at': (now + timedelta(hours=1)).isoformat()}
             elif finished:
                 values = {'status': 'updated', 'error': None, 'checkpoint': {},
-                          'last_checked_at': now.isoformat(), 'history_days': HISTORY_DAYS,
-                          'coverage_version': COVERAGE_VERSION,
+                          'last_checked_at': checkpoint['started_at'],
+                          **({'history_months': HISTORY_MONTHS, 'history_days': (end - scan_start).days, 'coverage_version': COVERAGE_VERSION} if lane == 'history' else {}),
                           'next_check_at': (now + timedelta(minutes=60)).isoformat()}
             else:
                 checkpoint.update(after=cursor, seen=checkpoint['seen'] + [cursor],
@@ -145,3 +165,21 @@ def run(store, client, *, token, account_id, api_version='v23.0', max_requests=3
         if requests >= max_requests:
             break
     return {'requests': requests, 'status': 'running' if requests >= max_requests or unfinished else 'finished'}
+
+
+def run(store, client, *, token, account_id, api_version='v23.0', max_requests=30, clock=None):
+    """Резерв для новых материалов; оставшийся бюджет — историческому обходу."""
+    if max_requests < 1:
+        return {'requests': 0, 'status': 'running'}
+    kwargs = dict(token=token, account_id=account_id, api_version=api_version, clock=clock)
+    recent_budget = max(1, max_requests // 2)
+    recent = _run_lane(store, client, lane='recent', max_requests=recent_budget, **kwargs)
+    if recent['status'] == 'meta_paused':
+        return recent
+    remaining = max_requests - recent['requests']
+    if remaining <= 0:
+        return {'requests': recent['requests'], 'status': 'running'}
+    history = _run_lane(store, client, lane='history', max_requests=remaining, **kwargs)
+    return {'requests': recent['requests'] + history['requests'],
+            'status': 'meta_paused' if history['status'] == 'meta_paused' else
+                      'running' if 'running' in (recent['status'], history['status']) else 'finished'}

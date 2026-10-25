@@ -12,7 +12,7 @@ router = APIRouter(prefix='/radar/carousel-cover-translations', tags=['carousels
 
 class CoverRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    period: Literal['7d', '14d', '30d', 'archive14d']
+    period: Literal['7d', '14d', '30d', '4m', 'custom', 'archive14d']
 
 
 def validate_id(value):

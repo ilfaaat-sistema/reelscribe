@@ -1,5 +1,5 @@
 export function carouselFeedBaseKey(query) {
-  return JSON.stringify([query.period, query.favorites_only, query.author, query.sort, query.order, query.limit, query.include_authors, query.source_account])
+  return JSON.stringify([query.period, query.favorites_only, query.author, query.sort, query.order, query.limit, query.include_authors, query.source_account, query.exclude_authors, query.date_from, query.date_to, query.min_likes, query.max_likes, query.min_comments, query.max_comments])
 }
 
 // Сохраняем глобальный порядок и убираем дубли при изменении отчёта между порциями.
@@ -47,5 +47,5 @@ export async function readCarouselPrefix(fetchPage, query, wanted, signal) {
 
 export function carouselRefreshInterval(period, status) {
   if (status === 'running' || status === 'cooldown') return 30000
-  return period === '14d' || period === '30d' ? 60000 : null
+  return ['14d', '30d', '4m', 'custom'].includes(period) ? 60000 : null
 }
