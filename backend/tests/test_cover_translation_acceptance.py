@@ -117,6 +117,9 @@ class AtomicStore:
             self.rows[media_id] = {'status': 'running'}
             return {'status': 'running', 'claim_token': 'claim-' + media_id}
 
+    def read_source_override(self, media_id):
+        return None
+
     def finish(self, media_id, token, result, _usage, _duration, uncertain=False):
         assert token == 'claim-' + media_id
         with self.lock:
@@ -140,6 +143,7 @@ def service_fixture(monkeypatch):
                         AsyncMock(return_value={'media_url': 'https://x.fbcdn.net/a'}))
     monkeypatch.setattr(cover_service, 'download_image',
                         AsyncMock(return_value=(b'\xff\xd8\xffimage', 'image/jpeg')))
+    monkeypatch.setattr(cover_service, 'normalize_image', lambda data, mime: (data, mime))
     client = SimpleNamespace(aio=SimpleNamespace(aclose=AsyncMock()), close=Mock())
     monkeypatch.setattr(cover_service, 'create_vertex_client', Mock(return_value=client))
     return store
@@ -162,11 +166,14 @@ def test_two_tabs_share_one_paid_claim_and_timeout_keeps_global_slot(monkeypatch
 
     async def two_tabs():
         owner = asyncio.create_task(cover_service.translate('10', '7d'))
-        await entered.wait()
-        follower = await cover_service.translate('10', '30d')
-        assert follower['item']['status'] == 'running'
-        release.set()
-        ready = await owner
+        try:
+            await asyncio.wait_for(entered.wait(), timeout=1)
+            follower = await cover_service.translate('10', '30d')
+            assert follower['item']['status'] == 'running'
+        finally:
+            # Ошибка владельца должна завершить проверку, а не оставить вечное ожидание.
+            release.set()
+            ready = await asyncio.wait_for(owner, timeout=1)
         assert ready['item']['status'] == 'ready'
 
     asyncio.run(two_tabs())

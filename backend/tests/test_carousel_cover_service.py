@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from app.services import carousel_cover_service as service
 from app.services.carousel_cover_settings import CoverSettings
-from app.services.carousel_cover_vertex import CoverResult
+from app.services.carousel_cover_vertex import CompletedCoverResponseError, CoverResult
 from fastapi import HTTPException
 
 
@@ -238,6 +238,32 @@ async def test_completed_provider_http_error_releases_slot_without_refunding_att
     assert runtime.attempts == 1 and not runtime.held
     assert (await service.translate('1', '7d'))['item']['status'] == 'error'
     assert service.generate.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_completed_invalid_response_releases_slot_and_preserves_usage_and_attempt(runtime):
+    service.generate.side_effect = CompletedCoverResponseError({'total_token_count': 17}, 'ValidationError')
+    runtime.finish = Mock(wraps=runtime.finish)
+    first = await service.translate('1', '7d')
+    assert first['item']['status'] == 'error' and first['item']['attempt_recorded']
+    assert runtime.attempts == 1 and not runtime.held
+    usage = runtime.finish.call_args.args[3]
+    assert usage['total_token_count'] == 17
+    assert usage['provider_response_complete'] is True and usage['error_type'] == 'ValidationError'
+    assert runtime.finish.call_args.args[-1] is False
+    assert (await service.translate('1', '7d'))['item']['status'] == 'error'
+    assert service.generate.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_sdk_validation_error_keeps_unknown_slot(runtime):
+    from pydantic import ValidationError
+    service.generate.side_effect = ValidationError.from_exception_data('SDK', [])
+    runtime.finish = Mock(wraps=runtime.finish)
+    assert (await service.translate('1', '7d'))['item']['status'] == 'error'
+    assert runtime.attempts == 1 and runtime.held == {'1'}
+    assert runtime.finish.call_args.args[3]['provider_response_complete'] is False
+    assert runtime.finish.call_args.args[-1] is True
 
 
 def test_mixed_non_latin_text_is_not_mistaken_for_russian():
