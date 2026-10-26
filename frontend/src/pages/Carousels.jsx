@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { thumbUrl } from '../api/client'
+import Cover from '../components/CarouselCover'
+import CarouselCard from '../components/CarouselCard'
 import { getCarousel, translateCarousel } from '../api/carousels'
 import { CAROUSEL_RANGE_KEYS, carouselPeriod, carouselRangeDraft, validateCarouselRanges, favoriteFilterEnabled, isLiveCarouselPeriod, toggleFavoriteFilter } from '../api/carouselFilters'
 import useHiddenAuthors from '../hooks/useHiddenAuthors'
@@ -66,28 +67,6 @@ function safeAuthorsReturn(value) {
   } catch { return null }
 }
 
-function Cover({ item, large = false }) {
-  const direct = item?.media_url?.startsWith('https://') ? item.media_url : null
-  const fallback = item?.shortcode ? thumbUrl(item.shortcode, 'm') : null
-  const [source, setSource] = useState(direct || fallback)
-
-  useEffect(() => { setSource(direct || fallback) }, [direct, fallback])
-
-  return (
-    <span className={`carousels-cover${large ? ' carousels-cover-large' : ''}`}>
-      {source ? (
-        <img
-          src={source}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          onError={() => setSource(current => current === direct && fallback && fallback !== direct ? fallback : null)}
-        />
-      ) : <span className="carousels-placeholder">Нет обложки</span>}
-      {!large && <span className="carousels-album" aria-hidden="true">▣</span>}
-    </span>
-  )
-}
 
 function Metric({ label, value }) {
   return <span className="carousels-metric"><b>{count(value)}</b><small>{label}</small></span>
@@ -737,20 +716,8 @@ export default function Carousels() {
       {!hidden.loading && !loading && !error && !items.length && <p className="carousels-empty">{isLiveCarouselPeriod(period) && favoriteOnly ? favoriteLoading ? 'Проверяем общий список избранных…' : !favorites.authors.length ? 'Добавьте профиль в общий список избранных.' : data?.coverage?.status === 'partial' ? 'История загружена не полностью. За выбранные даты и с этими фильтрами пока ничего не найдено; результат может пополниться.' : 'Авторы проверены. За выбранный период и с текущими фильтрами каруселей нет.' : favoriteOnly && !favorites.authors.length ? 'Список избранных авторов пуст. Добавьте авторов звёздой на карточках.' : authorUnknown ? 'Данные каруселей этого автора пока недоступны.' : 'Каруселей по выбранному фильтру пока нет.'}</p>}
       {isLiveCarouselPeriod(period) && !favoriteOnly && <p className="carousels-muted">Уже собранные карусели всех авторов за текущее окно. Новый сбор по всем авторам не запускается.</p>}
       {!!items.length && <div className="carousels-grid">
-        {items.map(item => <div className="carousels-tile" key={item.id}><button
-          className="carousels-card"
-          type="button"
-          onClick={() => updateQuery({ id: item.id, period: selectedPeriod })}
-          aria-label={`Открыть карусель @${item.username || 'автор неизвестен'}`}
-        >
-          <Cover item={item} />
-          <CarouselCoverTranslation id={item.id} period={selectedPeriod} rootRef={pageRef} />
-          <span className="carousels-card-info">
-            <strong>@{item.username || '—'}</strong>
-            <small>{date(item.timestamp)} МСК</small>
-            <span className="carousels-card-stats"><span>♥ {count(item.likes)}</span><span>◌ {count(item.comments)}</span></span>
-          </span>
-        </button><button type="button" className={`carousels-select${selectedIds.has(String(item.id)) ? ' is-selected' : ''}`}
+        {items.map(item => <div className="carousels-tile" key={item.id}><CarouselCard item={item} onOpen={() => updateQuery({ id: item.id, period: selectedPeriod })}
+          coverContent={<CarouselCoverTranslation id={item.id} period={selectedPeriod} rootRef={pageRef} />} /><button type="button" className={`carousels-select${selectedIds.has(String(item.id)) ? ' is-selected' : ''}`}
           disabled={selected.loading || selected.busy.has(String(item.id))}
           aria-pressed={selectedIds.has(String(item.id))}
           aria-label={selectedIds.has(String(item.id)) ? `Убрать карусель @${item.username} из отобранных` : `Отобрать карусель @${item.username}`}

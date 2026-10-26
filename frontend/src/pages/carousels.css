@@ -235,3 +235,5 @@
 .carousels-coverage strong { color: var(--tx); }
 .carousels-coverage.is-partial { border-color: var(--line); }
 @media (max-width: 540px) { .carousels-range-form fieldset { flex-basis: 100%; } .carousels-range-actions { width: 100%; } }
+
+.carousels-placeholder small { display: block; margin-top: 10px; font-size: 11px; color: var(--iris); }
