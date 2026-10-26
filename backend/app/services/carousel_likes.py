@@ -11,7 +11,7 @@ from fastapi import HTTPException
 from app.api import carousels
 from app.core.db import get_db
 
-COLUMNS = 'instagram_media_id,selected_at,snapshot,source_period'
+COLUMNS = 'instagram_media_id,selected_at,snapshot,source_period,note,note_updated_at,note_revision'
 
 
 def validate_id(media_id):
@@ -42,7 +42,7 @@ def snapshot(raw, media_id):
 def _item(row):
     media_id = validate_id(row.get('id', row.get('instagram_media_id')))
     return {'id': media_id, 'selected_at': row['selected_at'],
-            'snapshot': snapshot(row['snapshot'], media_id), 'source_period': row['source_period']}
+            'snapshot': snapshot(row['snapshot'], media_id), 'source_period': row['source_period'], **_note(row, media_id)}
 
 
 def _read_all():
@@ -81,6 +81,8 @@ def _write(media_id, selected, value=None, period=None):
 async def _database(fn, *args):
     try:
         return await asyncio.to_thread(fn, *args)
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(503, 'Не удалось прочитать или сохранить отбор. Попробуйте позже.') from None
 
@@ -111,3 +113,32 @@ async def select(media_id, period):
 async def deselect(media_id):
     validate_id(media_id)
     return await _database(_write, media_id, False)
+
+
+def _note(row, media_id):
+    return {'id': media_id, 'note': row.get('note', ''),
+            'note_updated_at': row.get('note_updated_at'), 'note_revision': row.get('note_revision', 0)}
+
+
+def _write_note(media_id, note, expected_revision):
+    data = get_db().rpc('set_carousel_note', {'p_id': media_id, 'p_note': note,
+                      'p_expected_revision': expected_revision}).execute().data
+    if isinstance(data, list) and len(data) == 1:
+        data = data[0]
+    if not isinstance(data, dict):
+        raise ValueError('Некорректный ответ заметки')
+    code = data.get('code')
+    if code in ('not_found', 'selection_inactive', 'note_conflict'):
+        detail = {'code': code}
+        if code == 'note_conflict':
+            detail['item'] = _note(data['item'], media_id)
+        raise HTTPException(404 if code == 'not_found' else 409, detail)
+    item = data.get('item')
+    if not isinstance(item, dict) or item.get('id') != media_id or not isinstance(item.get('note'), str):
+        raise ValueError('Некорректный ответ заметки')
+    return _note(item, media_id)
+
+
+async def save_note(media_id, note, expected_revision):
+    validate_id(media_id)
+    return await _database(_write_note, media_id, note, expected_revision)

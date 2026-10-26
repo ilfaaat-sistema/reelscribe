@@ -31,7 +31,7 @@ function Metric({ label, value }) {
   return <span className="carousels-metric"><b>{count(value)}</b><small>{label}</small></span>
 }
 
-export default function CarouselDrawer({ period, id, listItem, onClose, excluded, selected, selectionBusy, onToggleSelection, selectedAt }) {
+export default function CarouselDrawer({ period, id, listItem, onClose, excluded, selected, selectionBusy, onToggleSelection, selectedAt, noteItem, onEditNote }) {
   const [item, setItem] = useState(listItem || null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -42,6 +42,8 @@ export default function CarouselDrawer({ period, id, listItem, onClose, excluded
   const [translationRefreshBusy, setTranslationRefreshBusy] = useState(false)
   const closeRef = useRef(null)
   const panelRef = useRef(null)
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
   const initialItemRef = useRef(listItem || null)
   const itemRef = useRef(item)
   const detailSequenceRef = useRef(0)
@@ -194,7 +196,8 @@ export default function CarouselDrawer({ period, id, listItem, onClose, excluded
     const previous = document.activeElement
     closeRef.current?.focus()
     const onKey = event => {
-      if (event.key === 'Escape') onClose()
+      if (document.querySelector('[data-carousel-note-editor]')) return
+      if (event.key === 'Escape') onCloseRef.current()
       if (event.key !== 'Tab') return
       const controls = [...(panelRef.current?.querySelectorAll('button:not(:disabled), a[href], iframe, summary') || [])]
       const first = controls[0]; const last = controls.at(-1)
@@ -203,7 +206,7 @@ export default function CarouselDrawer({ period, id, listItem, onClose, excluded
     }
     window.addEventListener('keydown', onKey)
     return () => { window.removeEventListener('keydown', onKey); previous?.focus() }
-  }, [onClose])
+  }, [])
 
   const isHidden = excluded?.has(item?.username?.toLowerCase())
   const link = instagramUrl(item)
@@ -223,7 +226,7 @@ export default function CarouselDrawer({ period, id, listItem, onClose, excluded
               <div className="carousels-drawer-title"><span className="carousels-eyebrow">Карусель</span><strong>{item.username ? `@${item.username}` : 'Публикация Instagram'}</strong></div>
               <button type="button" className="carousels-select-drawer" disabled={selectionBusy} aria-pressed={selected}
                 aria-label={selectionBusy ? 'Сохраняем отбор карусели' : selected ? 'Убрать карусель из отобранных' : 'Отобрать карусель'}
-                title={selected ? 'Убрать карусель из отобранных' : 'Отобрать карусель'} onClick={() => onToggleSelection(item)}>
+                title={selected ? 'Убрать карусель из отобранных' : 'Отобрать карусель'} onClick={event => onToggleSelection(item, event)}>
                 <span aria-hidden="true">{selectionBusy ? '…' : selected ? '♥' : '♡'}</span>
               </button>
               <div className="carousels-head-stats">
@@ -248,6 +251,10 @@ export default function CarouselDrawer({ period, id, listItem, onClose, excluded
             </div>
           </div>
           <div className="carousels-detail">
+            {selected && noteItem && <section className="carousels-note-detail">
+              <h2>Заметка</h2>{noteItem.note && <p>{noteItem.note}</p>}
+              <button type="button" onClick={event => onEditNote?.(noteItem, event)}>{noteItem.note ? 'Редактировать заметку' : 'Добавить заметку'}</button>
+            </section>}
             <CarouselCoverTranslation id={id} period={period} full />
             <div className="carousels-translation-heading">
               <h2>Текст публикации</h2>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { fetchSelectedCarousels, setCarouselSelected } from '../api/selectedCarousels'
+import { fetchSelectedCarousels, setCarouselSelected, saveCarouselNote } from '../api/selectedCarousels'
 
 export default function useSelectedCarousels() {
   const [items, setItems] = useState([])
@@ -48,7 +48,7 @@ export default function useSelectedCarousels() {
       if (!active.current) return false
       setItems(previous => selected ? [...previous.filter(entry => entry.id !== id), saved] : previous.filter(entry => entry.id !== id))
       setError('')
-      return true
+      return selected ? saved : true
     } catch (failure) {
       if (active.current) setError(failure.message || 'Не удалось сохранить отметку.')
       return false
@@ -59,6 +59,30 @@ export default function useSelectedCarousels() {
         setBusy(new Set(mutations.current))
         setLoading(false)
       }
+    }
+  }, [])
+
+  const saveNote = useCallback(async ({ id, note, expected_revision }) => {
+    if (!active.current || mutations.current.has(id)) return { ok: false, error: 'Дождитесь завершения сохранения этой карусели.' }
+    mutations.current.add(id)
+    revision.current++
+    reading.current?.abort()
+    reading.current = null
+    setBusy(new Set(mutations.current))
+    try {
+      const saved = await saveCarouselNote({ id, note, expected_revision })
+      if (!active.current) return { ok: false }
+      // PATCH объединяет только поля заметки и никогда не возвращает снятую запись.
+      setItems(previous => previous.map(item => item.id === id ? { ...item, ...saved } : item))
+      return { ok: true, item: saved }
+    } catch (failure) {
+      if (active.current && failure.item) setItems(previous => previous.map(item => item.id === id ? { ...item, ...failure.item } : item))
+      if (active.current && ['selection_inactive', 'not_found'].includes(failure.code)) setItems(previous => previous.filter(item => item.id !== id))
+      return { ok: false, code: failure.code, error: failure.message, item: failure.item }
+    } finally {
+      revision.current++
+      mutations.current.delete(id)
+      if (active.current) setBusy(new Set(mutations.current))
     }
   }, [])
 
@@ -79,5 +103,5 @@ export default function useSelectedCarousels() {
     }
   }, [refresh])
 
-  return { items, loading, error, busy, refresh, setSelected }
+  return { items, loading, error, busy, refresh, setSelected, saveNote }
 }

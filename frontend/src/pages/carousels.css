@@ -237,3 +237,10 @@
 @media (max-width: 540px) { .carousels-range-form fieldset { flex-basis: 100%; } .carousels-range-actions { width: 100%; } }
 
 .carousels-placeholder small { display: block; margin-top: 10px; font-size: 11px; color: var(--iris); }
+
+.carousels-note-button { position:absolute; top:10px; left:10px; z-index:1; width:44px; height:44px; border:1px solid var(--line); border-radius:9px; background:#171923dd; color:var(--tx); font-size:24px; }
+.carousels-note-button.has-note { color:var(--iris); border-color:var(--iris); }
+.carousels-note-notice { position:fixed; bottom:20px; left:20px; max-width:calc(100vw - 100px); z-index:1100; background:var(--panel); border:1px solid var(--iris); border-radius:10px; padding:12px; font-size:13px; }
+.carousels-note-detail { margin-bottom:20px; padding:14px; border:1px solid var(--iris); border-radius:12px; }
+.carousels-note-detail p { white-space:pre-wrap; overflow-wrap:anywhere; font-size:14px; }
+.carousels-note-detail button { min-height:44px; color:var(--tx); background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:8px 12px; }

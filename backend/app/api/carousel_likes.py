@@ -1,9 +1,9 @@
 """Публичный общий список отбора каруселей без входа."""
 from typing import Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.services import carousel_likes
 
@@ -32,3 +32,21 @@ async def select(media_id: str, body: SelectCarousel):
 @router.delete('/{media_id}')
 async def deselect(media_id: str):
     return _response(await carousel_likes.deselect(media_id))
+
+
+class SaveNote(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    note: str = Field(strict=True, max_length=3000)
+    expected_revision: int = Field(strict=True, ge=0, le=2147483646)
+
+    @field_validator('note', mode='before')
+    @classmethod
+    def valid_text(cls, value):
+        if isinstance(value, str) and ('\x00' in value or any(0xD800 <= ord(char) <= 0xDFFF for char in value)):
+            raise HTTPException(422, 'Некорректный символ в заметке')
+        return value
+
+
+@router.patch('/{media_id}/note')
+async def save_note(media_id: str, body: SaveNote):
+    return _response(await carousel_likes.save_note(media_id, body.note, body.expected_revision))

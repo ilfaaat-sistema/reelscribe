@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import Drawer from '../components/CarouselDrawer'
 import CarouselCard from '../components/CarouselCard'
+import CarouselNoteEditor from '../components/CarouselNoteEditor'
+import useCarouselNotes from '../hooks/useCarouselNotes'
 import { CAROUSEL_RANGE_KEYS, carouselPeriod, carouselRangeDraft, validateCarouselRanges, favoriteFilterEnabled, isLiveCarouselPeriod, toggleFavoriteFilter } from '../api/carouselFilters'
 import useHiddenAuthors from '../hooks/useHiddenAuthors'
 import { FAVORITES_IMPORT_KEY, readFavoriteAuthors, getFavoriteAuthors, addFavoriteAuthor, removeFavoriteAuthor } from '../api/favoriteAuthors'
@@ -65,6 +67,7 @@ export default function Carousels() {
   const hidden = useHiddenAuthors()
   const [favorites, setFavorites] = useState({ authors: [] })
   const selected = useSelectedCarousels()
+  const notes = useCarouselNotes(selected)
   const [favoriteRows, setFavoriteRows] = useState([])
   const [favoriteLoading, setFavoriteLoading] = useState(true)
   const [favoriteBusy, setFavoriteBusy] = useState(false)
@@ -260,9 +263,7 @@ export default function Carousels() {
     finally { setFavoriteBusy(false) }
   }
 
-  const changeSelected = item => {
-    selected.setSelected(item, selectedPeriod || period || '14d', !selected.items.some(entry => entry.id === String(item.id)))
-  }
+  const changeSelected = (item, event) => notes.toggle(item, selectedPeriod || period || '14d', event)
 
   const backPath = safeAuthorsReturn(location.state?.authorsReturnTo)
   const backToRadar = () => navigate(backPath || '/radar', {
@@ -468,7 +469,7 @@ export default function Carousels() {
           aria-pressed={selectedIds.has(String(item.id))}
           aria-label={selectedIds.has(String(item.id)) ? `Убрать карусель @${item.username} из отобранных` : `Отобрать карусель @${item.username}`}
           title={selectedIds.has(String(item.id)) ? 'Убрать карусель из отобранных' : 'Отобрать карусель'}
-          onClick={() => changeSelected(item)}><span aria-hidden="true">{selectedIds.has(String(item.id)) ? '♥' : '♡'}</span>
+          onClick={event => changeSelected(item, event)}><span aria-hidden="true">{selectedIds.has(String(item.id)) ? '♥' : '♡'}</span>
         </button><button type="button" className="carousels-hide-author"
           aria-label={`Скрыть автора @${item.username}`} title={`Скрыть все карусели @${item.username}`}
           disabled={hidden.loading || hidden.busy.has(item.username?.toLowerCase())} onClick={() => changeHidden(item.username, true)}>
@@ -479,7 +480,9 @@ export default function Carousels() {
           title={favorites.authors.includes(item.username?.toLowerCase()) ? 'Убрать из избранного' : 'Добавить в избранное'}
           disabled={favoriteBusy || favoriteLoading} onClick={() => changeFavorite(item.username)}>
           <span aria-hidden="true">{favorites.authors.includes(item.username?.toLowerCase()) ? '★' : '☆'}</span>
-        </button></div>)}
+        </button>{selectedIds.has(String(item.id)) && <button className={`carousels-note-button${selected.items.find(entry => entry.id === String(item.id))?.note ? ' has-note' : ''}`} type="button"
+          aria-label={`Заметка к карусели @${item.username}`} title="Заметка к карусели"
+          onClick={event => notes.open(selected.items.find(entry => entry.id === String(item.id)), event)}>✎</button>}</div>)}
       </div>}
 
       {data && <div className="carousels-feed-end" ref={sentinelRef} aria-live="polite">
@@ -492,6 +495,8 @@ export default function Carousels() {
         {!hasMore && !loading && !error && !moreError && items.length > 0 && <span>Все найденные карусели показаны</span>}
       </div>}
     </div>
-    {detailId && <Drawer period={selectedPeriod} key={`${period || 'auto'}-${detailId}`} id={detailId} listItem={listItem} excluded={excluded} selected={selectedIds.has(String(detailId))} selectionBusy={selected.loading || selected.busy.has(String(detailId))} onToggleSelection={changeSelected} onClose={() => updateQuery({ id: null })} />}
+    {notes.notice && <p className="carousels-note-notice" role="status">{notes.notice}</p>}
+    {notes.editor && <CarouselNoteEditor key={`note-${notes.editor.item.id}`} {...notes.editor} onSave={notes.save} onClose={notes.close} />}
+    {detailId && <Drawer period={selectedPeriod} key={`${period || 'auto'}-${detailId}`} id={detailId} listItem={listItem} excluded={excluded} selected={selectedIds.has(String(detailId))} selectionBusy={selected.loading || selected.busy.has(String(detailId))} onToggleSelection={changeSelected} noteItem={selected.items.find(entry => entry.id === String(detailId))} onEditNote={notes.open} onClose={() => updateQuery({ id: null })} />}
   </main>
 }
