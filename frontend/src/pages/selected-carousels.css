@@ -10,3 +10,11 @@
 .selected-page .selected-at { white-space: normal; }
 
 .selected-card-caption > span { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+
+.selected-note-tile { display:flex; flex-direction:column; }
+.selected-note-tile .carousels-card { height:auto; flex:1; }
+.selected-note-summary { border:1px solid var(--line); border-top:0; padding:12px 11px 64px; border-radius:0 0 11px 11px; background:var(--panel); min-height:72px; }
+.selected-note-summary strong { font-size:12px; color:var(--iris); }
+.selected-note-summary p { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; white-space:pre-wrap; overflow-wrap:anywhere; font-size:13px; margin:6px 0; }
+.selected-page .selected-note-tile .selected-note-summary button { position:absolute; bottom:10px; left:11px; width:calc(100% - 75px); border:0; background:transparent; padding:0; text-align:left; font-size:12px; overflow-wrap:anywhere; }
+.selected-page .selected-note-tile .carousels-card-info { padding-bottom:12px; }

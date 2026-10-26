@@ -92,3 +92,36 @@ test('4m и custom сохраняют отбор через совместимы
     assert.equal(result.source_period, '14d')
   }
 })
+
+test('заметки старых записей пусты, новый формат сохраняет текст и версию', async () => {
+  const old = await fetchSelectedCarousels(undefined, async () => ok({ items: [item()], total: 1 }))
+  assert.equal(old.items[0].note, '')
+  const saved = { ...item(), note: 'Идея\nДля курса 🎯', note_revision: 2, note_updated_at: '2026-10-26T12:00:00Z' }
+  const result = await fetchSelectedCarousels(undefined, async () => ok({ items: [saved], total: 1 }))
+  assert.equal(result.items[0].note, saved.note)
+  assert.equal(result.items[0].note_revision, 2)
+})
+
+test('PATCH заметки передаёт ожидаемую версию и отклоняет чужой ID', async () => {
+  const { saveCarouselNote } = await import('./selectedCarousels.js')
+  const body = { id: '123', note: '😀'.repeat(3000), expected_revision: 2 }
+  const result = await saveCarouselNote(body, async (url, opts) => {
+    assert.equal(url, '/api/radar/carousel-likes/123/note')
+    assert.equal(opts.method, 'PATCH')
+    assert.deepEqual(JSON.parse(opts.body), { note: body.note, expected_revision: 2 })
+    return ok({ id: '123', note: body.note, note_revision: 3, note_updated_at: '2026-10-26T12:00:00Z' })
+  })
+  assert.equal(result.note_revision, 3)
+  await assert.rejects(saveCarouselNote({ ...body, note: 'a'.repeat(3001) }, () => assert.fail('Нет запроса')), /3000/)
+  await assert.rejects(saveCarouselNote(body, async () => ok({ id: '456', note: '', note_revision: 0 })), /другую/)
+})
+
+test('конфликт заметки сохраняет актуальный вариант и не повторяет PATCH автоматически', async () => {
+  const { saveCarouselNote } = await import('./selectedCarousels.js')
+  let calls = 0
+  await assert.rejects(saveCarouselNote({ id: '123', note: 'мой', expected_revision: 0 }, async () => {
+    calls++
+    return { ok: false, status: 409, json: async () => ({ detail: { code: 'note_conflict', item: { id: '123', note: 'другой', note_revision: 1 } } }) }
+  }), error => error.code === 'note_conflict' && error.item.note === 'другой')
+  assert.equal(calls, 1)
+})

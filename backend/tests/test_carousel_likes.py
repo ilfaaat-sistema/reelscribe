@@ -257,3 +257,47 @@ def test_month_snapshot_uses_legacy_live_bucket_and_survives_undo(setup, monkeyp
     assert db.calls[-1][1]['p_period'] == '14d'
     assert client.delete('/api/radar/carousel-likes/123').status_code == 200
     assert client.put('/api/radar/carousel-likes/123', json={'period': item['source_period']}).json()['item']['snapshot'] == item['snapshot']
+
+@pytest.mark.parametrize('body', [
+    {'note': 'x' * 3001, 'expected_revision': 0},
+    {'note': 'x', 'expected_revision': True},
+    {'note': 'x', 'expected_revision': -1},
+    {'note': 123, 'expected_revision': 0},
+    {'note': '\u0000', 'expected_revision': 0},
+    {'note': '\ud800', 'expected_revision': 0},
+])
+def test_note_validation_before_database(setup, body):
+    client, db = setup
+    import json
+    assert client.patch(URL + '/123/note', content=json.dumps(body), headers={'Content-Type': 'application/json'}).status_code == 422
+    assert not db.calls
+
+
+def test_note_unicode_and_normalization(setup, monkeypatch):
+    client, db = setup
+    async def save(identity, note, revision):
+        assert identity == '123'
+        assert revision == 3
+        return {'id': identity, 'note': note.strip(' \t\r\n'), 'note_revision': 4, 'note_updated_at': None}
+    monkeypatch.setattr(service, 'save_note', save)
+    response = client.patch(URL + '/123/note', json={'note': '😀' * 3000, 'expected_revision': 3})
+    assert response.status_code == 200
+    assert len(response.json()['note']) == 3000
+    response = client.patch(URL + '/123/note', json={'note': '  идея\nтекст\t', 'expected_revision': 3})
+    assert response.json()['note'] == 'идея\nтекст'
+
+
+@pytest.mark.parametrize('code,status', [('note_conflict', 409), ('selection_inactive', 409), ('not_found', 404)])
+def test_note_rpc_conflicts_preserve_http_status(setup, monkeypatch, code, status):
+    client, _ = setup
+    class NotesDB:
+        def rpc(self, name, args):
+            assert name == 'set_carousel_note'
+            assert args == {'p_id': '123', 'p_note': 'мой', 'p_expected_revision': 0}
+            return SimpleNamespace(execute=lambda: SimpleNamespace(data={'code': code, 'item': {'id': '123', 'note': 'другой', 'note_revision': 1}}))
+    monkeypatch.setattr(service, 'get_db', lambda: NotesDB())
+    response = client.patch(URL + '/123/note', json={'note': 'мой', 'expected_revision': 0})
+    assert response.status_code == status
+    assert response.json()['detail']['code'] == code
+    if code == 'note_conflict':
+        assert response.json()['detail']['item']['note'] == 'другой'

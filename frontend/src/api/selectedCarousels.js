@@ -36,7 +36,7 @@ function normalizeItem(item) {
   const id = String(item.id)
   if (!ID.test(id) || !PERIODS.has(item.source_period) || !Number.isFinite(Date.parse(item.selected_at))) throw new Error()
   return { id, selected_at: item.selected_at, source_period: item.source_period,
-    snapshot: snapshotOf(item.snapshot, id) }
+    snapshot: snapshotOf(item.snapshot, id), ...noteFields(item, id) }
 }
 
 function normalizeItems(items) {
@@ -88,4 +88,39 @@ export async function setCarouselSelected(id, period, selected, fetcher) {
     if (String(data.id) !== id || data.selected !== false) throw new Error()
     return null
   } catch { throw new Error('Сервер не подтвердил изменение отметки.') }
+}
+
+
+export function noteFields(item, id = String(item?.id ?? '')) {
+  const note = item?.note ?? ''
+  const revision = item?.note_revision ?? 0
+  const updated = item?.note_updated_at ?? null
+  if (!ID.test(id) || typeof note !== 'string' || Array.from(note).length > 3000 ||
+      !Number.isSafeInteger(revision) || revision < 0 || (updated !== null && !Number.isFinite(Date.parse(updated)))) throw new Error('Некорректная заметка')
+  return { id, note, note_revision: revision, note_updated_at: updated }
+}
+
+export async function saveCarouselNote({ id, note, expected_revision }, fetcher = globalThis.fetch) {
+  if (!ID.test(String(id)) || typeof note !== 'string' || Array.from(note).length > 3000 ||
+      !Number.isSafeInteger(expected_revision) || expected_revision < 0) throw new Error('Проверьте текст заметки (до 3000 символов).')
+  let response
+  try { response = await fetcher(`${BASE}/${id}/note`, {
+    method: 'PATCH', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ note, expected_revision }),
+  }) } catch { throw new Error('Нет соединения. Текст заметки остался в черновике.') }
+  let data
+  try { data = await response.json() } catch { throw new Error('Сервер не подтвердил сохранение заметки.') }
+  if (!response.ok) {
+    const detail = data?.detail
+    const messages = { note_conflict: 'Заметка изменена на другом устройстве.', selection_inactive: 'Карусель уже убрана из отобранных. Черновик сохранён.', not_found: 'Карусель больше не найдена в подборке.' }
+    const error = new Error(messages[detail?.code] || `Не удалось сохранить заметку (${response.status}). Текст сохранён в черновике.`)
+    error.code = detail?.code
+    if (error.code === 'note_conflict') {
+      if (String(detail.item?.id) !== String(id)) throw new Error('Некорректный ответ сервера.')
+      error.item = noteFields(detail.item, String(id))
+    }
+    throw error
+  }
+  if (String(data?.id) !== String(id)) throw new Error('Сервер подтвердил другую заметку.')
+  return noteFields(data, String(id))
 }
