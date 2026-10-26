@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import useSelectedCarousels from '../hooks/useSelectedCarousels'
+import CarouselCard from '../components/CarouselCard'
+import CarouselCover from '../components/CarouselCover'
+import './carousels.css'
 import './selected-carousels.css'
 
 const number = value => value == null || !Number.isFinite(Number(value)) ? '—' : new Intl.NumberFormat('ru-RU').format(Number(value))
@@ -18,15 +21,6 @@ const instagram = item => {
     if (url.protocol === 'https:' && ['instagram.com', 'www.instagram.com'].includes(url.hostname)) return url.href
   } catch { /* Ссылка могла исчезнуть из отчёта. */ }
   return null
-}
-
-function Cover({ snapshot }) {
-  const [failed, setFailed] = useState(false)
-  const source = snapshot.thumbnail_url || snapshot.media_url
-  useEffect(() => { setFailed(false) }, [source])
-  return <div className="selected-cover">{!failed && /^https:\/\//.test(source || '')
-    ? <img src={source} alt="" loading="lazy" onError={() => setFailed(true)} />
-    : <span>▧<br />Обложка недоступна</span>}</div>
 }
 
 function Drawer({ item, selected, busy, onToggle, onClose }) {
@@ -56,7 +50,7 @@ function Drawer({ item, selected, busy, onToggle, onClose }) {
       <button type="button" disabled={busy} aria-pressed={selected} onClick={() => onToggle(item)}>{selected ? '♥ Убрать из отобранных' : '♡ Отобрать снова'}</button>
       <p className="selected-muted">Опубликовано: {date(snapshot.timestamp)} · Отобрано: {date(item.selected_at)}</p>
       <p>♥ {number(snapshot.likes)} лайков Instagram · {number(snapshot.comments)} комментариев</p>
-      {canEmbed ? <iframe src={`https://www.instagram.com/p/${snapshot.shortcode}/embed/`} title={`Карусель @${snapshot.username || ''} в Instagram`} loading="lazy" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen /> : <Cover snapshot={snapshot} />}
+      {canEmbed ? <iframe src={`https://www.instagram.com/p/${snapshot.shortcode}/embed/`} title={`Карусель @${snapshot.username || ''} в Instagram`} loading="lazy" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen /> : <CarouselCover item={snapshot} large />}
       <p className="selected-muted">Слайды показывает Instagram. Если просмотр недоступен, сохранённый текст и ссылка остаются ниже.</p>
       {link && <a href={link} target="_blank" rel="noopener noreferrer">Открыть в Instagram ↗</a>}
       <h3>Сохранённый текст</h3><p className="selected-caption">{snapshot.caption || 'Описание отсутствует.'}</p>
@@ -129,9 +123,13 @@ export default function SelectedCarousels() {
     {undo && <p className="selected-notice" role="status">Отметка снята. <button type="button" disabled={busy.has(undo.id)} onClick={restore}>Отменить</button></p>}
     <p className="selected-muted" aria-live="polite">Показано {visible.length} / найдено {results.length} · Всего отобрано {items.length}</p>
     {!loading && !error && !results.length && <div className="selected-empty"><h2>{q ? 'Совпадений нет' : 'Пока нет отобранных каруселей'}</h2><p>{q ? 'Попробуйте другой запрос.' : 'Нажмите ♥ на отдельной карусели в общей сетке.'}</p>{q && <button type="button" onClick={() => change('q', '')}>Сбросить поиск</button>}</div>}
-    <div className="selected-grid">{visible.map(item => <article className="selected-card" key={item.id}>
-      <button type="button" className="selected-open" onClick={() => setDrawer(item)} aria-label={`Открыть карусель @${item.snapshot.username || 'автор неизвестен'}`}><Cover snapshot={item.snapshot} /><div className="selected-card-copy"><strong>@{item.snapshot.username || 'Автор неизвестен'}</strong><p>{item.snapshot.caption || 'Без описания'}</p><span>♥ {number(item.snapshot.likes)} · Комментарии: {number(item.snapshot.comments)}</span><small>Отобрано: {date(item.selected_at)}</small></div></button>
-      <button type="button" className="selected-remove" disabled={busy.has(item.id)} aria-pressed="true" onClick={() => toggle(item)}>♥ Убрать из отобранных</button>
+    <div className="selected-grid carousels-grid">{visible.map(item => <article className="carousels-tile" key={item.id}>
+      <CarouselCard item={item.snapshot} onOpen={() => setDrawer(item)}
+        coverContent={<span className="selected-card-caption"><span>{item.snapshot.caption || 'Без описания'}</span></span>}>
+        <small className="selected-at">Отобрано: {date(item.selected_at)}</small>
+      </CarouselCard>
+      <button type="button" className="carousels-select is-selected selected-remove" disabled={busy.has(item.id)} aria-pressed="true"
+        aria-label={`Убрать карусель @${item.snapshot.username} из отобранных`} title="Убрать из отобранных" onClick={() => toggle(item)}>♥</button>
     </article>)}</div>
     {visible.length < results.length && <button type="button" className="selected-more" onClick={() => setShown(value => value + 50)}>Показать ещё 50</button>}
     {drawer && <Drawer item={drawer} selected={!!selectedInDrawer} busy={busy.has(drawer.id)} onToggle={toggle} onClose={closeDrawer} />}
