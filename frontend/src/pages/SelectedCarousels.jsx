@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import useSelectedCarousels from '../hooks/useSelectedCarousels'
 import CarouselCard from '../components/CarouselCard'
-import CarouselCover from '../components/CarouselCover'
+import CarouselDrawer from '../components/CarouselDrawer'
+import CarouselCoverTranslation from '../components/CarouselCoverTranslation'
+import SelectedCarouselCaption from '../components/SelectedCarouselCaption'
 import './carousels.css'
 import './selected-carousels.css'
 
@@ -14,50 +16,6 @@ const safeReturn = value => {
     return url.origin === window.location.origin && url.pathname === '/radar/carousels' ? url.pathname + url.search : '/radar/carousels?period=14d'
   } catch { return '/radar/carousels?period=14d' }
 }
-const instagram = item => {
-  if (/^[\w-]+$/.test(item?.shortcode || '')) return `https://www.instagram.com/p/${item.shortcode}/`
-  try {
-    const url = new URL(item?.permalink)
-    if (url.protocol === 'https:' && ['instagram.com', 'www.instagram.com'].includes(url.hostname)) return url.href
-  } catch { /* Ссылка могла исчезнуть из отчёта. */ }
-  return null
-}
-
-function Drawer({ item, selected, busy, onToggle, onClose }) {
-  const panel = useRef(null)
-  const snapshot = item.snapshot
-  const link = instagram(snapshot)
-  const canEmbed = /^[\w-]+$/.test(snapshot.shortcode || '')
-  useEffect(() => {
-    const previous = document.activeElement
-    panel.current?.querySelector('button')?.focus()
-    const onKey = event => {
-      if (event.key === 'Escape') onClose()
-      if (event.key !== 'Tab') return
-      const controls = [...panel.current.querySelectorAll('button:not(:disabled), a[href], iframe')]
-      const first = controls[0]
-      const last = controls.at(-1)
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => { window.removeEventListener('keydown', onKey); previous?.focus() }
-  }, [onClose])
-  return <div className="selected-overlay" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
-    <aside ref={panel} className="selected-drawer" role="dialog" aria-modal="true" aria-label={`Карусель @${snapshot.username || 'автор неизвестен'}`}>
-      <button type="button" className="selected-close" onClick={onClose} aria-label="Закрыть просмотр">✕</button>
-      <h2>@{snapshot.username || 'Автор неизвестен'}</h2>
-      <button type="button" disabled={busy} aria-pressed={selected} onClick={() => onToggle(item)}>{selected ? '♥ Убрать из отобранных' : '♡ Отобрать снова'}</button>
-      <p className="selected-muted">Опубликовано: {date(snapshot.timestamp)} · Отобрано: {date(item.selected_at)}</p>
-      <p>♥ {number(snapshot.likes)} лайков Instagram · {number(snapshot.comments)} комментариев</p>
-      {canEmbed ? <iframe src={`https://www.instagram.com/p/${snapshot.shortcode}/embed/`} title={`Карусель @${snapshot.username || ''} в Instagram`} loading="lazy" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen /> : <CarouselCover item={snapshot} large />}
-      <p className="selected-muted">Слайды показывает Instagram. Если просмотр недоступен, сохранённый текст и ссылка остаются ниже.</p>
-      {link && <a href={link} target="_blank" rel="noopener noreferrer">Открыть в Instagram ↗</a>}
-      <h3>Сохранённый текст</h3><p className="selected-caption">{snapshot.caption || 'Описание отсутствует.'}</p>
-    </aside>
-  </div>
-}
-
 function sortValue(item, key) {
   const value = key === 'selected_at' ? item.selected_at : item.snapshot[key]
   if (value == null) return null
@@ -69,6 +27,7 @@ function sortValue(item, key) {
 }
 
 export default function SelectedCarousels() {
+  const pageRef = useRef(null)
   const location = useLocation()
   const [params, setParams] = useSearchParams()
   const { items, loading, error, busy, refresh, setSelected } = useSelectedCarousels()
@@ -110,7 +69,7 @@ export default function SelectedCarousels() {
   const back = safeReturn(params.get('returnTo'))
   const selectedInDrawer = drawer && items.some(item => item.id === drawer.id)
 
-  return <main className="selected-page">
+  return <main ref={pageRef} className="selected-page">
     <Link className="selected-back" to={back} state={{ carouselScrollTop: location.state?.carouselScrollTop }}>← Все карусели</Link>
     <div className="selected-heading"><span className="selected-eyebrow">Подборка</span><h1>Отобранные карусели <span>({number(items.length)})</span></h1><p className="selected-muted">Ваши отметки доступны с телефона и ноутбука.</p></div>
     <div className="selected-filters">
@@ -125,13 +84,14 @@ export default function SelectedCarousels() {
     {!loading && !error && !results.length && <div className="selected-empty"><h2>{q ? 'Совпадений нет' : 'Пока нет отобранных каруселей'}</h2><p>{q ? 'Попробуйте другой запрос.' : 'Нажмите ♥ на отдельной карусели в общей сетке.'}</p>{q && <button type="button" onClick={() => change('q', '')}>Сбросить поиск</button>}</div>}
     <div className="selected-grid carousels-grid">{visible.map(item => <article className="carousels-tile" key={item.id}>
       <CarouselCard item={item.snapshot} onOpen={() => setDrawer(item)}
-        coverContent={<span className="selected-card-caption"><span>{item.snapshot.caption || 'Без описания'}</span></span>}>
+        coverContent={<><CarouselCoverTranslation id={item.id} period={item.source_period} rootRef={pageRef} /><SelectedCarouselCaption item={item} rootRef={pageRef} /></>}>
         <small className="selected-at">Отобрано: {date(item.selected_at)}</small>
       </CarouselCard>
       <button type="button" className="carousels-select is-selected selected-remove" disabled={busy.has(item.id)} aria-pressed="true"
         aria-label={`Убрать карусель @${item.snapshot.username} из отобранных`} title="Убрать из отобранных" onClick={() => toggle(item)}>♥</button>
     </article>)}</div>
     {visible.length < results.length && <button type="button" className="selected-more" onClick={() => setShown(value => value + 50)}>Показать ещё 50</button>}
-    {drawer && <Drawer item={drawer} selected={!!selectedInDrawer} busy={busy.has(drawer.id)} onToggle={toggle} onClose={closeDrawer} />}
+    {drawer && <CarouselDrawer key={drawer.id} id={drawer.id} period={drawer.source_period} listItem={drawer.snapshot} selectedAt={drawer.selected_at}
+      selected={!!selectedInDrawer} selectionBusy={busy.has(drawer.id)} onToggleSelection={() => toggle(drawer)} onClose={closeDrawer} />}
   </main>
 }
