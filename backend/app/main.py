@@ -16,6 +16,7 @@ from app.api import (
     import_,
     progress,
     radar,
+    radar_discovery,
     radar_intel,
     radar_refresh,
     reels,
@@ -47,6 +48,7 @@ app.include_router(progress.router, prefix="/api")
 app.include_router(errors.router, prefix="/api")
 app.include_router(thumb.router, prefix="/api")
 app.include_router(radar.router, prefix="/api")
+app.include_router(radar_discovery.router, prefix="/api")
 app.include_router(radar_intel.router, prefix="/api")
 app.include_router(radar_refresh.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")

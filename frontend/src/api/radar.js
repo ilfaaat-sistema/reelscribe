@@ -147,10 +147,15 @@ export const getFeed = ({ period, usernames, onlyViral, sort, order, limit, offs
 }
 
 // GET /sources — активные и исключённые источники
-export const getSources = () => req('/sources')
+export const getSources = signal => req('/sources', { signal })
 
 // POST /sources — добавить источники одной строкой («@ник, ссылка на профиль»)
 export const addSources = input => req('/sources', postJson({ input }))
+
+export const getDiscovery = (username, signal) =>
+  req(`/discovery/${encodeURIComponent(username)}`, { signal })
+
+export const searchDiscovery = input => req('/discovery', postJson({ input }))
 
 // DELETE /sources/{username} — убрать источник в исключённые
 export const removeSource = username =>
