@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     deepl_api_key: str = ""       # free tier: 500k символов/мес, регистрация на deepl.com
 
+    meta_ig_token: str = ""
+    meta_ig_user_id: str = ""
+    meta_ig_api_version: str = "v23.0"
+
     instagram_cookies_file: str = ""  # путь к cookies.txt для yt-dlp
 
     rapidapi_key: str = ""             # один ключ RapidAPI (совместимость)

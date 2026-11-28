@@ -3,11 +3,11 @@ import { useSearchParams } from 'react-router-dom'
 import Feed from './radarTabs/Feed'
 import Sources from './radarTabs/Sources'
 import OneOff from './radarTabs/OneOff'
+import Discovery from './radarTabs/Discovery'
 import RefreshBar from './radarTabs/RefreshBar'
 import './radar.css'
 import './radar-scout.css'
 
-// Оболочка раздела «Радар» (ТЗ 10): три вкладки — Лента, Источники, Разовый сбор.
 // Вкладка живёт в адресе (?tab=), дефолт feed в адрес не пишется.
 // Старые ссылки без tab, но с ключами разового сбора, открывают «Разовый сбор».
 
@@ -15,6 +15,7 @@ const TABS = [
   ['feed', 'Лента'],
   ['sources', 'Источники'],
   ['oneoff', 'Разовый сбор'],
+  ['discovery', 'Поиск авторов'],
 ]
 const LEGACY_KEYS = ['accounts', 'period', 'metric', 'sort', 'view', 'buckets', 'reel']
 
@@ -64,11 +65,12 @@ export default function Radar() {
         ))}
       </nav>
 
-      {tab !== 'oneoff' && <RefreshBar sourcesKey={sourcesKey} onDone={onRefreshDone} />}
+      {(tab === 'feed' || tab === 'sources') && <RefreshBar sourcesKey={sourcesKey} onDone={onRefreshDone} />}
 
       {tab === 'feed' && <Feed refreshKey={refreshKey} />}
       {tab === 'sources' && <Sources refreshKey={refreshKey} onChanged={onSourcesChanged} />}
       {tab === 'oneoff' && <OneOff />}
+      {tab === 'discovery' && <Discovery onSourcesChanged={onSourcesChanged} />}
     </div>
   )
 }
